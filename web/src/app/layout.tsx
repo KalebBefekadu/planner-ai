@@ -1,17 +1,22 @@
 import type { Metadata } from "next";
 import "./globals.css";
 import Link from "next/link";
+import { createClient } from "@/lib/supabase/server";
+import AuthButton from "@/components/auth-button";
 
 export const metadata: Metadata = {
   title: "Planner AI",
   description: "Voice-First Life Operating System",
 };
 
-export default function RootLayout({
+export default async function RootLayout({
   children,
 }: Readonly<{
   children: React.ReactNode;
 }>) {
+  const supabase = await createClient();
+  const { data: { user } } = await supabase.auth.getUser();
+
   return (
     <html lang="en">
       <head>
@@ -32,10 +37,11 @@ export default function RootLayout({
           <div style={{ fontWeight: 700, fontSize: "1.25rem", letterSpacing: "-0.025em" }}>
             Planner AI
           </div>
-          <nav style={{ display: "flex", gap: "1.5rem", fontSize: "0.95rem", fontWeight: 500, color: "var(--text-secondary)" }}>
+          <nav style={{ display: "flex", alignItems: "center", gap: "1.5rem", fontSize: "0.95rem", fontWeight: 500, color: "var(--text-secondary)" }}>
             <Link href="/" style={{ color: "var(--text-primary)" }}>Dump</Link>
             <Link href="/vision">Vision</Link>
             <Link href="/goals">Goals</Link>
+            {user && <AuthButton email={user.email || ""} />}
           </nav>
         </header>
         
