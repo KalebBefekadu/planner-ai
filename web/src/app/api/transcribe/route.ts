@@ -1,35 +1,46 @@
 import { NextResponse } from 'next/server';
+import Groq from 'groq-sdk';
 
 // explicitly configure maxDuration for Vercel to prevent Whisper API timeouts
 // 60 seconds gives plenty of time for a 3-minute audio file to transcribe
 export const maxDuration = 60; 
 
+const groq = new Groq({
+  apiKey: process.env.GROQ_API_KEY
+});
+
 export async function POST(request: Request) {
   try {
     const formData = await request.formData();
-    const audioFile = formData.get('audio') as Blob;
+    const audioBlob = formData.get('audio') as Blob;
     
-    if (!audioFile) {
+    if (!audioBlob) {
       return NextResponse.json({ error: "No audio file provided" }, { status: 400 });
     }
 
-    // Limit to 25MB (OpenAI Whisper limit)
-    if (audioFile.size > 25 * 1024 * 1024) {
+    // Limit to 25MB (Whisper limit)
+    if (audioBlob.size > 25 * 1024 * 1024) {
       return NextResponse.json({ error: "Audio file exceeds 25MB limit" }, { status: 400 });
     }
 
     // Limit to > 100 bytes (to prevent empty/silent blobs)
-    if (audioFile.size < 100) {
+    if (audioBlob.size < 100) {
       return NextResponse.json({ error: "Audio file too short or empty" }, { status: 400 });
     }
 
-    // TODO: Forward audioFile to OpenAI Whisper API
-    // const transcript = await openAi.transcribe(audioFile);
+    // Convert Blob to a File object which the Groq SDK expects
+    const file = new File([audioBlob], "audio.webm", { type: audioBlob.type || "audio/webm" });
 
-    return NextResponse.json({ transcript: "This is a mock transcription because the OpenAI keys are not set up yet." });
+    // Send to Groq Whisper
+    const transcription = await groq.audio.transcriptions.create({
+      file,
+      model: "whisper-large-v3-turbo",
+    });
 
-  } catch (error) {
+    return NextResponse.json({ transcript: transcription.text });
+
+  } catch (error: any) {
     console.error("Transcription error:", error);
-    return NextResponse.json({ error: "Internal server error during transcription." }, { status: 500 });
+    return NextResponse.json({ error: error.message || "Internal server error during transcription." }, { status: 500 });
   }
 }
