@@ -23,6 +23,12 @@ export function GoalsUI({ initialData }: { initialData: GoalsData | null }) {
   const [isDeleteModalOpen, setDeleteModalOpen] = useState(false)
   const [itemToDelete, setItemToDelete] = useState<{ id: string, type: string } | null>(null)
   
+  // SMART Goal Form States
+  const [isAddingYearly, setIsAddingYearly] = useState(false)
+  const [newGoalText, setNewGoalText] = useState('')
+  const [isAnalyzing, setIsAnalyzing] = useState(false)
+  const [smartAnalysis, setSmartAnalysis] = useState<{isSmart: boolean, warning: string | null, suggestion: string | null} | null>(null)
+
   const [toasts, setToasts] = useState<{id: number, message: string, type: 'success'|'error'|'info'}[]>([])
   const toastIdRef = { current: 0 }
   const addToast = (message: string, type: 'success'|'error'|'info' = 'info') => {
@@ -39,6 +45,31 @@ export function GoalsUI({ initialData }: { initialData: GoalsData | null }) {
         <a href="/vision" className="btn-primary" style={{ textDecoration: 'none' }}>Draft Vision</a>
       </div>
     )
+  }
+
+  const handleVerifySmart = async () => {
+    setIsAnalyzing(true)
+    try {
+      const res = await fetch('/api/smart-goals', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ goalText: newGoalText, type: 'Yearly Goal' })
+      })
+      const analysis = await res.json()
+      setSmartAnalysis(analysis)
+    } catch (e) {
+      addToast('Failed to analyze goal', 'error')
+    } finally {
+      setIsAnalyzing(false)
+    }
+  }
+
+  const handleSaveGoal = (textToSave: string) => {
+    // Mock save for MVP
+    addToast('Yearly goal saved successfully!', 'success')
+    setIsAddingYearly(false)
+    setNewGoalText('')
+    setSmartAnalysis(null)
   }
 
   const handleStatusToggle = (id: string, type: string, currentStatus: string) => {
@@ -127,8 +158,58 @@ export function GoalsUI({ initialData }: { initialData: GoalsData | null }) {
       <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
           <h2 style={{ fontSize: '1.25rem', fontWeight: 600 }}>Action Plan</h2>
-          <button className="btn-primary" style={{ fontSize: '0.85rem', padding: '0.5rem 1rem' }}>+ Add Yearly Goal</button>
+          {!isAddingYearly && (
+            <button className="btn-primary" onClick={() => setIsAddingYearly(true)} style={{ fontSize: '0.85rem', padding: '0.5rem 1rem' }}>+ Add Yearly Goal</button>
+          )}
         </div>
+
+        {isAddingYearly && (
+          <div className="card animate-fade-in" style={{ padding: '1.5rem', marginBottom: '1rem', borderLeft: '4px solid var(--accent)' }}>
+            <h3 style={{ fontSize: '1rem', fontWeight: 600, marginBottom: '1rem' }}>New Yearly Goal</h3>
+            <textarea
+              className="input-field"
+              placeholder="e.g. Launch a profitable SaaS business generating $5k/MRR by December"
+              value={newGoalText}
+              onChange={(e) => { setNewGoalText(e.target.value); setSmartAnalysis(null); }}
+              style={{ width: '100%', minHeight: '80px', marginBottom: '1rem' }}
+            />
+            
+            {smartAnalysis && !smartAnalysis.isSmart && (
+              <div style={{ backgroundColor: 'rgba(239, 68, 68, 0.1)', border: '1px solid var(--danger)', padding: '1rem', borderRadius: '8px', marginBottom: '1rem' }}>
+                <p style={{ color: 'var(--danger)', fontWeight: 600, fontSize: '0.9rem', marginBottom: '0.5rem' }}>⚠️ AI Feedback: {smartAnalysis.warning}</p>
+                {smartAnalysis.suggestion && (
+                  <div style={{ marginTop: '0.5rem' }}>
+                    <p style={{ fontSize: '0.85rem', color: 'var(--text-secondary)', marginBottom: '0.25rem' }}>Suggested SMART Goal:</p>
+                    <p style={{ fontSize: '0.95rem', fontStyle: 'italic', marginBottom: '0.5rem' }}>"{smartAnalysis.suggestion}"</p>
+                    <button 
+                      className="btn-secondary" 
+                      style={{ fontSize: '0.8rem', padding: '0.25rem 0.5rem' }}
+                      onClick={() => { setNewGoalText(smartAnalysis.suggestion!); setSmartAnalysis(null); }}
+                    >
+                      Accept Suggestion
+                    </button>
+                  </div>
+                )}
+              </div>
+            )}
+
+            {smartAnalysis && smartAnalysis.isSmart && (
+              <div style={{ backgroundColor: 'rgba(34, 197, 94, 0.1)', border: '1px solid #22c55e', padding: '1rem', borderRadius: '8px', marginBottom: '1rem' }}>
+                <p style={{ color: '#22c55e', fontWeight: 600, fontSize: '0.9rem' }}>✅ Perfect SMART Goal!</p>
+              </div>
+            )}
+
+            <div style={{ display: 'flex', gap: '1rem', justifyContent: 'flex-end' }}>
+              <button className="btn-secondary" onClick={() => { setIsAddingYearly(false); setSmartAnalysis(null); setNewGoalText(''); }}>Cancel</button>
+              <button className="btn-secondary" onClick={handleVerifySmart} disabled={isAnalyzing || newGoalText.length < 3}>
+                {isAnalyzing ? 'Analyzing...' : 'Verify with AI'}
+              </button>
+              <button className="btn-primary" onClick={() => handleSaveGoal(newGoalText)} disabled={newGoalText.length < 3 || isAnalyzing}>
+                Save Goal
+              </button>
+            </div>
+          </div>
+        )}
 
         {data.yearly.length === 0 ? (
           <div style={{ padding: '2rem', textAlign: 'center', backgroundColor: 'rgba(255,255,255,0.03)', borderRadius: '8px', color: 'var(--text-secondary)' }}>
@@ -182,7 +263,10 @@ export function GoalsUI({ initialData }: { initialData: GoalsData | null }) {
           </>
         }
       >
-        <p>Are you sure you want to delete this {itemToDelete?.type}? This will also soft-delete all child nodes attached to it.</p>
+        <p>Are you sure you want to delete this {itemToDelete?.type}?</p>
+        <p style={{ color: 'var(--danger)', marginTop: '0.5rem', fontWeight: 500, fontSize: '0.9rem' }}>
+          ⚠️ Warning: Deleting this node will also permanently delete all of its child goals (Quarterly, Monthly, Weekly) attached to it!
+        </p>
       </Modal>
 
       <ToastContainer toasts={toasts} removeToast={(id) => setToasts(prev => prev.filter(t => t.id !== id))} />
