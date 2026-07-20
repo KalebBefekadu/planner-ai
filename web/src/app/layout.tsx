@@ -1,12 +1,18 @@
 import type { Metadata } from "next";
+import { Inter } from "next/font/google";
 import "./globals.css";
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/server";
 import AuthButton from "@/components/auth-button";
+import { ThemeToggle } from "@/components/theme-toggle";
+import { NavLinks } from "@/components/nav-links";
+
+const inter = Inter({ subsets: ["latin"] });
 
 export const metadata: Metadata = {
   title: "Planner AI",
   description: "Voice-First Life Operating System",
+  manifest: "/manifest.json",
 };
 
 export default async function RootLayout({
@@ -19,12 +25,7 @@ export default async function RootLayout({
 
   return (
     <html lang="en">
-      <head>
-        <link rel="preconnect" href="https://fonts.googleapis.com" />
-        <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="anonymous" />
-        <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet" />
-      </head>
-      <body>
+      <body className={inter.className}>
         <header className="glass" style={{
           position: "sticky",
           top: 0,
@@ -38,9 +39,8 @@ export default async function RootLayout({
             Planner AI
           </div>
           <nav style={{ display: "flex", alignItems: "center", gap: "1.5rem", fontSize: "0.95rem", fontWeight: 500, color: "var(--text-secondary)" }}>
-            <Link href="/" style={{ color: "var(--text-primary)" }}>Dump</Link>
-            <Link href="/vision">Vision</Link>
-            <Link href="/goals">Goals</Link>
+            <NavLinks />
+            <ThemeToggle />
             {user && <AuthButton email={user.email || ""} />}
           </nav>
         </header>

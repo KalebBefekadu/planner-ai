@@ -13,6 +13,16 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "No audio file provided" }, { status: 400 });
     }
 
+    // Limit to 25MB (OpenAI Whisper limit)
+    if (audioFile.size > 25 * 1024 * 1024) {
+      return NextResponse.json({ error: "Audio file exceeds 25MB limit" }, { status: 400 });
+    }
+
+    // Limit to > 100 bytes (to prevent empty/silent blobs)
+    if (audioFile.size < 100) {
+      return NextResponse.json({ error: "Audio file too short or empty" }, { status: 400 });
+    }
+
     // TODO: Forward audioFile to OpenAI Whisper API
     // const transcript = await openAi.transcribe(audioFile);
 
