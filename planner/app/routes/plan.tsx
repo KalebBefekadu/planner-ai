@@ -79,7 +79,7 @@ export default function PlanRoute() {
           <p className="text-[11px] font-medium uppercase tracking-[0.14em] text-muted-foreground">
             Cascade
           </p>
-          <h1 className="mt-2 text-pretty text-2xl font-semibold leading-tight tracking-tight text-foreground sm:text-3xl">
+          <h1 className="font-display mt-2 text-pretty text-[28px] font-semibold leading-[1.2] tracking-[-0.01em] text-foreground sm:text-[34px]">
             {primary ? primary.title : "Your plan"}
           </h1>
           {primary?.detail && (

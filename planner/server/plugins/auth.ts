@@ -3,15 +3,19 @@ import { createAuthPlugin } from "@agent-native/core/server";
 const rawAppTitle = "Planner";
 const appTitle = rawAppTitle === "{" + "{APP_TITLE}}" ? "Chat" : rawAppTitle;
 
+/**
+ * Copy for the public sign-in page. This is the first thing anyone sees, so it
+ * describes Planner — not the framework it happens to be built on.
+ */
 export default createAuthPlugin({
   marketing: {
     appName: appTitle,
     tagline:
-      "Start from a chat-first agent-native app and add actions, screens, and workflows as you grow.",
+      "Talk through your week. Planner keeps the structure — from this week's actions up to the life you're building.",
     features: [
-      "Full-page chat with durable threads and tool call history",
-      "Add actions once and use them from chat, UI, HTTP, MCP, A2A, and CLI",
-      "Plug in your own agent runtime or build on the included app-agent loop",
+      "Dump the week out loud; nothing gets lost and nothing gets summarized away",
+      "Every action ladders up through the month, the quarter, the year, the vision",
+      "A coach that reads your own words back and tells you where you've drifted",
     ],
   },
 });

@@ -9,9 +9,9 @@ import { useNavigate, useParams } from "react-router";
 import { APP_TITLE } from "@/lib/app-config";
 import { TAB_ID } from "@/lib/tab-id";
 
-const SEO_TITLE = `${APP_TITLE} - Open Source AI app starter with actions`;
+const SEO_TITLE = `${APP_TITLE} — voice-first life planning`;
 const SEO_DESCRIPTION =
-  "Open Source starter for agent-native apps with durable chat, shared actions, UI state, tools, and a backend your agent can extend.";
+  "Talk through your week and let Planner keep the structure: a cascade from this week's actions up to the life you're building, with a coach that reads your own words back to you.";
 
 export function meta() {
   return [
