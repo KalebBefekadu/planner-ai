@@ -18,7 +18,9 @@ export default defineAction({
       .string()
       .nullable()
       .optional()
-      .describe("Move the node under a different parent. Null makes it a root."),
+      .describe(
+        "Move the node under a different parent. Null makes it a root.",
+      ),
     horizonStart: z.string().nullable().optional(),
     horizonEnd: z.string().nullable().optional(),
     sortOrder: z.number().int().optional(),

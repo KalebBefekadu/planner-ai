@@ -1,7 +1,10 @@
 import { defineAction } from "@agent-native/core/action";
 import { z } from "zod";
 
-import { captureTranscript, requireUserEmail } from "../server/planner/store.js";
+import {
+  captureTranscript,
+  requireUserEmail,
+} from "../server/planner/store.js";
 
 export default defineAction({
   description:
@@ -19,7 +22,9 @@ export default defineAction({
     capturedAt: z
       .string()
       .optional()
-      .describe("ISO timestamp. Defaults to now — set it for backdated entries."),
+      .describe(
+        "ISO timestamp. Defaults to now — set it for backdated entries.",
+      ),
   }),
   run: async (args, ctx) => {
     const ownerEmail = requireUserEmail(ctx?.userEmail);

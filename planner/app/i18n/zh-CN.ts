@@ -46,6 +46,7 @@ const messages = {
     navigationDescription: "主导航",
     observability: "可观测性",
     openNavigation: "打开导航",
+    plan: "计划",
     settings: "设置",
     team: "团队",
   },

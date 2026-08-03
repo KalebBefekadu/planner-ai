@@ -64,7 +64,10 @@ export async function getNode(
     .select()
     .from(planNodes)
     .where(
-      and(eq(planNodes.ownerEmail, input.ownerEmail), eq(planNodes.id, input.id)),
+      and(
+        eq(planNodes.ownerEmail, input.ownerEmail),
+        eq(planNodes.id, input.id),
+      ),
     )
     .limit(1);
   return row ?? null;
@@ -108,7 +111,10 @@ export async function createNode(
   // node being attached to someone else's tree, and what stops the caller
   // creating an orphan pointing at an id that does not exist.
   if (parentId !== null) {
-    const parent = await getNode({ ownerEmail: input.ownerEmail, id: parentId }, db);
+    const parent = await getNode(
+      { ownerEmail: input.ownerEmail, id: parentId },
+      db,
+    );
     if (!parent) throw new NotFoundError("Parent node not found.");
   }
 
@@ -128,7 +134,10 @@ export async function createNode(
   };
 
   await db.insert(planNodes).values(row);
-  const created = await getNode({ ownerEmail: input.ownerEmail, id: row.id }, db);
+  const created = await getNode(
+    { ownerEmail: input.ownerEmail, id: row.id },
+    db,
+  );
   if (!created) throw new Error("Node insert did not persist.");
   return created;
 }
@@ -152,7 +161,10 @@ export async function updateNode(
   input: { ownerEmail: string; id: string; patch: NodePatch },
   db = getDb(),
 ): Promise<PlanNode> {
-  const existing = await getNode({ ownerEmail: input.ownerEmail, id: input.id }, db);
+  const existing = await getNode(
+    { ownerEmail: input.ownerEmail, id: input.id },
+    db,
+  );
   if (!existing) throw new NotFoundError("Node not found.");
 
   const { patch } = input;
@@ -176,7 +188,8 @@ export async function updateNode(
   if (patch.detail !== undefined) changes.detail = patch.detail;
   if (patch.status !== undefined) changes.status = patch.status;
   if (patch.parentId !== undefined) changes.parentId = patch.parentId;
-  if (patch.horizonStart !== undefined) changes.horizonStart = patch.horizonStart;
+  if (patch.horizonStart !== undefined)
+    changes.horizonStart = patch.horizonStart;
   if (patch.horizonEnd !== undefined) changes.horizonEnd = patch.horizonEnd;
   if (patch.sortOrder !== undefined) changes.sortOrder = patch.sortOrder;
   if (patch.archived !== undefined) {
@@ -187,10 +200,16 @@ export async function updateNode(
     .update(planNodes)
     .set(changes)
     .where(
-      and(eq(planNodes.ownerEmail, input.ownerEmail), eq(planNodes.id, input.id)),
+      and(
+        eq(planNodes.ownerEmail, input.ownerEmail),
+        eq(planNodes.id, input.id),
+      ),
     );
 
-  const updated = await getNode({ ownerEmail: input.ownerEmail, id: input.id }, db);
+  const updated = await getNode(
+    { ownerEmail: input.ownerEmail, id: input.id },
+    db,
+  );
   if (!updated) throw new Error("Node update did not persist.");
   return updated;
 }
@@ -225,7 +244,10 @@ export async function captureTranscript(
   db = getDb(),
 ): Promise<Transcript> {
   if (input.nodeId) {
-    const node = await getNode({ ownerEmail: input.ownerEmail, id: input.nodeId }, db);
+    const node = await getNode(
+      { ownerEmail: input.ownerEmail, id: input.nodeId },
+      db,
+    );
     if (!node) throw new NotFoundError("Node not found.");
   }
 

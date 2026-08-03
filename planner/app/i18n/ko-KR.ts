@@ -50,6 +50,7 @@ const messages = {
     navigationDescription: "기본 탐색",
     observability: "관찰성",
     openNavigation: "탐색 열기",
+    plan: "플랜",
     settings: "설정",
     team: "팀",
   },

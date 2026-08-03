@@ -48,6 +48,7 @@ const messages = {
     navigationDescription: "التنقل الرئيسي",
     observability: "قابلية المراقبة",
     openNavigation: "فتح التنقل",
+    plan: "الخطة",
     settings: "الإعدادات",
     team: "الفريق",
   },

@@ -16,6 +16,11 @@ export default defineAction({
   readOnly: true,
   run: async (args, ctx) => {
     const ownerEmail = requireUserEmail(ctx?.userEmail);
-    return { nodes: await listPlan({ ownerEmail, includeArchived: args.includeArchived }) };
+    return {
+      nodes: await listPlan({
+        ownerEmail,
+        includeArchived: args.includeArchived,
+      }),
+    };
   },
 });

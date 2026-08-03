@@ -49,6 +49,7 @@ const messages = {
     navigationDescription: "メインナビゲーション",
     observability: "可観測性",
     openNavigation: "ナビゲーションを開く",
+    plan: "プラン",
     settings: "設定",
     team: "チーム",
   },

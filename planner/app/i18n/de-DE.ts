@@ -50,6 +50,7 @@ const messages = {
     navigationDescription: "Hauptnavigation",
     observability: "Beobachtbarkeit",
     openNavigation: "Navigation öffnen",
+    plan: "Plan",
     settings: "Einstellungen",
     team: "Team",
   },

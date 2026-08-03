@@ -48,6 +48,7 @@ const messages = {
     navigationDescription: "मुख्य नेविगेशन",
     observability: "अवलोकनक्षमता",
     openNavigation: "नेविगेशन खोलें",
+    plan: "योजना",
     settings: "सेटिंग्स",
     team: "टीम",
   },
