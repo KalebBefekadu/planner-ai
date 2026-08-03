@@ -11,11 +11,13 @@ export function DumpUI({ initialTranscripts }: { initialTranscripts: Transcript[
   const [transcripts, setTranscripts] = useState<Transcript[]>(initialTranscripts)
   const [isRecording, setIsRecording] = useState(false)
   const [transcriptText, setTranscriptText] = useState('')
+  const [interimText, setInterimText] = useState('')
   const [recordingTime, setRecordingTime] = useState(0)
   const [toasts, setToasts] = useState<{id: number, message: string, type: 'success'|'error'|'info'}[]>([])
   
   const MAX_RECORDING_SECONDS = 180
   const mediaRecorderRef = useRef<MediaRecorder | null>(null)
+  const recognitionRef = useRef<any>(null)
   const audioChunksRef = useRef<Blob[]>([])
   const toastIdRef = useRef(0)
 
@@ -65,6 +67,30 @@ export function DumpUI({ initialTranscripts }: { initialTranscripts: Transcript[
       mediaRecorderRef.current = mediaRecorder
       audioChunksRef.current = []
 
+      // Setup Web Speech API for live captions (Gray text)
+      if (typeof window !== 'undefined' && ('SpeechRecognition' in window || 'webkitSpeechRecognition' in window)) {
+        const SpeechRecognition = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition
+        recognitionRef.current = new SpeechRecognition()
+        recognitionRef.current.continuous = true
+        recognitionRef.current.interimResults = true
+
+        recognitionRef.current.onresult = (event: any) => {
+          let currentInterim = ''
+          for (let i = event.resultIndex; i < event.results.length; ++i) {
+            if (!event.results[i].isFinal) {
+              currentInterim += event.results[i][0].transcript
+            }
+          }
+          setInterimText(currentInterim)
+        }
+        
+        recognitionRef.current.onerror = () => {} // Ignore transient speech errors
+        
+        try {
+          recognitionRef.current.start()
+        } catch (e) {}
+      }
+
       mediaRecorder.ondataavailable = (event) => {
         if (event.data.size > 0) audioChunksRef.current.push(event.data)
       }
@@ -100,6 +126,12 @@ export function DumpUI({ initialTranscripts }: { initialTranscripts: Transcript[
       mediaRecorderRef.current.stop()
       mediaRecorderRef.current.stream.getTracks().forEach(track => track.stop())
     }
+    if (recognitionRef.current) {
+      try {
+        recognitionRef.current.stop()
+      } catch (e) {}
+    }
+    setInterimText('')
     setIsRecording(false)
   }
 
@@ -133,13 +165,26 @@ export function DumpUI({ initialTranscripts }: { initialTranscripts: Transcript[
         </header>
 
         <div style={{ flex: 1, display: "flex", flexDirection: "column", gap: "1rem" }}>
-          <textarea
-            className="input-field"
-            placeholder="Your transcript will appear here... (You can also type manually)"
-            value={transcriptText}
-            onChange={(e) => setTranscriptText(e.target.value)}
-            style={{ flex: 1, minHeight: "300px", resize: "none", fontSize: "1.1rem", lineHeight: 1.6 }}
-          />
+          <div style={{ position: 'relative', flex: 1, display: 'flex', flexDirection: 'column' }}>
+            <textarea
+              className="input-field"
+              placeholder="Your transcript will appear here... (You can also type manually)"
+              value={transcriptText}
+              onChange={(e) => setTranscriptText(e.target.value)}
+              style={{ flex: 1, minHeight: "300px", resize: "none", fontSize: "1.1rem", lineHeight: 1.6 }}
+            />
+            {isRecording && interimText && (
+              <div className="animate-fade-in" style={{ 
+                position: 'absolute', bottom: '20px', left: '20px', right: '20px', 
+                padding: '1rem', backgroundColor: 'rgba(0,0,0,0.6)', borderRadius: '8px',
+                color: 'var(--text-secondary)', fontStyle: 'italic', fontSize: '1.1rem',
+                backdropFilter: 'blur(10px)', border: '1px solid var(--border)',
+                pointerEvents: 'none'
+              }}>
+                {interimText}...
+              </div>
+            )}
+          </div>
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
             <button 
               onClick={() => setTranscriptText('')}
