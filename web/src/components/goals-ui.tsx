@@ -1,275 +1,822 @@
-'use client'
+'use client';
 
-import { useState } from 'react'
-import { Database } from '@/types/supabase'
-import { Modal } from '@/components/modal'
-import { Toast, ToastContainer } from '@/components/toast'
+import { useState, useTransition } from 'react';
+import { Archive, CalendarPlus, Pause, Pencil, Play, Plus, Repeat2, Save, X } from 'lucide-react';
+import {
+  archiveActionTemplate,
+  archiveGoal,
+  createActionTemplate,
+  createGoal,
+  materializeActionTemplate,
+  movePlanAction,
+  setActionTemplateStatus,
+  updateActionTemplate,
+  updatePlanAction,
+  updatePlanGoal,
+  updateGoalStatus,
+  type ActionTemplateView,
+  type GoalType,
+  type GoalView,
+  type GoalsData,
+} from '@/app/actions';
 
-type YearlyGoal = Database['public']['Tables']['yearly_goals']['Row']
-type QuarterlyGoal = Database['public']['Tables']['quarterly_goals']['Row']
-type MonthlyTask = Database['public']['Tables']['monthly_tasks']['Row']
-type WeeklyAction = Database['public']['Tables']['weekly_actions']['Row']
+type ComposerTarget = { type: GoalType; parentId: string; label: string } | null;
+type GoalItem = GoalView;
+type EditTarget = { type: GoalType; item: GoalItem } | null;
 
-interface GoalsData {
-  vision: Database['public']['Tables']['visions']['Row'] | null
-  yearly: YearlyGoal[]
-  quarterly: QuarterlyGoal[]
-  monthly: MonthlyTask[]
-  weekly: WeeklyAction[]
+const labels: Record<GoalType, string> = {
+  yearly: 'Yearly goal',
+  quarterly: 'Quarterly goal',
+  monthly: 'Monthly action',
+  weekly: 'Weekly action',
+};
+const childTypes: Partial<Record<GoalType, GoalType>> = {
+  yearly: 'quarterly',
+  quarterly: 'monthly',
+  monthly: 'weekly',
+};
+
+function messageFor(error: unknown) {
+  return error instanceof Error ? error.message : 'Something went wrong. Please try again.';
 }
 
-export function GoalsUI({ initialData }: { initialData: GoalsData | null }) {
-  const [data, setData] = useState<GoalsData | null>(initialData)
-  const [isDeleteModalOpen, setDeleteModalOpen] = useState(false)
-  const [itemToDelete, setItemToDelete] = useState<{ id: string, type: string } | null>(null)
-  
-  // SMART Goal Form States
-  const [isAddingYearly, setIsAddingYearly] = useState(false)
-  const [newGoalText, setNewGoalText] = useState('')
-  const [isAnalyzing, setIsAnalyzing] = useState(false)
-  const [smartAnalysis, setSmartAnalysis] = useState<{isSmart: boolean, warning: string | null, suggestion: string | null} | null>(null)
+export function GoalsUI({
+  initialData,
+  initialTemplates,
+}: {
+  initialData: GoalsData | null;
+  initialTemplates: ActionTemplateView[] | null;
+}) {
+  const [composer, setComposer] = useState<ComposerTarget>(null);
+  const [content, setContent] = useState('');
+  const [editTarget, setEditTarget] = useState<EditTarget>(null);
+  const [templateEditor, setTemplateEditor] = useState<ActionTemplateView | 'new' | null>(null);
+  const [notice, setNotice] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const [isPending, startTransition] = useTransition();
 
-  const [toasts, setToasts] = useState<{id: number, message: string, type: 'success'|'error'|'info'}[]>([])
-  const toastIdRef = { current: 0 }
-  const addToast = (message: string, type: 'success'|'error'|'info' = 'info') => {
-    const id = ++toastIdRef.current
-    setToasts(prev => [...prev, { id, message, type }])
+  function openComposer(type: GoalType, parentId: string) {
+    setComposer({ type, parentId, label: labels[type] });
+    setContent('');
+    setError(null);
   }
 
-  // Ensure data exists, otherwise render Empty State
-  if (!data || !data.vision) {
+  function createItem() {
+    if (!composer) return;
+    setError(null);
+    startTransition(async () => {
+      try {
+        await createGoal({ type: composer.type, parentId: composer.parentId, content });
+        setNotice(`${composer.label} added to your plan.`);
+        setComposer(null);
+        setContent('');
+      } catch (caught) {
+        setError(messageFor(caught));
+      }
+    });
+  }
+
+  function toggleItem(type: GoalType, item: GoalItem) {
+    setError(null);
+    startTransition(async () => {
+      try {
+        await updateGoalStatus(
+          type,
+          item.id,
+          item.status === 'completed' ? 'pending' : 'completed',
+          item.version
+        );
+        setNotice(`${labels[type]} updated.`);
+      } catch (caught) {
+        setError(messageFor(caught));
+      }
+    });
+  }
+
+  function archiveItem(type: GoalType, id: string, expectedVersion: number) {
+    if (!window.confirm(`Archive this ${labels[type].toLowerCase()} and any items beneath it?`))
+      return;
+    setError(null);
+    startTransition(async () => {
+      try {
+        await archiveGoal(type, id, expectedVersion);
+        setNotice(`${labels[type]} archived.`);
+      } catch (caught) {
+        setError(messageFor(caught));
+      }
+    });
+  }
+
+  function saveEdit(formData: FormData) {
+    if (!editTarget) return;
+    const { type, item } = editTarget;
+    const title = String(formData.get('title') ?? '');
+    const descriptionMarkdown = String(formData.get('description') ?? '') || null;
+    const date = String(formData.get('date') ?? '') || null;
+    const destination = String(formData.get('destination') ?? '');
+    setError(null);
+    startTransition(async () => {
+      try {
+        if (type === 'yearly' || type === 'quarterly') {
+          const targetText = String(formData.get('targetValue') ?? '');
+          const currentText = String(formData.get('currentValue') ?? '');
+          const unit = String(formData.get('unit') ?? '').trim() || null;
+          await updatePlanGoal({
+            id: item.id,
+            expectedVersion: item.version,
+            title,
+            descriptionMarkdown,
+            parentGoalId: type === 'quarterly' ? destination : null,
+            targetValue: targetText ? Number(targetText) : null,
+            currentValue: targetText ? (currentText ? Number(currentText) : 0) : null,
+            unit,
+            dueOn: date,
+          });
+        } else {
+          const updated = await updatePlanAction({
+            id: item.id,
+            expectedVersion: item.version,
+            title,
+            descriptionMarkdown,
+            scheduledOn: date,
+          });
+          const currentDestination = type === 'monthly' ? item.quarterly_id : item.monthly_id;
+          if (destination && destination !== currentDestination) {
+            await movePlanAction({
+              type,
+              id: item.id,
+              expectedVersion: updated.version,
+              targetParentId: destination,
+            });
+          }
+        }
+        setEditTarget(null);
+        setNotice(`${labels[type]} saved.`);
+      } catch (caught) {
+        setError(messageFor(caught));
+      }
+    });
+  }
+
+  function saveTemplate(formData: FormData) {
+    const editing = templateEditor && templateEditor !== 'new' ? templateEditor : null;
+    const title = String(formData.get('title') ?? '');
+    const descriptionMarkdown = String(formData.get('description') ?? '') || null;
+    const goalId = String(formData.get('goalId') ?? '') || null;
+    const cadence = String(formData.get('cadence')) as 'weekly' | 'monthly';
+    const occurrenceOn = String(formData.get('occurrenceOn') ?? '');
+    setError(null);
+    startTransition(async () => {
+      try {
+        if (editing) {
+          await updateActionTemplate({
+            id: editing.id,
+            expectedVersion: editing.version,
+            title,
+            descriptionMarkdown,
+            goalId,
+            cadence,
+            nextOccurrenceOn: occurrenceOn,
+          });
+          setNotice('Recurring Action updated.');
+        } else {
+          await createActionTemplate({
+            title,
+            descriptionMarkdown,
+            goalId,
+            cadence,
+            firstOccurrenceOn: occurrenceOn,
+          });
+          setNotice('Recurring Action created with its first dated occurrence.');
+        }
+        setTemplateEditor(null);
+      } catch (caught) {
+        setError(messageFor(caught));
+      }
+    });
+  }
+
+  function toggleTemplate(template: ActionTemplateView) {
+    const status = template.status === 'active' ? 'paused' : 'active';
+    setError(null);
+    startTransition(async () => {
+      try {
+        await setActionTemplateStatus(template.id, template.version, status);
+        setNotice(status === 'active' ? 'Recurring Action resumed.' : 'Recurring Action paused.');
+      } catch (caught) {
+        setError(messageFor(caught));
+      }
+    });
+  }
+
+  function createDueActions(template: ActionTemplateView) {
+    setError(null);
+    startTransition(async () => {
+      try {
+        const result = await materializeActionTemplate(template.id, template.version);
+        setNotice(
+          result.createdActionIds.length === 0
+            ? 'No occurrences are due.'
+            : `${result.createdActionIds.length} due ${result.createdActionIds.length === 1 ? 'Action' : 'Actions'} created.`
+        );
+      } catch (caught) {
+        setError(messageFor(caught));
+      }
+    });
+  }
+
+  function archiveTemplate(template: ActionTemplateView) {
+    if (!window.confirm('Archive this recurring Action? Existing Actions will stay unchanged.'))
+      return;
+    setError(null);
+    startTransition(async () => {
+      try {
+        await archiveActionTemplate(template.id, template.version);
+        setNotice('Recurring Action archived.');
+      } catch (caught) {
+        setError(messageFor(caught));
+      }
+    });
+  }
+
+  if (!initialData) {
     return (
-      <div className="animate-fade-in" style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', height: '100%', gap: '1rem', textAlign: 'center' }}>
-        <h2 style={{ fontSize: '1.5rem', fontWeight: 600 }}>No Vision Found</h2>
-        <p style={{ color: 'var(--text-secondary)' }}>You must define your Life Vision before setting goals.</p>
-        <a href="/vision" className="btn-primary" style={{ textDecoration: 'none' }}>Draft Vision</a>
+      <div className="page">
+        <div className="card empty-state">
+          <h1>Start with your vision</h1>
+          <p>Every useful plan needs a direction to work from.</p>
+          <a className="btn-primary" href="/vision">
+            Draft vision
+          </a>
+        </div>
       </div>
-    )
+    );
   }
 
-  const handleVerifySmart = async () => {
-    setIsAnalyzing(true)
-    try {
-      const res = await fetch('/api/smart-goals', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ goalText: newGoalText, type: 'Yearly Goal' })
-      })
-      const analysis = await res.json()
-      setSmartAnalysis(analysis)
-    } catch (e) {
-      addToast('Failed to analyze goal', 'error')
-    } finally {
-      setIsAnalyzing(false)
-    }
-  }
-
-  const handleSaveGoal = (textToSave: string) => {
-    // Mock save for MVP
-    addToast('Yearly goal saved successfully!', 'success')
-    setIsAddingYearly(false)
-    setNewGoalText('')
-    setSmartAnalysis(null)
-  }
-
-  const handleStatusToggle = (id: string, type: string, currentStatus: string) => {
-    // Mock UI update for MVP
-    addToast(`Toggled status for ${type}`, 'success')
-  }
-
-  const requestDelete = (id: string, type: string) => {
-    setItemToDelete({ id, type })
-    setDeleteModalOpen(true)
-  }
-
-  const confirmDelete = () => {
-    // Mock UI delete for MVP
-    if (itemToDelete) {
-      addToast(`Deleted ${itemToDelete.type}`, 'success')
-    }
-    setDeleteModalOpen(false)
-    setItemToDelete(null)
-  }
-
-  // Helper to render a goal node
-  const renderNode = (item: any, type: string, indent: number) => {
-    const isDone = item.status === 'completed'
+  const { vision, yearly, quarterly, monthly, weekly } = initialData;
+  const renderItem = (item: GoalItem, type: GoalType, depth: number) => {
+    const childType = childTypes[type];
     return (
-      <div key={item.id} style={{ 
-        display: 'flex', 
-        alignItems: 'flex-start', 
-        gap: '1rem', 
-        marginLeft: `${indent}px`,
-        padding: '0.75rem',
-        backgroundColor: 'rgba(255,255,255,0.03)',
-        borderLeft: `2px solid var(--border)`,
-        borderRadius: '0 8px 8px 0',
-        marginBottom: '0.5rem',
-        opacity: isDone ? 0.5 : 1,
-        transition: 'all 0.2s ease'
-      }}>
-        <button 
-          onClick={() => handleStatusToggle(item.id, type, item.status)}
-          style={{ 
-            width: '20px', height: '20px', borderRadius: '50%', 
-            border: `2px solid ${isDone ? 'var(--accent)' : 'var(--text-secondary)'}`, 
-            backgroundColor: isDone ? 'var(--accent)' : 'transparent',
-            cursor: 'pointer', flexShrink: 0, marginTop: '2px'
-          }}
+      <div className={`plan-item plan-depth-${depth}`} key={item.id}>
+        <button
+          className={`status-toggle${item.status === 'completed' ? ' status-complete' : ''}`}
+          type="button"
+          onClick={() => toggleItem(type, item)}
+          aria-label={`Mark ${labels[type].toLowerCase()} as ${item.status === 'completed' ? 'not complete' : 'complete'}`}
+          disabled={isPending}
         />
-        <div style={{ flex: 1 }}>
-          <div style={{ 
-            fontSize: '1rem', 
-            textDecoration: isDone ? 'line-through' : 'none',
-            color: isDone ? 'var(--text-secondary)' : 'var(--text-primary)'
-          }}>
-            {item.content}
+        <div className="plan-content">
+          <p>{item.content}</p>
+          <div className="plan-item-meta">
+            <span>{labels[type]}</span>
+            {item.due_on || item.scheduled_on ? (
+              <time dateTime={item.due_on ?? item.scheduled_on ?? undefined}>
+                {new Intl.DateTimeFormat('en-US', { month: 'short', day: 'numeric' }).format(
+                  new Date(`${item.due_on ?? item.scheduled_on}T12:00:00Z`)
+                )}
+              </time>
+            ) : null}
           </div>
-          <div style={{ fontSize: '0.75rem', color: 'var(--text-secondary)', marginTop: '0.25rem', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
-            {type}
-          </div>
+          {(type === 'yearly' || type === 'quarterly') && item.target_value ? (
+            <div className="goal-progress">
+              <span>
+                {item.current_value ?? 0} / {item.target_value} {item.unit}
+              </span>
+              <div aria-hidden="true">
+                <i
+                  style={{
+                    width: `${Math.min(100, ((item.current_value ?? 0) / item.target_value) * 100)}%`,
+                  }}
+                />
+              </div>
+            </div>
+          ) : null}
         </div>
-        <div style={{ display: 'flex', gap: '0.5rem' }}>
-          <button className="btn-secondary" style={{ padding: '0.25rem 0.5rem', fontSize: '0.75rem' }}>Verify with AI</button>
-          <button onClick={() => requestDelete(item.id, type)} style={{ background: 'none', border: 'none', color: 'var(--danger)', cursor: 'pointer', fontSize: '0.85rem' }}>Delete</button>
+        <div className="plan-actions">
+          {childType ? (
+            <button
+              className="text-button"
+              type="button"
+              onClick={() => openComposer(childType, item.id)}
+              disabled={isPending}
+            >
+              Add {labels[childType].replace(' goal', '').replace(' action', '')}
+            </button>
+          ) : null}
+          <button
+            className="icon-button"
+            type="button"
+            onClick={() => setEditTarget({ type, item })}
+            disabled={isPending}
+            aria-label={`Edit ${item.content}`}
+            title="Edit"
+          >
+            <Pencil size={15} />
+          </button>
+          <button
+            className="text-button text-button-danger"
+            type="button"
+            onClick={() => archiveItem(type, item.id, item.version)}
+            disabled={isPending}
+          >
+            Archive
+          </button>
         </div>
       </div>
-    )
-  }
+    );
+  };
 
   return (
-    <div className="animate-fade-in" style={{ display: "flex", flexDirection: "column", gap: "2rem" }}>
-      <header>
-        <h1 style={{ fontSize: "2.5rem", fontWeight: 700, marginBottom: "0.5rem" }}>Goals Hierarchy</h1>
-        <p style={{ color: "var(--text-secondary)", fontSize: "1.1rem" }}>
-          Break your vision down into actionable steps.
-        </p>
+    <div className="page plan-page">
+      <header className="page-heading">
+        <div>
+          <p className="eyebrow">Aligned action</p>
+          <h1>Your plan</h1>
+          <p className="lede">
+            Keep each level connected, then turn the next meaningful step into this week&apos;s
+            work.
+          </p>
+        </div>
+        <div className="page-heading-actions">
+          {initialTemplates ? (
+            <button
+              className="btn-secondary button-with-icon"
+              type="button"
+              onClick={() => setTemplateEditor('new')}
+              disabled={isPending}
+            >
+              <Repeat2 size={16} />
+              Recurring Action
+            </button>
+          ) : null}
+          <button
+            className="btn-primary"
+            type="button"
+            onClick={() => openComposer('yearly', vision.id)}
+            disabled={isPending}
+          >
+            Add yearly goal
+          </button>
+        </div>
       </header>
 
-      {/* Vision Anchor */}
-      <div className="card" style={{ padding: '1.5rem', borderLeft: '4px solid var(--accent)' }}>
-        <h3 style={{ fontSize: '0.85rem', color: 'var(--accent)', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: '0.5rem' }}>
-          Current Vision
-        </h3>
-        <p style={{ fontSize: '1.1rem', fontStyle: 'italic', color: 'var(--text-secondary)' }}>"{data.vision.content}"</p>
-      </div>
+      {notice ? (
+        <p className="status-message" role="status">
+          {notice}
+        </p>
+      ) : null}
+      {error ? (
+        <p className="status-message status-message-error" role="alert">
+          {error}
+        </p>
+      ) : null}
 
-      {/* Hierarchy Render (Simplified for MVP UI) */}
-      <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-          <h2 style={{ fontSize: '1.25rem', fontWeight: 600 }}>Action Plan</h2>
-          {!isAddingYearly && (
-            <button className="btn-primary" onClick={() => setIsAddingYearly(true)} style={{ fontSize: '0.85rem', padding: '0.5rem 1rem' }}>+ Add Yearly Goal</button>
-          )}
-        </div>
+      {composer ? (
+        <section className="card goal-composer">
+          <div>
+            <p className="eyebrow">New item</p>
+            <h2>{composer.label}</h2>
+          </div>
+          <textarea
+            className="input-field"
+            value={content}
+            onChange={(event) => setContent(event.target.value)}
+            placeholder={`Describe this ${composer.label.toLowerCase()}...`}
+            autoFocus
+          />
+          <div className="composer-actions">
+            <button
+              className="btn-secondary"
+              type="button"
+              onClick={() => setComposer(null)}
+              disabled={isPending}
+            >
+              Cancel
+            </button>
+            <button
+              className="btn-primary"
+              type="button"
+              onClick={createItem}
+              disabled={isPending || content.trim().length < 3}
+            >
+              {isPending ? 'Saving...' : `Add ${composer.label}`}
+            </button>
+          </div>
+        </section>
+      ) : null}
 
-        {isAddingYearly && (
-          <div className="card animate-fade-in" style={{ padding: '1.5rem', marginBottom: '1rem', borderLeft: '4px solid var(--accent)' }}>
-            <h3 style={{ fontSize: '1rem', fontWeight: 600, marginBottom: '1rem' }}>New Yearly Goal</h3>
-            <textarea
-              className="input-field"
-              placeholder="e.g. Launch a profitable SaaS business generating $5k/MRR by December"
-              value={newGoalText}
-              onChange={(e) => { setNewGoalText(e.target.value); setSmartAnalysis(null); }}
-              style={{ width: '100%', minHeight: '80px', marginBottom: '1rem' }}
-            />
-            
-            {smartAnalysis && !smartAnalysis.isSmart && (
-              <div style={{ backgroundColor: 'rgba(239, 68, 68, 0.1)', border: '1px solid var(--danger)', padding: '1rem', borderRadius: '8px', marginBottom: '1rem' }}>
-                <p style={{ color: 'var(--danger)', fontWeight: 600, fontSize: '0.9rem', marginBottom: '0.5rem' }}>⚠️ AI Feedback: {smartAnalysis.warning}</p>
-                {smartAnalysis.suggestion && (
-                  <div style={{ marginTop: '0.5rem' }}>
-                    <p style={{ fontSize: '0.85rem', color: 'var(--text-secondary)', marginBottom: '0.25rem' }}>Suggested SMART Goal:</p>
-                    <p style={{ fontSize: '0.95rem', fontStyle: 'italic', marginBottom: '0.5rem' }}>"{smartAnalysis.suggestion}"</p>
-                    <button 
-                      className="btn-secondary" 
-                      style={{ fontSize: '0.8rem', padding: '0.25rem 0.5rem' }}
-                      onClick={() => { setNewGoalText(smartAnalysis.suggestion!); setSmartAnalysis(null); }}
-                    >
-                      Accept Suggestion
-                    </button>
-                  </div>
-                )}
-              </div>
-            )}
+      <section className="card vision-anchor">
+        <p className="eyebrow">North Star</p>
+        <p>{vision.content}</p>
+        <a href="/vision">Edit vision</a>
+      </section>
 
-            {smartAnalysis && smartAnalysis.isSmart && (
-              <div style={{ backgroundColor: 'rgba(34, 197, 94, 0.1)', border: '1px solid #22c55e', padding: '1rem', borderRadius: '8px', marginBottom: '1rem' }}>
-                <p style={{ color: '#22c55e', fontWeight: 600, fontSize: '0.9rem' }}>✅ Perfect SMART Goal!</p>
-              </div>
-            )}
-
-            <div style={{ display: 'flex', gap: '1rem', justifyContent: 'flex-end' }}>
-              <button className="btn-secondary" onClick={() => { setIsAddingYearly(false); setSmartAnalysis(null); setNewGoalText(''); }}>Cancel</button>
-              <button className="btn-secondary" onClick={handleVerifySmart} disabled={isAnalyzing || newGoalText.length < 3}>
-                {isAnalyzing ? 'Analyzing...' : 'Verify with AI'}
-              </button>
-              <button className="btn-primary" onClick={() => handleSaveGoal(newGoalText)} disabled={newGoalText.length < 3 || isAnalyzing}>
-                Save Goal
+      {initialTemplates ? (
+        <section className="recurrence-section" aria-labelledby="recurrence-title">
+          <header>
+            <div>
+              <p className="eyebrow">Simple recurrence</p>
+              <h2 id="recurrence-title">Recurring Actions</h2>
+            </div>
+            <button
+              className="icon-button"
+              type="button"
+              onClick={() => setTemplateEditor('new')}
+              disabled={isPending}
+              aria-label="Create recurring Action"
+              title="Create recurring Action"
+            >
+              <Plus size={17} />
+            </button>
+          </header>
+          {initialTemplates.length === 0 ? (
+            <div className="recurrence-empty">
+              <p>No recurring Actions yet.</p>
+              <button
+                className="text-button"
+                type="button"
+                onClick={() => setTemplateEditor('new')}
+              >
+                Create one
               </button>
             </div>
-          </div>
-        )}
+          ) : (
+            <div className="recurrence-list">
+              {initialTemplates.map((template) => (
+                <article className="recurrence-item" key={template.id}>
+                  <div className="recurrence-mark" aria-hidden="true">
+                    <Repeat2 size={17} />
+                  </div>
+                  <div className="recurrence-copy">
+                    <h3>{template.title}</h3>
+                    <p>
+                      {template.cadence === 'weekly' ? 'Weekly' : 'Monthly'} · Next{' '}
+                      <time dateTime={template.nextOccurrenceOn}>
+                        {new Intl.DateTimeFormat('en-US', {
+                          month: 'short',
+                          day: 'numeric',
+                          year: 'numeric',
+                          timeZone: 'UTC',
+                        }).format(new Date(`${template.nextOccurrenceOn}T12:00:00Z`))}
+                      </time>
+                      {template.status === 'paused' ? ' · Paused' : ''}
+                    </p>
+                  </div>
+                  <div className="recurrence-actions">
+                    <button
+                      className="icon-button"
+                      type="button"
+                      onClick={() => createDueActions(template)}
+                      disabled={isPending || template.status === 'paused'}
+                      aria-label={`Create due Actions for ${template.title}`}
+                      title="Create due Actions"
+                    >
+                      <CalendarPlus size={16} />
+                    </button>
+                    <button
+                      className="icon-button"
+                      type="button"
+                      onClick={() => toggleTemplate(template)}
+                      disabled={isPending}
+                      aria-label={`${template.status === 'active' ? 'Pause' : 'Resume'} ${template.title}`}
+                      title={template.status === 'active' ? 'Pause' : 'Resume'}
+                    >
+                      {template.status === 'active' ? <Pause size={16} /> : <Play size={16} />}
+                    </button>
+                    <button
+                      className="icon-button"
+                      type="button"
+                      onClick={() => setTemplateEditor(template)}
+                      disabled={isPending}
+                      aria-label={`Edit ${template.title}`}
+                      title="Edit"
+                    >
+                      <Pencil size={16} />
+                    </button>
+                    <button
+                      className="icon-button icon-button-danger"
+                      type="button"
+                      onClick={() => archiveTemplate(template)}
+                      disabled={isPending}
+                      aria-label={`Archive ${template.title}`}
+                      title="Archive"
+                    >
+                      <Archive size={16} />
+                    </button>
+                  </div>
+                </article>
+              ))}
+            </div>
+          )}
+        </section>
+      ) : null}
 
-        {data.yearly.length === 0 ? (
-          <div style={{ padding: '2rem', textAlign: 'center', backgroundColor: 'rgba(255,255,255,0.03)', borderRadius: '8px', color: 'var(--text-secondary)' }}>
-            No goals set yet. Add a Yearly Goal to get started!
+      <section className="plan-tree" aria-label="Goal hierarchy">
+        {yearly.length === 0 ? (
+          <div className="card empty-state">
+            <h2>No yearly goals yet</h2>
+            <p>Choose one meaningful result that moves your vision forward.</p>
+            <button
+              className="btn-primary"
+              type="button"
+              onClick={() => openComposer('yearly', vision.id)}
+            >
+              Create first goal
+            </button>
           </div>
         ) : (
-          <div style={{ display: 'flex', flexDirection: 'column' }}>
-            {data.yearly.map(yg => {
-              const qs = data.quarterly.filter(q => q.yearly_id === yg.id)
-              return (
-                <div key={yg.id} style={{ marginBottom: '1rem' }}>
-                  {renderNode(yg, 'Yearly Goal', 0)}
-                  {qs.map(q => {
-                    const ms = data.monthly.filter(m => m.quarterly_id === q.id)
-                    return (
-                      <div key={q.id}>
-                        {renderNode(q, 'Quarterly Goal', 40)}
-                        {ms.map(m => {
-                          const ws = data.weekly.filter(w => w.monthly_id === m.id)
-                          return (
-                            <div key={m.id}>
-                              {renderNode(m, 'Monthly Task', 80)}
-                              {ws.map(w => renderNode(w, 'Weekly Action', 120))}
-                            </div>
-                          )
-                        })}
-                      </div>
-                    )
-                  })}
-                </div>
-              )
-            })}
-          </div>
+          yearly.map((yearlyGoal) => (
+            <div className="plan-branch" key={yearlyGoal.id}>
+              {renderItem(yearlyGoal, 'yearly', 0)}
+              {quarterly
+                .filter((item) => item.yearly_id === yearlyGoal.id)
+                .map((quarterlyGoal) => (
+                  <div key={quarterlyGoal.id}>
+                    {renderItem(quarterlyGoal, 'quarterly', 1)}
+                    {monthly
+                      .filter((item) => item.quarterly_id === quarterlyGoal.id)
+                      .map((monthlyTask) => (
+                        <div key={monthlyTask.id}>
+                          {renderItem(monthlyTask, 'monthly', 2)}
+                          {weekly
+                            .filter((item) => item.monthly_id === monthlyTask.id)
+                            .map((weeklyAction) => renderItem(weeklyAction, 'weekly', 3))}
+                        </div>
+                      ))}
+                  </div>
+                ))}
+            </div>
+          ))
         )}
-      </div>
+      </section>
 
-      <Modal 
-        isOpen={isDeleteModalOpen} 
-        onClose={() => setDeleteModalOpen(false)}
-        title="Confirm Deletion"
-        footer={
-          <>
-            <button className="btn-secondary" onClick={() => setDeleteModalOpen(false)}>Cancel</button>
-            <button 
-              className="btn-primary" 
-              style={{ backgroundColor: 'var(--danger)', borderColor: 'var(--danger)' }} 
-              onClick={confirmDelete}
-            >
-              Delete
-            </button>
-          </>
-        }
-      >
-        <p>Are you sure you want to delete this {itemToDelete?.type}?</p>
-        <p style={{ color: 'var(--danger)', marginTop: '0.5rem', fontWeight: 500, fontSize: '0.9rem' }}>
-          ⚠️ Warning: Deleting this node will also permanently delete all of its child goals (Quarterly, Monthly, Weekly) attached to it!
-        </p>
-      </Modal>
+      {editTarget ? (
+        <div
+          className="dialog-backdrop"
+          role="presentation"
+          onMouseDown={() => setEditTarget(null)}
+        >
+          <section
+            className="action-edit-dialog plan-edit-dialog"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="plan-edit-title"
+            onMouseDown={(event) => event.stopPropagation()}
+          >
+            <header>
+              <div>
+                <p className="eyebrow">{labels[editTarget.type]}</p>
+                <h2 id="plan-edit-title">Edit plan item</h2>
+              </div>
+              <button
+                className="icon-button"
+                type="button"
+                onClick={() => setEditTarget(null)}
+                aria-label="Close editor"
+                title="Close"
+              >
+                <X size={17} />
+              </button>
+            </header>
+            <form action={saveEdit}>
+              <label>
+                Title
+                <input
+                  className="input-field"
+                  name="title"
+                  defaultValue={editTarget.item.content}
+                  minLength={3}
+                  maxLength={1000}
+                  required
+                />
+              </label>
+              <label>
+                {editTarget.type === 'yearly' || editTarget.type === 'quarterly'
+                  ? 'Due date'
+                  : 'Scheduled date'}
+                <input
+                  className="input-field"
+                  type="date"
+                  name="date"
+                  defaultValue={editTarget.item.due_on ?? editTarget.item.scheduled_on ?? ''}
+                />
+              </label>
 
-      <ToastContainer toasts={toasts} removeToast={(id) => setToasts(prev => prev.filter(t => t.id !== id))} />
+              {editTarget.type === 'quarterly' ? (
+                <label>
+                  Yearly Goal
+                  <select
+                    className="input-field"
+                    name="destination"
+                    defaultValue={editTarget.item.yearly_id}
+                    required
+                  >
+                    {yearly.map((goal) => (
+                      <option key={goal.id} value={goal.id}>
+                        {goal.content}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+              ) : null}
+
+              {editTarget.type === 'monthly' || editTarget.type === 'weekly' ? (
+                <label>
+                  {editTarget.type === 'monthly' ? 'Quarterly Goal' : 'Monthly Action'}
+                  <select
+                    className="input-field"
+                    name="destination"
+                    defaultValue={
+                      editTarget.type === 'monthly'
+                        ? editTarget.item.quarterly_id
+                        : editTarget.item.monthly_id
+                    }
+                    required
+                  >
+                    {(editTarget.type === 'monthly' ? quarterly : monthly).map((parent) => (
+                      <option key={parent.id} value={parent.id}>
+                        {parent.content}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+              ) : null}
+
+              {editTarget.type === 'yearly' || editTarget.type === 'quarterly' ? (
+                <fieldset className="outcome-fields">
+                  <legend>Outcome progress</legend>
+                  <label>
+                    Current
+                    <input
+                      className="input-field"
+                      type="number"
+                      name="currentValue"
+                      min="0"
+                      step="any"
+                      defaultValue={editTarget.item.current_value ?? ''}
+                    />
+                  </label>
+                  <label>
+                    Target
+                    <input
+                      className="input-field"
+                      type="number"
+                      name="targetValue"
+                      min="0.000001"
+                      step="any"
+                      defaultValue={editTarget.item.target_value ?? ''}
+                    />
+                  </label>
+                  <label>
+                    Unit
+                    <input
+                      className="input-field"
+                      name="unit"
+                      maxLength={80}
+                      defaultValue={editTarget.item.unit ?? ''}
+                    />
+                  </label>
+                </fieldset>
+              ) : null}
+
+              <label>
+                Details
+                <textarea
+                  className="input-field"
+                  name="description"
+                  rows={5}
+                  maxLength={50_000}
+                  defaultValue={editTarget.item.description ?? ''}
+                />
+              </label>
+              <div className="dialog-actions">
+                <button className="btn-secondary" type="button" onClick={() => setEditTarget(null)}>
+                  Cancel
+                </button>
+                <button className="btn-primary button-with-icon" type="submit" disabled={isPending}>
+                  <Save size={16} />
+                  {isPending ? 'Saving...' : 'Save changes'}
+                </button>
+              </div>
+            </form>
+          </section>
+        </div>
+      ) : null}
+
+      {templateEditor ? (
+        <div
+          className="dialog-backdrop"
+          role="presentation"
+          onMouseDown={() => setTemplateEditor(null)}
+        >
+          <section
+            className="action-edit-dialog recurrence-dialog"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="recurrence-dialog-title"
+            onMouseDown={(event) => event.stopPropagation()}
+          >
+            <header>
+              <div>
+                <p className="eyebrow">Recurring Action</p>
+                <h2 id="recurrence-dialog-title">
+                  {templateEditor === 'new' ? 'Create template' : 'Edit template'}
+                </h2>
+              </div>
+              <button
+                className="icon-button"
+                type="button"
+                onClick={() => setTemplateEditor(null)}
+                aria-label="Close recurring Action editor"
+                title="Close"
+              >
+                <X size={17} />
+              </button>
+            </header>
+            <form action={saveTemplate}>
+              <label>
+                Title
+                <input
+                  className="input-field"
+                  name="title"
+                  minLength={3}
+                  maxLength={1000}
+                  defaultValue={templateEditor === 'new' ? '' : templateEditor.title}
+                  required
+                  autoFocus
+                />
+              </label>
+              <div className="recurrence-fields">
+                <label>
+                  Repeats
+                  <select
+                    className="input-field"
+                    name="cadence"
+                    defaultValue={templateEditor === 'new' ? 'weekly' : templateEditor.cadence}
+                  >
+                    <option value="weekly">Weekly</option>
+                    <option value="monthly">Monthly</option>
+                  </select>
+                </label>
+                <label>
+                  {templateEditor === 'new' ? 'First occurrence' : 'Next occurrence'}
+                  <input
+                    className="input-field"
+                    type="date"
+                    name="occurrenceOn"
+                    defaultValue={
+                      templateEditor === 'new'
+                        ? new Date().toISOString().slice(0, 10)
+                        : templateEditor.nextOccurrenceOn
+                    }
+                    required
+                  />
+                </label>
+              </div>
+              <label>
+                Goal
+                <select
+                  className="input-field"
+                  name="goalId"
+                  defaultValue={templateEditor === 'new' ? '' : (templateEditor.goalId ?? '')}
+                >
+                  <option value="">No linked Goal</option>
+                  {[...yearly, ...quarterly].map((goal) => (
+                    <option key={goal.id} value={goal.id}>
+                      {goal.content}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <label>
+                Details
+                <textarea
+                  className="input-field"
+                  name="description"
+                  rows={4}
+                  maxLength={50_000}
+                  defaultValue={
+                    templateEditor === 'new' ? '' : (templateEditor.descriptionMarkdown ?? '')
+                  }
+                />
+              </label>
+              <div className="dialog-actions">
+                <button
+                  className="btn-secondary"
+                  type="button"
+                  onClick={() => setTemplateEditor(null)}
+                >
+                  Cancel
+                </button>
+                <button className="btn-primary button-with-icon" type="submit" disabled={isPending}>
+                  <Save size={16} />
+                  {isPending ? 'Saving...' : 'Save template'}
+                </button>
+              </div>
+            </form>
+          </section>
+        </div>
+      ) : null}
     </div>
-  )
+  );
 }

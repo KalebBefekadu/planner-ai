@@ -1,36 +1,77 @@
-'use client'
+'use client';
 
-import Link from 'next/link'
-import { usePathname } from 'next/navigation'
+import Link from 'next/link';
+import {
+  Activity,
+  Bell,
+  CalendarCheck2,
+  Compass,
+  FileText,
+  History,
+  Inbox,
+  ListChecks,
+  Settings,
+  Target,
+  Trash2,
+} from 'lucide-react';
+import { usePathname } from 'next/navigation';
 
-export function NavLinks() {
-  const pathname = usePathname()
+const links = [
+  { name: 'Today', href: '/', icon: CalendarCheck2 },
+  { name: 'Inbox', href: '/inbox', icon: Inbox },
+  { name: 'Vision', href: '/vision', icon: Compass },
+  { name: 'Plan', href: '/goals', icon: Target },
+  { name: 'Settings', href: '/settings/security', icon: Settings },
+];
 
-  const links = [
-    { name: 'Dump', href: '/' },
-    { name: 'Vision', href: '/vision' },
-    { name: 'Goals', href: '/goals' },
-  ]
+export function NavLinks({
+  showNotes = false,
+  unreadNotifications = 0,
+}: {
+  showNotes?: boolean;
+  unreadNotifications?: number;
+}) {
+  const pathname = usePathname();
+  const visibleLinks = showNotes
+    ? [
+        ...links.slice(0, 4),
+        { name: 'Notes', href: '/notes', icon: FileText },
+        { name: 'Conversations', href: '/conversations', icon: History },
+        { name: 'Notifications', href: '/notifications', icon: Bell },
+        { name: 'Review', href: '/review', icon: ListChecks },
+        { name: 'Activity', href: '/activity', icon: Activity },
+        { name: 'Trash', href: '/trash', icon: Trash2 },
+        ...links.slice(4),
+      ]
+    : links;
 
   return (
-    <>
-      {links.map(link => {
-        const isActive = pathname === link.href
+    <nav className="app-nav" aria-label="Primary navigation">
+      <p className="nav-label">Workspace</p>
+      {visibleLinks.map((link) => {
+        const Icon = link.icon;
+        const isActive =
+          pathname === link.href ||
+          (link.href === '/settings/security' && pathname.startsWith('/settings/'));
         return (
-          <Link 
-            key={link.name} 
+          <Link
+            key={link.href}
             href={link.href}
-            style={{ 
-              color: isActive ? 'var(--text-primary)' : 'var(--text-secondary)',
-              fontWeight: isActive ? 600 : 500,
-              textDecoration: 'none',
-              transition: 'color 0.2s'
-            }}
+            className={`nav-link${isActive ? ' nav-link-active' : ''}`}
           >
-            {link.name}
+            <Icon className="nav-icon" size={17} strokeWidth={1.8} aria-hidden="true" />
+            <span>{link.name}</span>
+            {link.href === '/notifications' && unreadNotifications > 0 ? (
+              <span
+                className="nav-badge"
+                aria-label={`${unreadNotifications} unread notifications`}
+              >
+                {unreadNotifications > 99 ? '99+' : unreadNotifications}
+              </span>
+            ) : null}
           </Link>
-        )
+        );
       })}
-    </>
-  )
+    </nav>
+  );
 }

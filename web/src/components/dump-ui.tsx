@@ -1,262 +1,534 @@
-'use client'
+'use client';
 
-import { useState, useRef, useEffect } from 'react'
-import { saveTranscript } from '@/app/actions'
-import { Toast, ToastContainer } from '@/components/toast'
-import { Database } from '@/types/supabase'
+import { useCallback, useEffect, useRef, useState } from 'react';
+import { CloudOff, RefreshCw, Trash2 } from 'lucide-react';
+import { saveTranscript, type CaptureView } from '@/app/actions';
+import { CoachingCue } from '@/components/coaching-cue';
+import {
+  deferQueuedCapture,
+  listFailedVoices,
+  listQueuedCaptures,
+  loadCaptureDraft,
+  queueCapture,
+  readFailedVoice,
+  removeFailedVoice,
+  removeQueuedCapture,
+  retainFailedVoice,
+  saveCaptureDraft,
+  type FailedVoice,
+  type QueuedCapture,
+} from '@/lib/capture-queue';
+import { inboxCoachingCue, type CoachingIntensity } from '@/lib/coaching';
+import { AnalyzeCaptureButton, CaptureProposalQueue } from '@/components/capture-proposal-queue';
+import type { CaptureAnalysisJobView, CaptureProposalBatchView } from '@/app/inbox/actions';
 
-type Transcript = Database['public']['Tables']['transcripts']['Row']
+type Transcript = CaptureView;
+type SpeechRecognitionInstance = {
+  continuous: boolean;
+  interimResults: boolean;
+  onresult: ((event: SpeechRecognitionEvent) => void) | null;
+  onerror: (() => void) | null;
+  start: () => void;
+  stop: () => void;
+};
+type SpeechRecognitionConstructor = new () => SpeechRecognitionInstance;
+type SpeechRecognitionEvent = {
+  resultIndex: number;
+  results: ArrayLike<{ isFinal: boolean; 0: { transcript: string } }>;
+};
 
-export function DumpUI({ initialTranscripts }: { initialTranscripts: Transcript[] }) {
-  const [transcripts, setTranscripts] = useState<Transcript[]>(initialTranscripts)
-  const [isRecording, setIsRecording] = useState(false)
-  const [transcriptText, setTranscriptText] = useState('')
-  const [interimText, setInterimText] = useState('')
-  const [recordingTime, setRecordingTime] = useState(0)
-  const [toasts, setToasts] = useState<{id: number, message: string, type: 'success'|'error'|'info'}[]>([])
-  
-  const MAX_RECORDING_SECONDS = 180
-  const mediaRecorderRef = useRef<MediaRecorder | null>(null)
-  const recognitionRef = useRef<any>(null)
-  const audioChunksRef = useRef<Blob[]>([])
-  const toastIdRef = useRef(0)
+const MAX_RECORDING_SECONDS = 180;
 
-  const addToast = (message: string, type: 'success'|'error'|'info' = 'info') => {
-    const id = ++toastIdRef.current
-    setToasts(prev => [...prev, { id, message, type }])
-  }
+function messageFor(error: unknown) {
+  return error instanceof Error
+    ? error.message
+    : 'Something went wrong. Your draft is still available.';
+}
+
+export function DumpUI({
+  initialTranscripts,
+  coachingIntensity,
+  initialProposalBatches,
+  captureProposalsEnabled,
+  initialAnalysisJobs,
+}: {
+  initialTranscripts: Transcript[];
+  coachingIntensity?: CoachingIntensity | null;
+  initialProposalBatches: CaptureProposalBatchView[];
+  captureProposalsEnabled: boolean;
+  initialAnalysisJobs: CaptureAnalysisJobView[];
+}) {
+  const [transcripts, setTranscripts] = useState(initialTranscripts);
+  const [isRecording, setIsRecording] = useState(false);
+  const [transcriptText, setTranscriptText] = useState('');
+  const [captureSource, setCaptureSource] = useState<CaptureView['source']>('typed');
+  const [interimText, setInterimText] = useState('');
+  const [recordingTime, setRecordingTime] = useState(0);
+  const [isTranscribing, setIsTranscribing] = useState(false);
+  const [isSyncing, setIsSyncing] = useState(false);
+  const [isOnline, setIsOnline] = useState(() =>
+    typeof navigator === 'undefined' ? true : navigator.onLine
+  );
+  const [storageReady, setStorageReady] = useState(false);
+  const [queuedCaptures, setQueuedCaptures] = useState<QueuedCapture[]>([]);
+  const [failedVoices, setFailedVoices] = useState<FailedVoice[]>([]);
+  const [notice, setNotice] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const mediaRecorderRef = useRef<MediaRecorder | null>(null);
+  const recognitionRef = useRef<SpeechRecognitionInstance | null>(null);
+  const audioChunksRef = useRef<Blob[]>([]);
+  const syncingRef = useRef(false);
+
+  const refreshLocalState = useCallback(async () => {
+    const [captures, voices] = await Promise.all([listQueuedCaptures(), listFailedVoices()]);
+    setQueuedCaptures(captures);
+    setFailedVoices(voices);
+  }, []);
+
+  const syncQueuedCaptures = useCallback(
+    async (force = false) => {
+      if (!navigator.onLine || syncingRef.current) return;
+      syncingRef.current = true;
+      setIsSyncing(true);
+      try {
+        const queued = await listQueuedCaptures();
+        for (const capture of queued) {
+          if (!force && capture.nextRetryAt > new Date().toISOString()) continue;
+          try {
+            const saved = await saveTranscript(capture.rawText, capture.source, capture.id);
+            await removeQueuedCapture(capture.id);
+            setTranscripts((current) => [saved, ...current.filter((item) => item.id !== saved.id)]);
+          } catch {
+            await deferQueuedCapture(capture.id, capture.attempts + 1);
+          }
+        }
+        await refreshLocalState();
+      } finally {
+        syncingRef.current = false;
+        setIsSyncing(false);
+      }
+    },
+    [refreshLocalState]
+  );
 
   useEffect(() => {
-    let interval: NodeJS.Timeout
-    if (isRecording) {
-      interval = setInterval(() => {
-        setRecordingTime(prev => {
-          if (prev >= MAX_RECORDING_SECONDS - 1) {
-            handleStopRecording()
-            return MAX_RECORDING_SECONDS
-          }
-          return prev + 1
-        })
-      }, 1000)
-    } else {
-      setRecordingTime(0)
-    }
-    return () => clearInterval(interval)
-  }, [isRecording])
-
-  const getSupportedMimeType = () => {
-    const types = ['audio/webm', 'audio/mp4', 'audio/ogg', 'audio/aac']
-    for (const type of types) {
-      if (typeof MediaRecorder !== 'undefined' && MediaRecorder.isTypeSupported(type)) return type
-    }
-    return ''
-  }
-
-  const handleStartRecording = async () => {
-    if (!navigator.onLine) {
-      addToast('You are currently offline. Please connect to the internet to use voice transcription.', 'error')
-      return
-    }
-
-    try {
-      const stream = await navigator.mediaDevices.getUserMedia({ audio: true })
-      const mimeType = getSupportedMimeType()
-      const options = mimeType ? { mimeType } : undefined
-      const mediaRecorder = new MediaRecorder(stream, options)
-      
-      mediaRecorderRef.current = mediaRecorder
-      audioChunksRef.current = []
-
-      // Setup Web Speech API for live captions (Gray text)
-      if (typeof window !== 'undefined' && ('SpeechRecognition' in window || 'webkitSpeechRecognition' in window)) {
-        const SpeechRecognition = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition
-        recognitionRef.current = new SpeechRecognition()
-        recognitionRef.current.continuous = true
-        recognitionRef.current.interimResults = true
-
-        recognitionRef.current.onresult = (event: any) => {
-          let currentInterim = ''
-          for (let i = event.resultIndex; i < event.results.length; ++i) {
-            if (!event.results[i].isFinal) {
-              currentInterim += event.results[i][0].transcript
-            }
-          }
-          setInterimText(currentInterim)
-        }
-        
-        recognitionRef.current.onerror = () => {} // Ignore transient speech errors
-        
-        try {
-          recognitionRef.current.start()
-        } catch (e) {}
-      }
-
-      mediaRecorder.ondataavailable = (event) => {
-        if (event.data.size > 0) audioChunksRef.current.push(event.data)
-      }
-
-      mediaRecorder.onstop = async () => {
-        const audioBlob = new Blob(audioChunksRef.current, { type: mimeType || 'audio/webm' })
-        addToast('Transcribing audio...', 'info')
-        
-        try {
-          const formData = new FormData()
-          formData.append('audio', audioBlob)
-          
-          const res = await fetch('/api/transcribe', { method: 'POST', body: formData })
-          const data = await res.json()
-          
-          if (data.error) throw new Error(data.error)
-          setTranscriptText(prev => prev ? prev + ' ' + data.transcript : data.transcript)
-          addToast('Transcription complete', 'success')
-        } catch (error: any) {
-          addToast(error.message || 'Transcription failed', 'error')
-        }
-      }
-
-      mediaRecorder.start()
-      setIsRecording(true)
-    } catch (err) {
-      addToast('Could not access microphone.', 'error')
-    }
-  }
-
-  const handleStopRecording = () => {
-    if (mediaRecorderRef.current && mediaRecorderRef.current.state === "recording") {
-      mediaRecorderRef.current.stop()
-      mediaRecorderRef.current.stream.getTracks().forEach(track => track.stop())
-    }
-    if (recognitionRef.current) {
+    let active = true;
+    void (async () => {
       try {
-        recognitionRef.current.stop()
-      } catch (e) {}
-    }
-    setInterimText('')
-    setIsRecording(false)
+        const draft = await loadCaptureDraft();
+        if (!active) return;
+        if (draft) {
+          setTranscriptText(draft.rawText);
+          setCaptureSource(draft.source);
+          setNotice('Your unsent capture was restored.');
+        }
+        await refreshLocalState();
+        if (active) setStorageReady(true);
+        await syncQueuedCaptures();
+      } catch {
+        if (active) setError('Private offline storage is unavailable in this browser.');
+      }
+    })();
+    return () => {
+      active = false;
+    };
+  }, [refreshLocalState, syncQueuedCaptures]);
+
+  useEffect(() => {
+    if (!storageReady) return;
+    const timeout = window.setTimeout(() => {
+      void saveCaptureDraft(
+        transcriptText,
+        captureSource === 'import' ? 'typed' : captureSource
+      ).catch(() => setError('Planner AI could not preserve this draft locally.'));
+    }, 300);
+    return () => window.clearTimeout(timeout);
+  }, [captureSource, storageReady, transcriptText]);
+
+  useEffect(() => {
+    const online = () => {
+      setIsOnline(true);
+      void syncQueuedCaptures();
+    };
+    const offline = () => setIsOnline(false);
+    window.addEventListener('online', online);
+    window.addEventListener('offline', offline);
+    const interval = window.setInterval(() => void syncQueuedCaptures(), 30_000);
+    return () => {
+      window.removeEventListener('online', online);
+      window.removeEventListener('offline', offline);
+      window.clearInterval(interval);
+    };
+  }, [syncQueuedCaptures]);
+
+  useEffect(() => {
+    if (!isRecording) return;
+    const interval = window.setInterval(() => {
+      setRecordingTime((seconds) => {
+        if (seconds + 1 >= MAX_RECORDING_SECONDS) {
+          window.setTimeout(() => stopRecording(), 0);
+          return MAX_RECORDING_SECONDS;
+        }
+        return seconds + 1;
+      });
+    }, 1_000);
+    return () => window.clearInterval(interval);
+  }, [isRecording]);
+
+  function getMimeType() {
+    return (
+      ['audio/webm', 'audio/mp4', 'audio/ogg'].find((type) =>
+        MediaRecorder.isTypeSupported(type)
+      ) ?? ''
+    );
   }
 
-  const handleSave = async () => {
-    if (!transcriptText.trim()) return
+  function stopRecording() {
+    const recorder = mediaRecorderRef.current;
+    if (recorder?.state === 'recording') {
+      recorder.stop();
+      recorder.stream.getTracks().forEach((track) => track.stop());
+    }
     try {
-      const saved = await saveTranscript(transcriptText)
-      setTranscripts(prev => [saved, ...prev])
-      setTranscriptText('')
-      addToast('Saved successfully', 'success')
-    } catch (error) {
-      addToast('Failed to save', 'error')
+      recognitionRef.current?.stop();
+    } catch {
+      /* Browser speech recognition may have already stopped. */
+    }
+    setInterimText('');
+    setIsRecording(false);
+    setRecordingTime(0);
+  }
+
+  async function transcribeRetainedVoice(retainedId: string, audio?: Blob) {
+    const retainedAudio = audio ?? (await readFailedVoice(retainedId));
+    if (!retainedAudio) throw new Error('This recording expired or is no longer available.');
+    const formData = new FormData();
+    formData.append('audio', retainedAudio, 'capture.webm');
+    const response = await fetch('/api/transcribe', { method: 'POST', body: formData });
+    const data = (await response.json()) as { transcript?: string; error?: string };
+    if (!response.ok || !data.transcript) throw new Error(data.error ?? 'Transcription failed.');
+    setTranscriptText((current) =>
+      current ? `${current} ${data.transcript}` : (data.transcript ?? '')
+    );
+    setCaptureSource('voice');
+    await removeFailedVoice(retainedId);
+    await refreshLocalState();
+    setNotice('Transcription added. Review it, then save the exact text to your inbox.');
+  }
+
+  async function startRecording() {
+    setError(null);
+    setNotice(null);
+    if (!navigator.mediaDevices?.getUserMedia) {
+      setError(
+        'This browser does not support microphone recording. You can still type your capture.'
+      );
+      return;
+    }
+
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      const mimeType = getMimeType();
+      const recorder = new MediaRecorder(stream, mimeType ? { mimeType } : undefined);
+      mediaRecorderRef.current = recorder;
+      audioChunksRef.current = [];
+
+      const recognitionWindow = window as typeof window & {
+        SpeechRecognition?: SpeechRecognitionConstructor;
+        webkitSpeechRecognition?: SpeechRecognitionConstructor;
+      };
+      const Recognition =
+        recognitionWindow.SpeechRecognition ?? recognitionWindow.webkitSpeechRecognition;
+      if (Recognition) {
+        const recognition = new Recognition();
+        recognition.continuous = true;
+        recognition.interimResults = true;
+        recognition.onresult = (event) => {
+          let interim = '';
+          for (let index = event.resultIndex; index < event.results.length; index += 1) {
+            if (!event.results[index].isFinal) interim += event.results[index][0].transcript;
+          }
+          setInterimText(interim);
+        };
+        recognition.onerror = () => undefined;
+        recognitionRef.current = recognition;
+        try {
+          recognition.start();
+        } catch {
+          /* Live captions are optional. */
+        }
+      }
+
+      recorder.ondataavailable = (event) => {
+        if (event.data.size > 0) audioChunksRef.current.push(event.data);
+      };
+      recorder.onstop = async () => {
+        setIsTranscribing(true);
+        const audio = new Blob(audioChunksRef.current, { type: mimeType || 'audio/webm' });
+        try {
+          const retainedId = await retainFailedVoice(audio);
+          await refreshLocalState();
+          if (!navigator.onLine) {
+            setNotice('Recording encrypted locally. It will remain available for seven days.');
+          } else {
+            await transcribeRetainedVoice(retainedId, audio);
+          }
+        } catch (caught) {
+          setError(messageFor(caught));
+        } finally {
+          setIsTranscribing(false);
+        }
+      };
+      recorder.start();
+      setRecordingTime(0);
+      setIsRecording(true);
+    } catch (caught) {
+      setError(messageFor(caught));
     }
   }
 
-  const formatTime = (seconds: number) => {
-    const m = Math.floor(seconds / 60).toString().padStart(2, '0')
-    const s = (seconds % 60).toString().padStart(2, '0')
-    return `${m}:${s}`
+  async function retryVoice(id: string) {
+    setError(null);
+    setIsTranscribing(true);
+    try {
+      if (!navigator.onLine) throw new Error('Reconnect before retrying transcription.');
+      await transcribeRetainedVoice(id);
+    } catch (caught) {
+      setError(messageFor(caught));
+    } finally {
+      setIsTranscribing(false);
+    }
   }
+
+  async function deleteVoice(id: string) {
+    await removeFailedVoice(id);
+    await refreshLocalState();
+    setNotice('Local recording deleted.');
+  }
+
+  async function saveCapture() {
+    setError(null);
+    const idempotencyKey = crypto.randomUUID();
+    try {
+      if (!navigator.onLine) throw new Error('offline');
+      const saved = await saveTranscript(transcriptText, captureSource, idempotencyKey);
+      setTranscripts((current) => [saved, ...current]);
+      setTranscriptText('');
+      setCaptureSource('typed');
+      await saveCaptureDraft('', 'typed');
+      setNotice('Capture saved to your inbox.');
+    } catch {
+      try {
+        await queueCapture(
+          idempotencyKey,
+          transcriptText,
+          captureSource === 'import' ? 'typed' : captureSource
+        );
+        setTranscriptText('');
+        setCaptureSource('typed');
+        await refreshLocalState();
+        setNotice('Capture encrypted on this device and queued for sync.');
+      } catch (caught) {
+        setError(messageFor(caught));
+      }
+    }
+  }
+
+  const minutes = String(Math.floor(recordingTime / 60)).padStart(2, '0');
+  const seconds = String(recordingTime % 60).padStart(2, '0');
 
   return (
-    <div className="animate-fade-in" style={{ display: "flex", gap: "2rem", height: "100%" }}>
-      {/* Main Content */}
-      <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: '2rem' }}>
-        <header>
-          <h1 style={{ fontSize: "2.5rem", fontWeight: 700, marginBottom: "0.5rem" }}>Brain Dump</h1>
-          <p style={{ color: "var(--text-secondary)", fontSize: "1.1rem" }}>
-            Record your daily progress. Speak freely. (3-minute limit)
+    <div className="page capture-page">
+      <header className="page-heading">
+        <div>
+          <p className="eyebrow">Capture inbox</p>
+          <h1>What is on your mind?</h1>
+          <p className="lede">
+            Speak freely or type a note. Planner AI keeps the raw thought intact before anything is
+            organized.
           </p>
-        </header>
-
-        <div style={{ flex: 1, display: "flex", flexDirection: "column", gap: "1rem" }}>
-          <div style={{ position: 'relative', flex: 1, display: 'flex', flexDirection: 'column' }}>
-            <textarea
-              className="input-field"
-              placeholder="Your transcript will appear here... (You can also type manually)"
-              value={transcriptText}
-              onChange={(e) => setTranscriptText(e.target.value)}
-              style={{ flex: 1, minHeight: "300px", resize: "none", fontSize: "1.1rem", lineHeight: 1.6 }}
-            />
-            {isRecording && interimText && (
-              <div className="animate-fade-in" style={{ 
-                position: 'absolute', bottom: '20px', left: '20px', right: '20px', 
-                padding: '1rem', backgroundColor: 'rgba(0,0,0,0.6)', borderRadius: '8px',
-                color: 'var(--text-secondary)', fontStyle: 'italic', fontSize: '1.1rem',
-                backdropFilter: 'blur(10px)', border: '1px solid var(--border)',
-                pointerEvents: 'none'
-              }}>
-                {interimText}...
-              </div>
-            )}
+        </div>
+      </header>
+      {coachingIntensity ? (
+        <CoachingCue cue={inboxCoachingCue(coachingIntensity, transcripts.length)} />
+      ) : null}
+      {!isOnline ? (
+        <p className="status-message" role="status">
+          Offline. New captures will remain encrypted on this device until you reconnect.
+        </p>
+      ) : null}
+      {notice ? (
+        <p className="status-message" role="status">
+          {notice}
+        </p>
+      ) : null}
+      {error ? (
+        <p className="status-message status-message-error" role="alert">
+          {error}
+        </p>
+      ) : null}
+      <div className="capture-layout">
+        <section className="card capture-editor">
+          <div className="capture-toolbar">
+            <span>Unstructured capture</span>
+            <span>{isTranscribing ? 'Transcribing...' : `${minutes}:${seconds} / 03:00`}</span>
           </div>
-          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-            <button 
-              onClick={() => setTranscriptText('')}
-              style={{ background: 'none', border: 'none', color: 'var(--text-secondary)', cursor: 'pointer' }}
+          <textarea
+            className="capture-textarea"
+            value={transcriptText}
+            maxLength={60_000}
+            onChange={(event) => {
+              setTranscriptText(event.target.value);
+              if (!event.target.value) setCaptureSource('typed');
+            }}
+            placeholder="Start with the thought exactly as it arrives..."
+          />
+          {isRecording && interimText ? <p className="live-caption">{interimText}</p> : null}
+          <div className="capture-actions">
+            <button
+              className="btn-secondary"
+              type="button"
+              onClick={() => {
+                setTranscriptText('');
+                setCaptureSource('typed');
+              }}
+              disabled={!transcriptText || isRecording}
             >
               Clear
             </button>
-            <button onClick={handleSave} className="btn-primary" disabled={!transcriptText.trim()}>
-              Save Dump
-            </button>
+            <div className="record-actions">
+              <button
+                className={`record-button${isRecording ? ' record-button-active' : ''}`}
+                type="button"
+                onClick={isRecording ? stopRecording : () => void startRecording()}
+                disabled={isTranscribing}
+                aria-label={isRecording ? 'Stop recording' : 'Start recording'}
+              >
+                <span aria-hidden="true" />
+              </button>
+              <button
+                className="btn-primary"
+                type="button"
+                onClick={() => void saveCapture()}
+                disabled={isRecording || isTranscribing || transcriptText.trim().length < 3}
+              >
+                Save capture
+              </button>
+            </div>
           </div>
-        </div>
-
-        <div style={{ display: "flex", flexDirection: "column", alignItems: "center", padding: "1rem 0" }}>
-          <div style={{ 
-            marginBottom: "1rem", 
-            fontSize: "1.25rem", 
-            fontWeight: 600, 
-            fontVariantNumeric: "tabular-nums",
-            color: isRecording ? "var(--danger)" : "var(--text-secondary)",
-            transition: "color 0.3s ease"
-          }}>
-            {formatTime(recordingTime)} / 03:00
+        </section>
+        <aside className="card capture-history">
+          <div>
+            <p className="eyebrow">Recent</p>
+            <h2>Inbox history</h2>
           </div>
-          
-          <button 
-            onClick={isRecording ? handleStopRecording : handleStartRecording}
-            style={{
-              width: "80px", height: "80px", borderRadius: "50%", border: "none",
-              backgroundColor: isRecording ? "var(--danger)" : "var(--accent)",
-              color: "white", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center",
-              boxShadow: isRecording ? "0 0 30px rgba(239, 68, 68, 0.4)" : "0 10px 25px var(--accent-glow)",
-              transition: "all 0.3s cubic-bezier(0.16, 1, 0.3, 1)",
-              transform: isRecording ? "scale(1.1)" : "scale(1)"
-            }}
-          >
-            <div style={{
-              width: isRecording ? "24px" : "32px", height: isRecording ? "24px" : "32px",
-              backgroundColor: "currentColor", borderRadius: isRecording ? "4px" : "50%",
-              transition: "all 0.3s ease"
-            }} />
-          </button>
-        </div>
-      </div>
-
-      {/* Sidebar for Past Dumps */}
-      <div className="card" style={{ width: '300px', padding: '1.5rem', display: 'flex', flexDirection: 'column', gap: '1rem', overflowY: 'auto' }}>
-        <h3 style={{ fontSize: '1.1rem', fontWeight: 600, borderBottom: '1px solid var(--border)', paddingBottom: '0.5rem' }}>
-          Recent Dumps
-        </h3>
-        
-        {transcripts.length === 0 ? (
-          <div style={{ color: 'var(--text-secondary)', fontSize: '0.9rem', textAlign: 'center', marginTop: '2rem' }}>
-            No dumps yet. Start talking!
+          <div className="history-list">
+            {transcripts.length ? (
+              transcripts.map((transcript) => (
+                <article className="history-item" key={transcript.id}>
+                  <time dateTime={transcript.created_at}>
+                    {new Intl.DateTimeFormat(undefined, {
+                      month: 'short',
+                      day: 'numeric',
+                      hour: 'numeric',
+                      minute: '2-digit',
+                    }).format(new Date(transcript.created_at))}
+                  </time>
+                  <p>{transcript.raw_text}</p>
+                  {captureProposalsEnabled ? (
+                    <AnalyzeCaptureButton
+                      captureId={transcript.id}
+                      job={initialAnalysisJobs.find((job) => job.captureId === transcript.id)}
+                    />
+                  ) : null}
+                </article>
+              ))
+            ) : (
+              <p className="guide-empty">Your saved voice and typed captures will appear here.</p>
+            )}
           </div>
-        ) : (
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
-            {transcripts.map(t => (
-              <div key={t.id} style={{ padding: '1rem', backgroundColor: 'rgba(255,255,255,0.05)', borderRadius: '8px' }}>
-                <div style={{ fontSize: '0.8rem', color: 'var(--text-secondary)', marginBottom: '0.5rem' }}>
-                  {new Date(t.created_at).toLocaleDateString()} at {new Date(t.created_at).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}
+        </aside>
+        <CaptureProposalQueue batches={initialProposalBatches} captures={transcripts} />
+        {queuedCaptures.length || failedVoices.length ? (
+          <section className="local-recovery" aria-label="Local recovery queue">
+            <div className="local-recovery-heading">
+              <div>
+                <CloudOff size={18} aria-hidden="true" />
+                <div>
+                  <h2>Waiting on this device</h2>
+                  <p>Encrypted locally until sync or deletion.</p>
                 </div>
-                <div style={{ fontSize: '0.9rem', display: '-webkit-box', WebkitLineClamp: 3, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}>
-                  {t.raw_text}
+              </div>
+              <button
+                className="icon-button"
+                type="button"
+                title="Retry pending captures"
+                aria-label="Retry pending captures"
+                disabled={isSyncing || !isOnline}
+                onClick={() => void syncQueuedCaptures(true)}
+              >
+                <RefreshCw size={16} className={isSyncing ? 'spin-icon' : ''} />
+              </button>
+            </div>
+            {queuedCaptures.map((capture) => (
+              <div className="recovery-row" key={capture.id}>
+                <div>
+                  <strong>Pending {capture.source} capture</strong>
+                  <span>{capture.rawText}</span>
+                  <small>
+                    {capture.attempts ? `Retry ${capture.attempts} failed` : 'Ready to sync'}
+                  </small>
+                </div>
+                <button
+                  className="icon-button"
+                  type="button"
+                  title="Delete pending capture"
+                  aria-label="Delete pending capture"
+                  onClick={() =>
+                    void removeQueuedCapture(capture.id).then(() => refreshLocalState())
+                  }
+                >
+                  <Trash2 size={16} />
+                </button>
+              </div>
+            ))}
+            {failedVoices.map((voice) => (
+              <div className="recovery-row" key={voice.id}>
+                <div>
+                  <strong>Recording awaiting transcription</strong>
+                  <span>
+                    Retained until{' '}
+                    {new Intl.DateTimeFormat(undefined, { dateStyle: 'medium' }).format(
+                      new Date(voice.expiresAt)
+                    )}
+                  </span>
+                </div>
+                <div className="recovery-actions">
+                  <button
+                    className="icon-button"
+                    type="button"
+                    title="Retry transcription"
+                    aria-label="Retry transcription"
+                    disabled={isTranscribing || !isOnline}
+                    onClick={() => void retryVoice(voice.id)}
+                  >
+                    <RefreshCw size={16} />
+                  </button>
+                  <button
+                    className="icon-button"
+                    type="button"
+                    title="Delete recording"
+                    aria-label="Delete recording"
+                    onClick={() => void deleteVoice(voice.id)}
+                  >
+                    <Trash2 size={16} />
+                  </button>
                 </div>
               </div>
             ))}
-          </div>
-        )}
+          </section>
+        ) : null}
       </div>
-
-      <ToastContainer toasts={toasts} removeToast={(id) => setToasts(prev => prev.filter(t => t.id !== id))} />
     </div>
-  )
+  );
 }

@@ -1,4 +1,6 @@
-# Planner — Agent Guide
+# Planner Agent Guide
+
+> **Planner AI repository override:** This imported application is an integration reference only. Do not add Planner AI product screens, production data, authoritative schema, or deployable user capabilities here. The repository-root `README.md`, `CONTEXT.md`, accepted ADRs, `architecture.md`, and implementation roadmap govern all Planner AI work. Use this guide only when inspecting the imported template's internal patterns.
 
 Planner is a voice-first life planning app. The user talks; you keep the
 structure. Chat is the primary surface — add screens only when a workflow needs

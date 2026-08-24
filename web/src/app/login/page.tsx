@@ -1,65 +1,75 @@
-import { login } from '../auth/actions'
-import Link from 'next/link'
+import { login, loginWithGoogle } from '../auth/actions';
+import Link from 'next/link';
 
 export default async function LoginPage({
   searchParams,
 }: {
-  searchParams: Promise<{ message: string }>
+  searchParams: Promise<{ message?: string; returnTo?: string }>;
 }) {
-  const message = (await searchParams).message
+  const { message, returnTo } = await searchParams;
+  const safeReturnTo = returnTo?.startsWith('/') && !returnTo.startsWith('//') ? returnTo : '/';
 
   return (
-    <div style={{ display: 'flex', height: '100vh', alignItems: 'center', justifyContent: 'center' }}>
-      <div className="card" style={{ maxWidth: '400px', width: '100%', padding: '2rem' }}>
-        <h1 style={{ fontSize: '2rem', fontWeight: 700, marginBottom: '1.5rem', textAlign: 'center' }}>
-          Welcome Back
-        </h1>
-        
+    <div className="auth-page">
+      <div className="card auth-card">
+        <p className="eyebrow">Welcome back</p>
+        <h1>Continue planning</h1>
+        <p className="lede">Your goals, captures, and progress are waiting for you.</p>
+
         {message && (
-          <div style={{ backgroundColor: 'var(--danger)', color: 'white', padding: '0.75rem', borderRadius: '8px', marginBottom: '1rem', fontSize: '0.9rem' }}>
+          <div className="status-message status-message-error" role="alert">
             {message}
           </div>
         )}
 
-        <form action={login} style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+        <form action={login} className="auth-form">
+          <input type="hidden" name="returnTo" value={safeReturnTo} />
           <div>
-            <label htmlFor="email" style={{ display: 'block', marginBottom: '0.5rem', fontSize: '0.9rem', color: 'var(--text-secondary)' }}>Email</label>
-            <input 
-              id="email" 
-              name="email" 
-              type="email" 
-              required 
+            <label htmlFor="email">Email</label>
+            <input
+              id="email"
+              name="email"
+              type="email"
+              required
               className="input-field"
               placeholder="you@example.com"
             />
           </div>
-          
+
           <div>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.5rem' }}>
-              <label htmlFor="password" style={{ fontSize: '0.9rem', color: 'var(--text-secondary)' }}>Password</label>
-              <Link href="/forgot-password" style={{ fontSize: '0.8rem', color: 'var(--accent)', textDecoration: 'none' }}>
-                Forgot Password?
-              </Link>
+            <div className="password-label">
+              <label htmlFor="password">Password</label>
+              <Link href="/forgot-password">Forgot Password?</Link>
             </div>
-            <input 
-              id="password" 
-              name="password" 
-              type="password" 
-              required 
+            <input
+              id="password"
+              name="password"
+              type="password"
+              required
               className="input-field"
               placeholder="••••••••"
             />
           </div>
 
-          <button type="submit" className="btn-primary" style={{ marginTop: '0.5rem' }}>
+          <button type="submit" className="btn-primary">
             Sign In
           </button>
         </form>
 
-        <div style={{ marginTop: '1.5rem', textAlign: 'center', fontSize: '0.9rem', color: 'var(--text-secondary)' }}>
-          Don't have an account? <Link href="/signup" style={{ color: 'var(--accent)', textDecoration: 'none' }}>Sign up</Link>
+        <div className="auth-divider">
+          <span>or</span>
+        </div>
+        <form action={loginWithGoogle}>
+          <input type="hidden" name="returnTo" value={safeReturnTo} />
+          <button type="submit" className="btn-secondary auth-provider">
+            Continue with Google
+          </button>
+        </form>
+
+        <div className="auth-switch">
+          Don&apos;t have an account? <Link href="/signup">Sign up</Link>
         </div>
       </div>
     </div>
-  )
+  );
 }

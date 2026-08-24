@@ -1,0 +1,377 @@
+'use client';
+
+import { useMemo, useState, useTransition } from 'react';
+import Link from 'next/link';
+import { useRouter } from 'next/navigation';
+import {
+  AlertTriangle,
+  ArrowRight,
+  CalendarCheck2,
+  Check,
+  Inbox,
+  Pencil,
+  Plus,
+  Save,
+  Target,
+  X,
+} from 'lucide-react';
+import {
+  completeTodayAction,
+  editTodayAction,
+  saveDailyFocus,
+  type TodayAction,
+  type TodayData,
+} from '@/app/today/actions';
+import { CoachingCue } from '@/components/coaching-cue';
+import { todayCoachingCue } from '@/lib/coaching';
+
+function errorMessage(error: unknown) {
+  return error instanceof Error ? error.message : 'Today could not be updated.';
+}
+
+function dateLabel(value: string | null, today: string) {
+  if (!value) return 'Unscheduled';
+  if (value === today) return 'Today';
+  if (value < today) return 'Overdue';
+  return new Intl.DateTimeFormat('en-US', { month: 'short', day: 'numeric' }).format(
+    new Date(`${value}T12:00:00Z`)
+  );
+}
+
+export function TodayWorkspace({ data }: { data: TodayData }) {
+  const router = useRouter();
+  const [isPending, startTransition] = useTransition();
+  const [focusIds, setFocusIds] = useState(data.focusActionIds);
+  const [actions, setActions] = useState(data.actions);
+  const [editing, setEditing] = useState<TodayAction | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const focus = focusIds
+    .map((id) => actions.find((action) => action.id === id))
+    .filter((action): action is TodayAction => Boolean(action));
+  const candidates = actions.filter((action) => !focusIds.includes(action.id));
+  const overdueCount = actions.filter(
+    (action) => action.scheduledOn && action.scheduledOn < data.localDate
+  ).length;
+  const dueTodayCount = actions.filter((action) => action.scheduledOn === data.localDate).length;
+  const blockedCount = actions.filter((action) => action.status === 'blocked').length;
+  const readableDate = useMemo(
+    () =>
+      new Intl.DateTimeFormat('en-US', {
+        weekday: 'long',
+        month: 'long',
+        day: 'numeric',
+        timeZone: 'UTC',
+      }).format(new Date(`${data.localDate}T12:00:00Z`)),
+    [data.localDate]
+  );
+
+  function changeFocus(nextIds: string[]) {
+    setError(null);
+    startTransition(async () => {
+      try {
+        const result = await saveDailyFocus(data.localDate, nextIds);
+        setFocusIds(result.actionIds);
+      } catch (caught) {
+        setError(errorMessage(caught));
+      }
+    });
+  }
+
+  function complete(action: TodayAction) {
+    setError(null);
+    startTransition(async () => {
+      try {
+        await completeTodayAction(action.id, action.version);
+        setActions((current) => current.filter((item) => item.id !== action.id));
+        setFocusIds((current) => current.filter((id) => id !== action.id));
+        router.refresh();
+      } catch (caught) {
+        setError(errorMessage(caught));
+      }
+    });
+  }
+
+  function saveEdit(formData: FormData) {
+    if (!editing) return;
+    setError(null);
+    const title = String(formData.get('title') ?? '');
+    const description = String(formData.get('description') ?? '');
+    const scheduledOn = String(formData.get('scheduledOn') ?? '');
+    startTransition(async () => {
+      try {
+        const result = await editTodayAction({
+          id: editing.id,
+          expectedVersion: editing.version,
+          title,
+          descriptionMarkdown: description || null,
+          scheduledOn: scheduledOn || null,
+        });
+        setActions((current) =>
+          current.map((action) =>
+            action.id === editing.id
+              ? {
+                  ...action,
+                  title: result.title,
+                  descriptionMarkdown: result.description_markdown ?? null,
+                  scheduledOn: result.scheduled_on ?? null,
+                  version: result.version,
+                }
+              : action
+          )
+        );
+        setEditing(null);
+      } catch (caught) {
+        setError(errorMessage(caught));
+      }
+    });
+  }
+
+  function actionRow(action: TodayAction, focused: boolean) {
+    const label = dateLabel(action.scheduledOn, data.localDate);
+    return (
+      <article className="today-action-row" key={action.id}>
+        <button
+          className="action-complete-button"
+          type="button"
+          onClick={() => complete(action)}
+          disabled={isPending}
+          aria-label={`Complete ${action.title}`}
+          title="Complete Action"
+        >
+          <Check size={16} />
+        </button>
+        <div className="today-action-copy">
+          <strong>{action.title}</strong>
+          <div>
+            {action.goalTitle ? <span>{action.goalTitle}</span> : null}
+            <span className={label === 'Overdue' ? 'date-overdue' : undefined}>{label}</span>
+            {action.status === 'blocked' ? <span>Blocked</span> : null}
+          </div>
+        </div>
+        <div className="today-action-tools">
+          <button
+            className="icon-button"
+            type="button"
+            onClick={() => setEditing(action)}
+            disabled={isPending}
+            aria-label={`Edit ${action.title}`}
+            title="Edit Action"
+          >
+            <Pencil size={15} />
+          </button>
+          <button
+            className="icon-button"
+            type="button"
+            onClick={() =>
+              changeFocus(
+                focused
+                  ? focusIds.filter((id) => id !== action.id)
+                  : [...focusIds, action.id].slice(0, 5)
+              )
+            }
+            disabled={isPending || (!focused && focusIds.length >= 5)}
+            aria-label={focused ? `Remove ${action.title} from focus` : `Focus ${action.title}`}
+            title={focused ? 'Remove from focus' : 'Add to focus'}
+          >
+            {focused ? <X size={16} /> : <Plus size={16} />}
+          </button>
+        </div>
+      </article>
+    );
+  }
+
+  return (
+    <div className="page canonical-today-page">
+      <header className="page-heading today-heading">
+        <div>
+          <p className="eyebrow">{readableDate}</p>
+          <h1>Today</h1>
+          <p className="lede">Commit to a short list, then finish one thing at a time.</p>
+        </div>
+        <Link className="btn-primary button-with-icon" href="/inbox">
+          <Plus size={16} aria-hidden="true" />
+          New capture
+        </Link>
+      </header>
+
+      {error ? (
+        <p className="status-message status-message-error" role="alert">
+          {error}
+        </p>
+      ) : null}
+
+      <CoachingCue
+        cue={todayCoachingCue(data.coachingIntensity, {
+          focusCount: focus.length,
+          overdueCount,
+          blockedCount,
+        })}
+      />
+
+      <section className="today-metrics" aria-label="Today summary">
+        <div className="metric-block">
+          <Target size={18} aria-hidden="true" />
+          <div>
+            <strong>{focus.length}</strong>
+            <span>Focused</span>
+          </div>
+        </div>
+        <div className="metric-block">
+          <CalendarCheck2 size={18} aria-hidden="true" />
+          <div>
+            <strong>{dueTodayCount}</strong>
+            <span>Due today</span>
+          </div>
+        </div>
+        <div className="metric-block">
+          <AlertTriangle size={18} aria-hidden="true" />
+          <div>
+            <strong>{overdueCount}</strong>
+            <span>Overdue</span>
+          </div>
+        </div>
+      </section>
+
+      <div className="today-execution-grid">
+        <section className="today-section">
+          <div className="section-heading">
+            <div>
+              <p className="eyebrow">Focus</p>
+              <h2>Committed Actions</h2>
+            </div>
+            <span className="focus-capacity">{focus.length} / 5</span>
+          </div>
+          <div className="today-action-list">
+            {focus.map((action) => actionRow(action, true))}
+            {!focus.length ? (
+              <div className="inline-empty">
+                <p>No Actions are committed yet.</p>
+                <span>Choose from the available list.</span>
+              </div>
+            ) : null}
+          </div>
+        </section>
+
+        <section className="today-section available-actions-section">
+          <div className="section-heading">
+            <div>
+              <p className="eyebrow">Available</p>
+              <h2>Open Actions</h2>
+            </div>
+            <Link href="/goals" aria-label="Open plan" title="Open Plan">
+              <ArrowRight size={18} />
+            </Link>
+          </div>
+          <div className="today-action-list today-action-scroll">
+            {candidates.map((action) => actionRow(action, false))}
+            {!candidates.length ? (
+              <div className="inline-empty">
+                <p>No more open Actions.</p>
+                <Link href="/goals">Open Plan</Link>
+              </div>
+            ) : null}
+          </div>
+        </section>
+      </div>
+
+      <section className="today-section today-capture-strip">
+        <div className="section-heading">
+          <div>
+            <p className="eyebrow">Inbox</p>
+            <h2>Recent captures</h2>
+          </div>
+          <Link href="/inbox" aria-label="Open Inbox" title="Open Inbox">
+            <Inbox size={18} />
+          </Link>
+        </div>
+        <div className="capture-preview-list">
+          {data.recentCaptures.map((capture) => (
+            <article className="capture-preview" key={capture.id}>
+              <p>{capture.rawText}</p>
+              <time dateTime={capture.createdAt}>
+                {new Intl.DateTimeFormat('en-US', { month: 'short', day: 'numeric' }).format(
+                  new Date(capture.createdAt)
+                )}
+              </time>
+            </article>
+          ))}
+          {!data.recentCaptures.length ? (
+            <div className="inline-empty">
+              <p>Your unstructured thoughts will land here.</p>
+              <Link href="/inbox">Make a capture</Link>
+            </div>
+          ) : null}
+        </div>
+      </section>
+
+      {editing ? (
+        <div className="dialog-backdrop" role="presentation" onMouseDown={() => setEditing(null)}>
+          <section
+            className="action-edit-dialog"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="edit-action-title"
+            onMouseDown={(event) => event.stopPropagation()}
+          >
+            <header>
+              <div>
+                <p className="eyebrow">Action</p>
+                <h2 id="edit-action-title">Edit Action</h2>
+              </div>
+              <button
+                className="icon-button"
+                type="button"
+                onClick={() => setEditing(null)}
+                aria-label="Close editor"
+                title="Close"
+              >
+                <X size={17} />
+              </button>
+            </header>
+            <form action={saveEdit}>
+              <label>
+                Title
+                <input
+                  className="input-field"
+                  name="title"
+                  defaultValue={editing.title}
+                  minLength={3}
+                  maxLength={1000}
+                  required
+                />
+              </label>
+              <label>
+                Scheduled date
+                <input
+                  className="input-field"
+                  type="date"
+                  name="scheduledOn"
+                  defaultValue={editing.scheduledOn ?? ''}
+                />
+              </label>
+              <label>
+                Details
+                <textarea
+                  className="input-field"
+                  name="description"
+                  defaultValue={editing.descriptionMarkdown ?? ''}
+                  maxLength={50_000}
+                  rows={6}
+                />
+              </label>
+              <div className="dialog-actions">
+                <button className="btn-secondary" type="button" onClick={() => setEditing(null)}>
+                  Cancel
+                </button>
+                <button className="btn-primary button-with-icon" type="submit" disabled={isPending}>
+                  <Save size={16} />
+                  {isPending ? 'Saving...' : 'Save Action'}
+                </button>
+              </div>
+            </form>
+          </section>
+        </div>
+      ) : null}
+    </div>
+  );
+}

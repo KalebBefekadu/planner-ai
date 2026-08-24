@@ -1,6 +1,7 @@
--- ==========================================
--- Planner AI MVP Database Schema
--- Run this in the Supabase SQL Editor
+-- LEGACY PROTOTYPE SCHEMA - DO NOT APPLY TO A NEW OR PRODUCTION DATABASE.
+-- This one-shot file is retained only to describe the current MVP tables.
+-- The approved target is database_schema.md and must be implemented as
+-- versioned Supabase migrations under PAI-004.
 -- ==========================================
 
 -- 1. Custom Types

@@ -1,20 +1,7 @@
-# Project Roadmap
+# Planner AI Roadmap
 
-## Phase 1: The Web MVP (Current)
-* Next.js + Supabase web application.
-* Standard Email/Password Auth.
-* Simple UI focus (No complex visualizations).
-* Whisper Voice-to-Text integration for basic transcription dumps.
-* Single Hierarchy Cascade (Vision -> Yearly -> Quarterly -> Monthly -> Weekly).
-* Basic Socratic questioning in the Vision UI.
+The canonical, dependency-checked ticket plan is [Planner AI Implementation Roadmap](planner_ai_implementation_roadmap.md).
 
-## Phase 2: The Proactive AI Coach
-* LLM actively parses transcripts to check off tasks and generate new ones.
-* "SMART Goal Enforcer" aggressively evaluates goals before saving.
+This file intentionally contains no second phase list. Earlier versions described a fixed goal cascade, automatic AI task updates, custom tiers, and an immediate local-first/Tauri migration. Those directions were superseded by the accepted decisions in `planner_ai_decision_register.md`.
 
-## Phase 3: The Final Product (Local-First)
-* Wrap Next.js web app in Tauri for desktop installation.
-* Migrate primary database to local filesystem (JSON/SQLite).
-* Implement custom cascade toggle.
-* Develop "Advanced Mode" UI for deep metrics and custom queries.
-* Implement Sync Engine for E2E encrypted cloud backup.
+Implementation begins with current-prototype containment, schema/data backup, repeatable migrations, Operation architecture, CI, and a timeboxed Agent Native feasibility spike. That spike concluded with ADR-0024: adapt useful patterns into `web` and do not ship a sidecar in v1. Product expansion follows only after the remaining evidence gates pass.

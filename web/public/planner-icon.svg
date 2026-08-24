@@ -1,0 +1,5 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" role="img" aria-label="Planner AI">
+  <rect width="512" height="512" rx="96" fill="#13795b"/>
+  <path fill="#fff" d="M146 112h126c75 0 120 41 120 108 0 70-48 113-126 113h-46v67h-74V112Zm74 61v99h45c35 0 54-18 54-50 0-31-19-49-54-49h-45Z"/>
+  <circle cx="367" cy="367" r="34" fill="#ef927b"/>
+</svg>

@@ -1,16 +1,20 @@
 {
   "name": "Planner AI",
   "short_name": "Planner",
-  "description": "Voice-First Life Operating System",
-  "start_url": "/",
+  "description": "A private, voice-first planning and knowledge workspace.",
+  "id": "/",
+  "start_url": "/inbox",
+  "scope": "/",
   "display": "standalone",
-  "background_color": "#09090b",
-  "theme_color": "#09090b",
+  "background_color": "#f5f5f0",
+  "theme_color": "#13795b",
+  "categories": ["productivity", "utilities"],
   "icons": [
     {
-      "src": "/favicon.ico",
-      "sizes": "64x64",
-      "type": "image/x-icon"
+      "src": "/planner-icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
     }
   ]
 }

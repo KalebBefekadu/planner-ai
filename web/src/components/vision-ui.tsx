@@ -1,192 +1,158 @@
-'use client'
+'use client';
 
-import { useState, useRef, useEffect } from 'react'
-import { Toast, ToastContainer } from '@/components/toast'
-import { Database } from '@/types/supabase'
-import { createClient } from '@/lib/supabase/client'
+import { useRef, useState } from 'react';
+import { RefreshCw } from 'lucide-react';
+import { saveVision, type VisionView } from '@/app/actions';
 
-type Vision = Database['public']['Tables']['visions']['Row']
+type Vision = VisionView;
+
+function messageFor(error: unknown) {
+  return error instanceof Error ? error.message : 'Something went wrong. Your draft is still here.';
+}
 
 export function VisionUI({ initialVision }: { initialVision: Vision | null }) {
-  const [visionText, setVisionText] = useState(initialVision?.content || '')
-  const [isExpanded, setIsExpanded] = useState(false)
-  const [isSaving, setIsSaving] = useState(false)
-  
-  // Socratic Questions State
-  const [questions, setQuestions] = useState<string[]>([])
-  const [isGenerating, setIsGenerating] = useState(false)
-  const typingTimeoutRef = useRef<NodeJS.Timeout | null>(null)
+  const [visionText, setVisionText] = useState(initialVision?.content ?? '');
+  const [questions, setQuestions] = useState<string[]>([]);
+  const [isSaving, setIsSaving] = useState(false);
+  const [isThinking, setIsThinking] = useState(false);
+  const [notice, setNotice] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const [questionsError, setQuestionsError] = useState<string | null>(null);
+  const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  const [toasts, setToasts] = useState<{id: number, message: string, type: 'success'|'error'|'info'}[]>([])
-  
-  const toastIdRef = { current: 0 }
-  const addToast = (message: string, type: 'success'|'error'|'info' = 'info') => {
-    const id = ++toastIdRef.current
-    setToasts(prev => [...prev, { id, message, type }])
-  }
-
-  // Fetch Questions from Groq API
-  const fetchSocraticQuestions = async (textToAnalyze: string) => {
-    if (textToAnalyze.trim().length < 20) return
-    setIsGenerating(true)
+  async function askQuestions(text: string) {
+    if (text.trim().length < 20) return;
+    setIsThinking(true);
+    setQuestionsError(null);
     try {
-      const res = await fetch('/api/socratic', {
+      const response = await fetch('/api/socratic', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ visionText: textToAnalyze })
-      })
-      const data = await res.json()
-      if (data.questions && data.questions.length > 0) {
-        setQuestions(data.questions)
-      }
-    } catch (error) {
-      console.error("Failed to generate questions")
+        body: JSON.stringify({ visionText: text }),
+      });
+      const data = (await response.json()) as { questions?: string[]; error?: string };
+      if (!response.ok) throw new Error(data.error ?? 'Unable to generate questions.');
+      setQuestions(Array.isArray(data.questions) ? data.questions : []);
+    } catch (caught) {
+      setQuestionsError(messageFor(caught));
     } finally {
-      setIsGenerating(false)
+      setIsThinking(false);
     }
   }
 
-  // Handle Text Changes & Debounce
-  const handleTextChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
-    const newText = e.target.value
-    setVisionText(newText)
-
-    if (typingTimeoutRef.current) {
-      clearTimeout(typingTimeoutRef.current)
-    }
-
-    typingTimeoutRef.current = setTimeout(() => {
-      fetchSocraticQuestions(newText)
-    }, 5000) // 5 seconds of inactivity
+  function handleChange(text: string) {
+    setVisionText(text);
+    if (timerRef.current) clearTimeout(timerRef.current);
+    timerRef.current = setTimeout(() => void askQuestions(text), 1_200);
   }
 
-  // Run once on load if there's initial text
-  useEffect(() => {
-    if (initialVision?.content) {
-      fetchSocraticQuestions(initialVision.content)
-    }
-  }, [initialVision])
-
-  const handleSave = async () => {
-    setIsSaving(true)
+  async function handleSave() {
+    setIsSaving(true);
+    setError(null);
+    setNotice(null);
     try {
-      const supabase = createClient()
-      const { data: { user } } = await supabase.auth.getUser()
-      if (!user) throw new Error('Not authenticated')
-
-      const { error } = await supabase.from('visions').insert({
-        user_id: user.id,
-        content: visionText
-      })
-
-      if (error) throw error
-      addToast('Vision saved successfully!', 'success')
-    } catch (error) {
-      addToast('Failed to save vision', 'error')
+      await saveVision(visionText);
+      setNotice('Vision saved. Your plan will now use this as its North Star.');
+    } catch (caught) {
+      setError(messageFor(caught));
     } finally {
-      setIsSaving(false)
+      setIsSaving(false);
     }
   }
 
   return (
-    <div 
-      className="animate-fade-in" 
-      style={{ 
-        display: "flex", 
-        flexDirection: "column", 
-        gap: "2rem",
-        height: isExpanded ? "calc(100vh - 120px)" : "100%",
-        transition: "height 0.3s ease"
-      }}
-    >
-      {!isExpanded && (
-        <header>
-          <h1 style={{ fontSize: "2.5rem", fontWeight: 700, marginBottom: "0.5rem" }}>Life Vision</h1>
-          <p style={{ color: "var(--text-secondary)", fontSize: "1.1rem" }}>
-            Draft your ultimate North Star. What does your ideal life look like?
+    <div className="page vision-page">
+      <header className="page-heading">
+        <div>
+          <p className="eyebrow">North Star</p>
+          <h1>Your life vision</h1>
+          <p className="lede">
+            Write the direction that makes your yearly, quarterly, and weekly choices coherent.
           </p>
-        </header>
-      )}
-
-      <div style={{ flex: 1, display: "flex", gap: "2rem" }}>
-        {/* Editor Area */}
-        <div style={{ flex: 1, display: "flex", flexDirection: "column", gap: "1rem" }}>
-          {initialVision === null && visionText === '' && !isExpanded && (
-            <div style={{ padding: '1rem', backgroundColor: 'rgba(255,255,255,0.05)', borderRadius: '8px', color: 'var(--accent)' }}>
-              Welcome! You haven't written a vision yet. Start typing below to create your first North Star.
-            </div>
-          )}
-          
-          <textarea
-            className="input-field"
-            placeholder="In 5 years, my ideal life looks like..."
-            value={visionText}
-            onChange={handleTextChange}
-            style={{ 
-              flex: 1, 
-              minHeight: isExpanded ? "100%" : "400px", 
-              resize: "none",
-              fontSize: "1.1rem",
-              lineHeight: 1.6,
-              transition: "all 0.3s ease"
-            }}
-          />
-          
-          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-            <button 
-              onClick={() => setIsExpanded(!isExpanded)}
-              style={{ background: 'none', border: 'none', color: 'var(--text-secondary)', cursor: 'pointer' }}
-            >
-              {isExpanded ? 'Exit Focus Mode' : 'Enter Focus Mode'}
-            </button>
-            <button 
-              onClick={handleSave} 
-              className="btn-primary" 
-              disabled={isSaving || !visionText.trim()}
-            >
-              {isSaving ? 'Saving...' : 'Save Vision'}
-            </button>
-          </div>
         </div>
+        <button
+          className="btn-primary"
+          type="button"
+          onClick={() => void handleSave()}
+          disabled={isSaving || visionText.trim().length < 3}
+        >
+          {isSaving ? 'Saving...' : 'Save vision'}
+        </button>
+      </header>
 
-        {/* AI Questions Sidebar */}
-        {!isExpanded && (
-          <div className="card" style={{ width: '300px', padding: '1.5rem', display: 'flex', flexDirection: 'column', gap: '1rem' }}>
-            <h3 style={{ fontSize: '1.1rem', fontWeight: 600, borderBottom: '1px solid var(--border)', paddingBottom: '0.5rem', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-              Socratic Guide 
-              {isGenerating && <span style={{ fontSize: '0.8rem', color: 'var(--accent)', fontWeight: 400 }}>Thinking...</span>}
-            </h3>
-            <p style={{ fontSize: '0.9rem', color: 'var(--text-secondary)' }}>
-              Based on your vision, consider these questions:
-            </p>
-            
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem', marginTop: '1rem' }}>
-              {questions.length === 0 && !isGenerating && (
-                <div style={{ padding: '1rem', color: 'var(--text-secondary)', fontSize: '0.9rem', textAlign: 'center' }}>
-                  Write a bit more to generate deep questions.
-                </div>
-              )}
-              
-              {questions.map((q, idx) => (
-                <div key={idx} className="animate-fade-in" style={{ padding: '1rem', backgroundColor: 'rgba(255,255,255,0.05)', borderRadius: '8px', fontSize: '0.9rem', borderLeft: '3px solid var(--accent)' }}>
-                  "{q}"
-                </div>
-              ))}
-            </div>
+      {notice ? (
+        <p className="status-message" role="status">
+          {notice}
+        </p>
+      ) : null}
+      {error ? (
+        <p className="status-message status-message-error" role="alert">
+          {error}
+        </p>
+      ) : null}
 
-            <button 
-              onClick={() => fetchSocraticQuestions(visionText)} 
-              className="btn-secondary" 
-              style={{ marginTop: 'auto' }}
-              disabled={isGenerating || visionText.trim().length < 20}
+      <div className="vision-layout">
+        <section className="card vision-editor">
+          <label htmlFor="vision" className="editor-label">
+            Vision draft
+          </label>
+          <textarea
+            id="vision"
+            className="vision-textarea"
+            value={visionText}
+            onChange={(event) => handleChange(event.target.value)}
+            placeholder="Five years from now, my life feels..."
+          />
+          <div className="editor-footer">
+            <span>{visionText.trim().split(/\s+/).filter(Boolean).length} words</span>
+            <button
+              className="btn-secondary"
+              type="button"
+              onClick={() => void askQuestions(visionText)}
+              disabled={isThinking || visionText.trim().length < 20}
             >
-              Generate New Questions
+              {isThinking ? 'Reflecting...' : 'Prompt reflection'}
             </button>
           </div>
-        )}
-      </div>
+        </section>
 
-      <ToastContainer toasts={toasts} removeToast={(id) => setToasts(prev => prev.filter(t => t.id !== id))} />
+        <aside className="card guide-panel">
+          <div>
+            <p className="eyebrow">Socratic guide</p>
+            <h2>Make it more specific</h2>
+          </div>
+          <p className="guide-copy">
+            Use these questions as a lens, not a test. The vision remains yours.
+          </p>
+          <div className="question-list">
+            {questions.length ? (
+              questions.map((question, index) => (
+                <p className="question" key={question}>
+                  <span>{String(index + 1).padStart(2, '0')}</span>
+                  {question}
+                </p>
+              ))
+            ) : (
+              <p className="guide-empty">
+                Write a few sentences, then ask for a reflection when you are ready.
+              </p>
+            )}
+          </div>
+          {questionsError ? (
+            <div className="guide-retry" role="alert">
+              <p>{questionsError}</p>
+              <button
+                className="btn-secondary button-with-icon"
+                type="button"
+                disabled={isThinking}
+                onClick={() => void askQuestions(visionText)}
+              >
+                <RefreshCw size={14} /> Retry reflection
+              </button>
+            </div>
+          ) : null}
+        </aside>
+      </div>
     </div>
-  )
+  );
 }

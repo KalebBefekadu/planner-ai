@@ -2,27 +2,56 @@
   "name": "web",
   "version": "0.1.0",
   "private": true,
+  "type": "module",
+  "packageManager": "npm@11.11.0",
+  "engines": {
+    "node": ">=24 <25"
+  },
   "scripts": {
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "eslint"
+    "lint": "eslint",
+    "typecheck": "tsc --noEmit",
+    "format:check": "prettier --check src playwright.config.ts vitest.config.ts vitest.live.config.ts tests",
+    "test": "vitest run",
+    "test:ai:live": "node --env-file-if-exists=.env.local ./node_modules/vitest/vitest.mjs run --config vitest.live.config.ts",
+    "test:watch": "vitest",
+    "test:e2e": "playwright test",
+    "test:db": "supabase test db",
+    "types:generate": "supabase gen types typescript --local --schema public > src/types/supabase.generated.ts",
+    "backup:production-db": "./scripts/backup-production-db.sh",
+    "verify:production-backup": "./scripts/backup-production-db.sh --verify",
+    "audit": "npm audit --audit-level=high"
   },
   "dependencies": {
+    "@modelcontextprotocol/sdk": "1.30.0",
     "@supabase/ssr": "^0.12.3",
     "@supabase/supabase-js": "^2.110.7",
+    "csv-parse": "^7.0.2",
     "groq-sdk": "^1.3.0",
-    "next": "16.2.10",
+    "lucide-react": "0.544.0",
+    "next": "16.3.1",
+    "openai": "7.5.0",
     "react": "19.2.4",
     "react-dom": "19.2.4",
-    "resend": "^6.18.0"
+    "react-markdown": "^10.1.0",
+    "resend": "^6.18.0",
+    "yauzl": "^3.4.0",
+    "zod": "4.4.3"
   },
   "devDependencies": {
+    "@axe-core/playwright": "^4.13.0",
+    "@playwright/test": "1.58.2",
     "@types/node": "^20",
     "@types/react": "^19",
     "@types/react-dom": "^19",
+    "@types/yauzl": "^3.4.0",
     "eslint": "^9",
     "eslint-config-next": "16.2.10",
-    "typescript": "^5"
+    "prettier": "3.8.1",
+    "supabase": "2.114.0",
+    "typescript": "^5",
+    "vitest": "4.1.10"
   }
 }

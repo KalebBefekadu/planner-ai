@@ -1,7 +1,7 @@
-import React from 'react'
+import React from 'react';
 
 interface CardProps extends React.HTMLAttributes<HTMLDivElement> {
-  children: React.ReactNode
+  children: React.ReactNode;
 }
 
 export function Card({ children, className = '', ...props }: CardProps) {
@@ -9,5 +9,5 @@ export function Card({ children, className = '', ...props }: CardProps) {
     <div className={`card ${className}`} {...props}>
       {children}
     </div>
-  )
+  );
 }
