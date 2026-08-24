@@ -1,4 +1,5 @@
 import { expect, test } from '@playwright/test';
+import { createClient } from '@supabase/supabase-js';
 
 test('anonymous users cannot see the workspace', async ({ page }) => {
   await page.goto('/');
@@ -17,6 +18,46 @@ test('authentication screens expose complete recovery and invite flows', async (
   await page.goto('/signup');
   await expect(page.getByLabel('Invite code')).toBeVisible();
   await expect(page.getByLabel('Password')).toHaveAttribute('minlength', '12');
+});
+
+test('canonical users see the complete workspace navigation after login', async ({
+  page,
+}, testInfo) => {
+  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
+  const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+  test.skip(
+    !supabaseUrl?.startsWith('http://127.0.0.1:55321') || !serviceRoleKey,
+    'This authenticated boundary test is restricted to the isolated local Supabase stack.'
+  );
+
+  const admin = createClient(supabaseUrl!, serviceRoleKey!, {
+    auth: { autoRefreshToken: false, persistSession: false },
+  });
+  const email = `canonical-nav-${testInfo.project.name}-${Date.now()}@planner-ai.test`;
+  const password = 'Planner-local-navigation-test!9';
+  const { data, error } = await admin.auth.admin.createUser({
+    email,
+    password,
+    email_confirm: true,
+  });
+  expect(error).toBeNull();
+  expect(data.user).not.toBeNull();
+
+  try {
+    await page.goto('/login');
+    await page.getByLabel('Email').fill(email);
+    await page.getByLabel('Password').fill(password);
+    await page.getByRole('button', { name: 'Sign In' }).click();
+
+    await expect(page.getByRole('link', { name: 'Notes' })).toBeVisible();
+    await expect(page.getByRole('link', { name: 'Conversations' })).toBeVisible();
+    await expect(page.getByRole('link', { name: 'Notifications' })).toBeVisible();
+    await expect(page.getByRole('link', { name: 'Review' })).toBeVisible();
+    await expect(page.getByRole('link', { name: 'Activity' })).toBeVisible();
+    await expect(page.getByRole('link', { name: 'Trash' })).toBeVisible();
+  } finally {
+    if (data.user) await admin.auth.admin.deleteUser(data.user.id);
+  }
 });
 
 test('anonymous AI requests fail with JSON instead of exposing a provider', async ({ request }) => {

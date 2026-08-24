@@ -16,6 +16,10 @@ major_version = 17
 enabled = true
 port = 55323
 
+[local_smtp]
+enabled = true
+port = 55324
+
 [auth]
 enabled = true
 site_url = "http://127.0.0.1:3000"
