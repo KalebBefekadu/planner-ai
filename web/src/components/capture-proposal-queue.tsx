@@ -12,14 +12,15 @@ import {
   type CaptureAnalysisJobView,
 } from '@/app/inbox/actions';
 import type { CaptureView } from '@/app/actions';
-
-function operationLabel(operationId: string) {
-  return operationId
-    .replace(/\.v\d+$/, '')
-    .split('.')
-    .map((part) => part[0].toUpperCase() + part.slice(1))
-    .join(' ');
-}
+import { AsyncStatus } from '@/components/async-status';
+import {
+  changeKind,
+  distinctObjects,
+  highestRisk,
+  operationLabel,
+  proposedFields,
+  RISK_DETAIL,
+} from '@/lib/proposal-anatomy';
 
 function ProposalItem({ item }: { item: CaptureProposalItemView }) {
   const router = useRouter();
@@ -56,6 +57,9 @@ function ProposalItem({ item }: { item: CaptureProposalItemView }) {
     <article className="capture-proposal-item">
       <div className="capture-proposal-item-heading">
         <div>
+          <span className={`proposal-kind proposal-kind-${changeKind(item.operationId)}`}>
+            {changeKind(item.operationId)}
+          </span>
           <span>{operationLabel(item.operationId)}</span>
           <span>{item.risk} risk</span>
         </div>
@@ -151,7 +155,19 @@ function ProposalItem({ item }: { item: CaptureProposalItemView }) {
           </button>
         </div>
       ) : (
-        <p>{item.summary}</p>
+        <>
+          <p>{item.summary}</p>
+          {proposedFields(item.input).length ? (
+            <dl className="proposal-fields">
+              {proposedFields(item.input).map((field) => (
+                <div key={field.label}>
+                  <dt>{field.label}</dt>
+                  <dd>{field.value}</dd>
+                </div>
+              ))}
+            </dl>
+          ) : null}
+        </>
       )}
       {error ? <p className="status-message status-message-error">{error}</p> : null}
     </article>
@@ -170,6 +186,8 @@ function CaptureProposalBatch({
   const [confirming, setConfirming] = useState(false);
   const [confirmingExpensive, setConfirmingExpensive] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const risk = highestRisk(batch.items);
+  const objectCount = distinctObjects(batch.items);
 
   function decide(action: () => Promise<{ ok: boolean; error?: string }>) {
     setError(null);
@@ -214,8 +232,13 @@ function CaptureProposalBatch({
           <p className="eyebrow">Review proposal</p>
           <h3>{batch.summary}</h3>
         </div>
-        <span>{batch.items.length} changes</span>
+        <span className={`proposal-risk proposal-risk-${risk}`}>{risk} risk</span>
       </header>
+      <p className="proposal-scope">
+        <strong>{batch.items.length}</strong> {batch.items.length === 1 ? 'change' : 'changes'} to{' '}
+        <strong>{objectCount}</strong> {objectCount === 1 ? 'object' : 'objects'} ·{' '}
+        {RISK_DETAIL[risk]}
+      </p>
       {capture ? <blockquote>{capture.raw_text}</blockquote> : null}
       {batch.insights.length ? (
         <div className="capture-proposal-insights">
@@ -232,6 +255,15 @@ function CaptureProposalBatch({
         ))}
         {!batch.items.length ? <p>No record changes were inferred from this Capture.</p> : null}
       </div>
+      <AsyncStatus
+        message={
+          pending
+            ? `Applying ${batch.items.length} changes. This takes a moment.`
+            : confirming
+              ? `Ready to apply ${batch.items.length} changes to ${objectCount} ${objectCount === 1 ? 'object' : 'objects'}. Each one can be undone from Activity afterwards.`
+              : ''
+        }
+      />
       <footer>
         <span>
           {batch.modelId} · {batch.promptVersion}

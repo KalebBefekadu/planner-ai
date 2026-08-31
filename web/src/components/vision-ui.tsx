@@ -1,6 +1,6 @@
 'use client';
 
-import { useRef, useState } from 'react';
+import { useState } from 'react';
 import { RefreshCw } from 'lucide-react';
 import { saveVision, type VisionView } from '@/app/actions';
 
@@ -18,7 +18,8 @@ export function VisionUI({ initialVision }: { initialVision: Vision | null }) {
   const [notice, setNotice] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [questionsError, setQuestionsError] = useState<string | null>(null);
-  const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const saved = initialVision?.content ?? '';
+  const unsaved = visionText.trim() !== saved.trim();
 
   async function askQuestions(text: string) {
     if (text.trim().length < 20) return;
@@ -40,11 +41,11 @@ export function VisionUI({ initialVision }: { initialVision: Vision | null }) {
     }
   }
 
-  function handleChange(text: string) {
-    setVisionText(text);
-    if (timerRef.current) clearTimeout(timerRef.current);
-    timerRef.current = setTimeout(() => void askQuestions(text), 1_200);
-  }
+  /* Reflection used to fire on a 1.2s debounce as you typed. That sent the
+     vision to the model without the screen ever saying so (§17, invisible
+     context collection), and when AI is switched off every keystroke pause
+     produced an error for a request the user never made. The explicit
+     "Prompt reflection" button below was already the honest path. */
 
   async function handleSave() {
     setIsSaving(true);
@@ -100,11 +101,14 @@ export function VisionUI({ initialVision }: { initialVision: Vision | null }) {
             id="vision"
             className="vision-textarea"
             value={visionText}
-            onChange={(event) => handleChange(event.target.value)}
+            onChange={(event) => setVisionText(event.target.value)}
             placeholder="Five years from now, my life feels..."
           />
           <div className="editor-footer">
-            <span>{visionText.trim().split(/\s+/).filter(Boolean).length} words</span>
+            <span>
+              {visionText.trim().split(/\s+/).filter(Boolean).length} words
+              {unsaved ? ' · unsaved' : saved ? ' · saved' : ''}
+            </span>
             <button
               className="btn-secondary"
               type="button"
@@ -122,7 +126,8 @@ export function VisionUI({ initialVision }: { initialVision: Vision | null }) {
             <h2>Make it more specific</h2>
           </div>
           <p className="guide-copy">
-            Use these questions as a lens, not a test. The vision remains yours.
+            Use these questions as a lens, not a test. The vision remains yours. Your draft is only
+            sent to the model when you ask for a reflection.
           </p>
           <div className="question-list">
             {questions.length ? (
