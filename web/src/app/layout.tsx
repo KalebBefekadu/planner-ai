@@ -7,6 +7,7 @@ import { ThemeToggle } from '@/components/theme-toggle';
 import { NavLinks } from '@/components/nav-links';
 import { AssistantDock } from '@/components/assistant-dock';
 import { ServiceWorkerRegistration } from '@/components/service-worker-registration';
+import { ExperienceShell } from '@/components/experience-shell';
 
 export const metadata: Metadata = {
   title: 'Planner AI',
@@ -31,12 +32,33 @@ export default async function RootLayout({ children }: Readonly<{ children: Reac
       .lte('visible_at', new Date().toISOString());
     unreadNotifications = count ?? 0;
   }
+  const canonical = process.env.PLANNER_DATA_MODEL === 'canonical';
+  const experienceV2 = process.env.PLANNER_UI_V2 === 'enabled';
 
   return (
-    <html lang="en" data-theme="light">
+    <html lang="en" suppressHydrationWarning>
+      <head>
+        {/* Applies an explicit theme choice before first paint. With no stored
+            choice the stamp is absent and prefers-color-scheme decides, so the
+            default costs nothing and there is no flash either way. */}
+        <script
+          dangerouslySetInnerHTML={{
+            __html:
+              "try{var t=localStorage.getItem('planner-theme');if(t==='dark'||t==='light')document.documentElement.dataset.theme=t}catch(e){}",
+          }}
+        />
+      </head>
       <body>
         <ServiceWorkerRegistration />
-        {user ? (
+        {user && experienceV2 ? (
+          <ExperienceShell
+            canonical={canonical}
+            email={user.email ?? ''}
+            unreadNotifications={unreadNotifications}
+          >
+            {children}
+          </ExperienceShell>
+        ) : user ? (
           <div className="app-shell">
             <aside className="app-sidebar">
               <Link className="brand" href="/" aria-label="Planner AI home">
@@ -45,10 +67,7 @@ export default async function RootLayout({ children }: Readonly<{ children: Reac
                 </span>
                 <span>Planner AI</span>
               </Link>
-              <NavLinks
-                showNotes={process.env.PLANNER_DATA_MODEL === 'canonical'}
-                unreadNotifications={unreadNotifications}
-              />
+              <NavLinks showNotes={canonical} unreadNotifications={unreadNotifications} />
               <AssistantDock />
               <div className="sidebar-footer">
                 <ThemeToggle />
