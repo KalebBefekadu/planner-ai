@@ -149,7 +149,11 @@ function buildServer(claims: McpClaims) {
         inputSchema: definition.input,
         annotations: {
           readOnlyHint: false,
-          destructiveHint: definition.risk === 'medium',
+          /* Anything above low risk is destructive to an MCP client. Testing
+             for 'medium' alone inverted the hint for high-risk operations,
+             advertising the most dangerous tools as the safest. No high-risk
+             operation is exposed today, so this was latent rather than live. */
+          destructiveHint: definition.risk !== 'low',
           idempotentHint: false,
         },
       },
