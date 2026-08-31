@@ -1,5 +1,6 @@
-import { login, loginWithGoogle } from '../auth/actions';
 import Link from 'next/link';
+import { PerimeterMessage, PerimeterShell } from '@/components/perimeter-shell';
+import { login, loginWithGoogle } from '../auth/actions';
 
 export default async function LoginPage({
   searchParams,
@@ -10,66 +11,63 @@ export default async function LoginPage({
   const safeReturnTo = returnTo?.startsWith('/') && !returnTo.startsWith('//') ? returnTo : '/';
 
   return (
-    <div className="auth-page">
-      <div className="card auth-card">
-        <p className="eyebrow">Welcome back</p>
-        <h1>Continue planning</h1>
-        <p className="lede">Your goals, captures, and progress are waiting for you.</p>
+    <PerimeterShell>
+      <div className="perimeter-form">
+        <h1>Welcome back</h1>
+        <p className="perimeter-lede">Pick up where you left off.</p>
 
-        {message && (
-          <div className="status-message status-message-error" role="alert">
-            {message}
-          </div>
-        )}
+        {message && <PerimeterMessage message={message} tone="error" />}
 
-        <form action={login} className="auth-form">
+        <form action={login} className="perimeter-form">
           <input type="hidden" name="returnTo" value={safeReturnTo} />
-          <div>
-            <label htmlFor="email">Email</label>
-            <input
-              id="email"
-              name="email"
-              type="email"
-              required
-              className="input-field"
-              placeholder="you@example.com"
-            />
-          </div>
 
-          <div>
-            <div className="password-label">
-              <label htmlFor="password">Password</label>
-              <Link href="/forgot-password">Forgot Password?</Link>
-            </div>
-            <input
-              id="password"
-              name="password"
-              type="password"
-              required
-              className="input-field"
-              placeholder="••••••••"
-            />
+          <label htmlFor="email">Email</label>
+          <input
+            id="email"
+            name="email"
+            type="email"
+            required
+            autoComplete="email"
+            className="input-field"
+            placeholder="you@example.com"
+            aria-invalid={message ? true : undefined}
+          />
+
+          <div className="perimeter-label-row">
+            <label htmlFor="password">Password</label>
+            <Link href="/forgot-password">Forgot password?</Link>
           </div>
+          <input
+            id="password"
+            name="password"
+            type="password"
+            required
+            autoComplete="current-password"
+            className="input-field"
+            placeholder="••••••••••"
+            aria-invalid={message ? true : undefined}
+          />
 
           <button type="submit" className="btn-primary">
-            Sign In
+            Sign in
           </button>
         </form>
 
-        <div className="auth-divider">
+        <p className="perimeter-divider">
           <span>or</span>
-        </div>
+        </p>
+
         <form action={loginWithGoogle}>
           <input type="hidden" name="returnTo" value={safeReturnTo} />
-          <button type="submit" className="btn-secondary auth-provider">
+          <button type="submit" className="btn-secondary perimeter-provider">
             Continue with Google
           </button>
         </form>
 
-        <div className="auth-switch">
-          Don&apos;t have an account? <Link href="/signup">Sign up</Link>
-        </div>
+        <p className="perimeter-switch">
+          New here? <Link href="/signup">Create an account</Link>
+        </p>
       </div>
-    </div>
+    </PerimeterShell>
   );
 }

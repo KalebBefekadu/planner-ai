@@ -1,4 +1,5 @@
 import Link from 'next/link';
+import { PerimeterMessage, PerimeterShell } from '@/components/perimeter-shell';
 import { requestPasswordReset } from '../auth/actions';
 
 export default async function ForgotPasswordPage({
@@ -7,42 +8,43 @@ export default async function ForgotPasswordPage({
   searchParams: Promise<{ message?: string }>;
 }) {
   const message = (await searchParams).message;
+
   return (
-    <div className="auth-page">
-      <div className="card auth-card">
-        <p className="eyebrow">Account recovery</p>
-        <h1>Reset password</h1>
-        <p className="lede">
-          Enter your email address and we&apos;ll send you a link to reset your password.
+    <PerimeterShell>
+      <div className="perimeter-form">
+        <p className="perimeter-back">
+          <Link href="/login">← Back to sign in</Link>
         </p>
 
-        {message ? (
-          <p className="status-message status-message-error" role="alert">
-            {message}
-          </p>
-        ) : null}
-        <form action={requestPasswordReset} className="auth-form">
-          <div>
-            <label htmlFor="email">Email</label>
-            <input
-              id="email"
-              name="email"
-              type="email"
-              required
-              className="input-field"
-              placeholder="you@example.com"
-            />
-          </div>
+        <h1>Reset your password</h1>
+        <p className="perimeter-lede">
+          Enter the email you signed up with and we&rsquo;ll send a link that works once.
+        </p>
+
+        {message ? <PerimeterMessage message={message} tone="error" /> : null}
+
+        <form action={requestPasswordReset} className="perimeter-form">
+          <label htmlFor="email">Email</label>
+          <input
+            id="email"
+            name="email"
+            type="email"
+            required
+            autoComplete="email"
+            className="input-field"
+            placeholder="you@example.com"
+          />
 
           <button type="submit" className="btn-primary">
-            Send Reset Link
+            Send reset link
           </button>
         </form>
 
-        <div className="auth-switch">
-          Remembered your password? <Link href="/login">Sign in</Link>
-        </div>
+        <p className="perimeter-fine">
+          If an account exists for that address, the link arrives within a minute. It works once and
+          expires in an hour.
+        </p>
       </div>
-    </div>
+    </PerimeterShell>
   );
 }
