@@ -1,7 +1,19 @@
 'use client';
 
 import { useState, useTransition } from 'react';
-import { Archive, CalendarPlus, Pause, Pencil, Play, Plus, Repeat2, Save, X } from 'lucide-react';
+import {
+  Archive,
+  CalendarPlus,
+  Pause,
+  Pencil,
+  Play,
+  Plus,
+  Repeat2,
+  Save,
+  TriangleAlert,
+  X,
+} from 'lucide-react';
+import { assessGoalPace, summariseDrift } from '@/lib/goal-pace';
 import {
   archiveActionTemplate,
   archiveGoal,
@@ -254,6 +266,9 @@ export function GoalsUI({
   }
 
   const { vision, yearly, quarterly, monthly, weekly } = initialData;
+  /* Reports drift and stops there. AGENTS.md's coaching stance is to surface
+     it and let the person decide what it is worth — never to quietly fix it. */
+  const drift = summariseDrift([...yearly, ...quarterly]);
   const renderItem = (item: GoalItem, type: GoalType, depth: number) => {
     const childType = childTypes[type];
     return (
@@ -282,6 +297,20 @@ export function GoalsUI({
               <span>
                 {item.current_value ?? 0} / {item.target_value} {item.unit}
               </span>
+              {/* Progress alone does not say whether you are on pace for it. */}
+              {(() => {
+                const pace = assessGoalPace(item);
+                if (pace.state === 'on-track' || pace.state === 'done') return null;
+                return (
+                  <span className={`goal-pace goal-pace-${pace.state}`} title={pace.reason}>
+                    {pace.state === 'overdue'
+                      ? 'Overdue'
+                      : pace.state === 'not-started'
+                        ? 'Not started'
+                        : 'Behind pace'}
+                  </span>
+                );
+              })()}
               <div aria-hidden="true">
                 <i
                   style={{
@@ -360,6 +389,16 @@ export function GoalsUI({
         </div>
       </header>
 
+      {drift.headline ? (
+        <aside className="drift-banner" role="status">
+          <TriangleAlert size={16} aria-hidden="true" />
+          <div>
+            <strong>{drift.headline}</strong>
+            <p>Nothing has been changed. Review each one and decide what it is worth.</p>
+          </div>
+        </aside>
+      ) : null}
+
       {notice ? (
         <p className="status-message" role="status">
           {notice}
@@ -375,9 +414,10 @@ export function GoalsUI({
         <section className="card goal-composer">
           <div>
             <p className="eyebrow">New item</p>
-            <h2>{composer.label}</h2>
+            <h2 id="goal-composer-label">{composer.label}</h2>
           </div>
           <textarea
+            aria-labelledby="goal-composer-label"
             className="input-field"
             value={content}
             onChange={(event) => setContent(event.target.value)}
