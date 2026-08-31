@@ -1,15 +1,18 @@
 'use client';
 
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState, useSyncExternalStore } from 'react';
 import { CloudOff, RefreshCw, Trash2 } from 'lucide-react';
-import { saveTranscript, type CaptureView } from '@/app/actions';
+import { saveTranscript, syncTranscript, type CaptureView } from '@/app/actions';
 import { CoachingCue } from '@/components/coaching-cue';
 import {
+  applyQueuedCaptureJournalEvents,
+  captureMatchesJournal,
   deferQueuedCapture,
   listFailedVoices,
   listQueuedCaptures,
   loadCaptureDraft,
   queueCapture,
+  queueCaptureOperation,
   readFailedVoice,
   removeFailedVoice,
   removeQueuedCapture,
@@ -19,6 +22,7 @@ import {
   type QueuedCapture,
 } from '@/lib/capture-queue';
 import { inboxCoachingCue, type CoachingIntensity } from '@/lib/coaching';
+import { classifyOperationRejection } from '@/lib/operations/journal';
 import { AnalyzeCaptureButton, CaptureProposalQueue } from '@/components/capture-proposal-queue';
 import type { CaptureAnalysisJobView, CaptureProposalBatchView } from '@/app/inbox/actions';
 
@@ -39,6 +43,23 @@ type SpeechRecognitionEvent = {
 
 const MAX_RECORDING_SECONDS = 180;
 
+function subscribeToNetworkState(onStoreChange: () => void) {
+  window.addEventListener('online', onStoreChange);
+  window.addEventListener('offline', onStoreChange);
+  return () => {
+    window.removeEventListener('online', onStoreChange);
+    window.removeEventListener('offline', onStoreChange);
+  };
+}
+
+function browserIsOnline() {
+  return navigator.onLine;
+}
+
+function serverIsOnline() {
+  return true;
+}
+
 function messageFor(error: unknown) {
   return error instanceof Error
     ? error.message
@@ -50,12 +71,14 @@ export function DumpUI({
   coachingIntensity,
   initialProposalBatches,
   captureProposalsEnabled,
+  operationJournalEnabled,
   initialAnalysisJobs,
 }: {
   initialTranscripts: Transcript[];
   coachingIntensity?: CoachingIntensity | null;
   initialProposalBatches: CaptureProposalBatchView[];
   captureProposalsEnabled: boolean;
+  operationJournalEnabled: boolean;
   initialAnalysisJobs: CaptureAnalysisJobView[];
 }) {
   const [transcripts, setTranscripts] = useState(initialTranscripts);
@@ -66,9 +89,7 @@ export function DumpUI({
   const [recordingTime, setRecordingTime] = useState(0);
   const [isTranscribing, setIsTranscribing] = useState(false);
   const [isSyncing, setIsSyncing] = useState(false);
-  const [isOnline, setIsOnline] = useState(() =>
-    typeof navigator === 'undefined' ? true : navigator.onLine
-  );
+  const isOnline = useSyncExternalStore(subscribeToNetworkState, browserIsOnline, serverIsOnline);
   const [storageReady, setStorageReady] = useState(false);
   const [queuedCaptures, setQueuedCaptures] = useState<QueuedCapture[]>([]);
   const [failedVoices, setFailedVoices] = useState<FailedVoice[]>([]);
@@ -94,11 +115,96 @@ export function DumpUI({
         const queued = await listQueuedCaptures();
         for (const capture of queued) {
           if (!force && capture.nextRetryAt > new Date().toISOString()) continue;
+          let journal = capture.journal;
           try {
-            const saved = await saveTranscript(capture.rawText, capture.source, capture.id);
+            if (journal?.status === 'accepted' || journal?.status === 'duplicate_accepted') {
+              await removeQueuedCapture(capture.id);
+              continue;
+            }
+            if (
+              journal?.status === 'preserved_private_copy' ||
+              journal?.status === 'needs_upgrade'
+            ) {
+              continue;
+            }
+            if (journal && !captureMatchesJournal(journal, capture.rawText, capture.source)) {
+              await applyQueuedCaptureJournalEvents(capture.id, [
+                { type: 'preserve_private_copy' },
+              ]);
+              setError(
+                'A local Capture failed its integrity check. Its private recovery copy was preserved.'
+              );
+              continue;
+            }
+            if (journal?.status === 'retryable_rejection') {
+              journal = await applyQueuedCaptureJournalEvents(capture.id, [{ type: 'retry' }]);
+            }
+            if (journal?.status === 'queued') {
+              journal = await applyQueuedCaptureJournalEvents(capture.id, [{ type: 'send' }]);
+            }
+            const syncResult = journal
+              ? await syncTranscript(capture.rawText, capture.source, capture.id)
+              : {
+                  ok: true as const,
+                  capture: await saveTranscript(capture.rawText, capture.source, capture.id),
+                };
+            if (!syncResult.ok) {
+              const rejection = classifyOperationRejection({ code: syncResult.code });
+              if (journal?.status === 'sent') {
+                if (rejection === 'retryable') {
+                  await applyQueuedCaptureJournalEvents(capture.id, [
+                    { type: 'reject', kind: rejection, code: syncResult.code },
+                  ]);
+                  await deferQueuedCapture(capture.id, capture.attempts + 1);
+                } else if (rejection === 'obsolete_schema') {
+                  await applyQueuedCaptureJournalEvents(capture.id, [
+                    { type: 'reject', kind: rejection, code: syncResult.code },
+                    { type: 'require_upgrade' },
+                  ]);
+                  setError('Planner AI must be upgraded before this Capture can sync.');
+                } else {
+                  await applyQueuedCaptureJournalEvents(capture.id, [
+                    { type: 'reject', kind: rejection, code: syncResult.code },
+                    { type: 'preserve_private_copy' },
+                  ]);
+                  setError(
+                    rejection === 'policy'
+                      ? 'This Capture cannot sync with the current access. Its private copy was preserved.'
+                      : 'This Capture conflicts with the server. Its private copy was preserved.'
+                  );
+                }
+              } else {
+                await deferQueuedCapture(capture.id, capture.attempts + 1);
+              }
+              continue;
+            }
+            const saved = syncResult.capture;
+            if (journal?.status === 'sent') {
+              if (!saved.operation_receipt_id) {
+                throw new Error('The server did not return an Operation receipt.');
+              }
+              if (saved.raw_text !== capture.rawText || saved.source !== capture.source) {
+                await applyQueuedCaptureJournalEvents(capture.id, [
+                  { type: 'reject', kind: 'conflict', code: 'idempotency_payload_mismatch' },
+                  { type: 'preserve_private_copy' },
+                ]);
+                setError(
+                  'The server acknowledged different Capture content. Your private copy was preserved.'
+                );
+                continue;
+              }
+              await applyQueuedCaptureJournalEvents(capture.id, [
+                { type: 'accept', receiptId: saved.operation_receipt_id },
+              ]);
+            }
             await removeQueuedCapture(capture.id);
             setTranscripts((current) => [saved, ...current.filter((item) => item.id !== saved.id)]);
           } catch {
+            if (journal?.status === 'sent') {
+              await applyQueuedCaptureJournalEvents(capture.id, [
+                { type: 'reject', kind: 'retryable', code: 'network_error' },
+              ]).catch(() => undefined);
+            }
             await deferQueuedCapture(capture.id, capture.attempts + 1);
           }
         }
@@ -147,16 +253,12 @@ export function DumpUI({
 
   useEffect(() => {
     const online = () => {
-      setIsOnline(true);
       void syncQueuedCaptures();
     };
-    const offline = () => setIsOnline(false);
     window.addEventListener('online', online);
-    window.addEventListener('offline', offline);
     const interval = window.setInterval(() => void syncQueuedCaptures(), 30_000);
     return () => {
       window.removeEventListener('online', online);
-      window.removeEventListener('offline', offline);
       window.clearInterval(interval);
     };
   }, [syncQueuedCaptures]);
@@ -309,6 +411,26 @@ export function DumpUI({
   async function saveCapture() {
     setError(null);
     const idempotencyKey = crypto.randomUUID();
+    const localSource = captureSource === 'import' ? 'typed' : captureSource;
+    if (operationJournalEnabled) {
+      try {
+        await queueCaptureOperation(idempotencyKey, transcriptText, localSource);
+        setTranscriptText('');
+        setCaptureSource('typed');
+        await refreshLocalState();
+        setNotice('Capture committed on this device and queued for sync.');
+        if (navigator.onLine) {
+          await syncQueuedCaptures(true);
+          const remaining = await listQueuedCaptures();
+          if (!remaining.some((capture) => capture.id === idempotencyKey)) {
+            setNotice('Capture saved to your inbox.');
+          }
+        }
+      } catch (caught) {
+        setError(messageFor(caught));
+      }
+      return;
+    }
     try {
       if (!navigator.onLine) throw new Error('offline');
       const saved = await saveTranscript(transcriptText, captureSource, idempotencyKey);
@@ -319,11 +441,7 @@ export function DumpUI({
       setNotice('Capture saved to your inbox.');
     } catch {
       try {
-        await queueCapture(
-          idempotencyKey,
-          transcriptText,
-          captureSource === 'import' ? 'typed' : captureSource
-        );
+        await queueCapture(idempotencyKey, transcriptText, localSource);
         setTranscriptText('');
         setCaptureSource('typed');
         await refreshLocalState();
@@ -370,10 +488,11 @@ export function DumpUI({
       <div className="capture-layout">
         <section className="card capture-editor">
           <div className="capture-toolbar">
-            <span>Unstructured capture</span>
+            <span id="capture-editor-label">Unstructured capture</span>
             <span>{isTranscribing ? 'Transcribing...' : `${minutes}:${seconds} / 03:00`}</span>
           </div>
           <textarea
+            aria-labelledby="capture-editor-label"
             className="capture-textarea"
             value={transcriptText}
             maxLength={60_000}
@@ -473,10 +592,22 @@ export function DumpUI({
             {queuedCaptures.map((capture) => (
               <div className="recovery-row" key={capture.id}>
                 <div>
-                  <strong>Pending {capture.source} capture</strong>
+                  <strong>
+                    {capture.journal?.status === 'preserved_private_copy'
+                      ? 'Private recovery copy'
+                      : capture.journal?.status === 'needs_upgrade'
+                        ? 'Capture needs an upgrade'
+                        : `Pending ${capture.source} capture`}
+                  </strong>
                   <span>{capture.rawText}</span>
                   <small>
-                    {capture.attempts ? `Retry ${capture.attempts} failed` : 'Ready to sync'}
+                    {capture.journal?.status === 'preserved_private_copy'
+                      ? 'Needs review; automatic sync stopped'
+                      : capture.journal?.status === 'needs_upgrade'
+                        ? 'Update Planner AI before retrying'
+                        : capture.attempts
+                          ? `Retry ${capture.attempts} failed`
+                          : 'Ready to sync'}
                   </small>
                 </div>
                 <button

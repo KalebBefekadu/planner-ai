@@ -12,6 +12,7 @@ import {
   Target,
 } from 'lucide-react';
 import { useRouter } from 'next/navigation';
+import { AsyncStatus } from '@/components/async-status';
 import { completeGuidedOnboarding, type WorkspacePreferences } from '@/app/onboarding/actions';
 
 const days = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
@@ -265,6 +266,25 @@ export function OnboardingWizard({ initial }: { initial: WorkspacePreferences })
             />
           </label>
         </div>
+      ) : null}
+
+      <AsyncStatus message={isPending ? 'Creating your workspace. This takes a moment.' : ''} />
+
+      {step === steps.length - 1 && (visionText.trim() || goalTitle.trim()) ? (
+        <ol className="onboarding-recap" aria-label="What you have written so far">
+          {visionText.trim() ? (
+            <li>
+              <span>Vision</span>
+              <p>{visionText.trim()}</p>
+            </li>
+          ) : null}
+          {goalTitle.trim() ? (
+            <li>
+              <span>Goal</span>
+              <p>{goalTitle.trim()}</p>
+            </li>
+          ) : null}
+        </ol>
       ) : null}
 
       {error ? (

@@ -3,6 +3,7 @@
 import { useState, useTransition } from 'react';
 import Link from 'next/link';
 import { Check, RefreshCw, Sparkles } from 'lucide-react';
+import { AsyncStatus } from '@/components/async-status';
 import type { ReviewAiProposalView, ReviewAnalysisJobView } from '@/app/review/actions';
 
 type ProposalResponse = {
@@ -79,6 +80,13 @@ export function ReviewAiProposal({
                 : 'Generate'}
         </button>
       </div>
+      <AsyncStatus
+        message={
+          pending || persistedRunning
+            ? `Reading this ${kind === 'weekly' ? 'week' : 'period'}\u2019s actions and goals. Nothing is changed until you choose to use it.`
+            : ''
+        }
+      />
       {error ? (
         <p className="status-message status-message-error" role="alert">
           {error}

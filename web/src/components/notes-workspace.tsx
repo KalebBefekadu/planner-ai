@@ -362,6 +362,7 @@ export function NotesWorkspace({
               {editorMode === 'edit' ? (
                 <textarea
                   ref={editorRef}
+                  aria-label="Note body, Markdown"
                   className="markdown-editor"
                   value={body}
                   onChange={(event) => setBody(event.target.value)}
