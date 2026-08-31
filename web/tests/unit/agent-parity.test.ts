@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { operationDefinitions, type OperationId } from '@/lib/operations';
 import { mcpGrantOptions, mcpOperationIds } from '@/lib/mcp/catalog';
+import { undoableOperationIds } from '@/lib/operations';
 
 /* The product's north star is that whatever a human can do, an agent can do
    too. That principle has deliberate exceptions, and the exceptions are the
@@ -110,6 +111,25 @@ describe('human and agent parity', () => {
     expect(destructive('low')).toBe(false);
     expect(destructive('medium')).toBe(true);
     expect(destructive('high')).toBe(true);
+  });
+
+  /* "You can always undo" is promised on the sign-in page. Two independent
+     sources back it: the reversible flag on each operation, and the
+     undoableOperationIds list. They are hand-maintained and can drift, and a
+     drift in either direction is a broken promise — either the UI offers an
+     undo that does not exist, or a reversible change is silently one-way. */
+  it('keeps the reversible flag and the undo list in exact agreement', () => {
+    const flagged = entries
+      .filter(([, definition]) => definition.reversible)
+      .map(([id]) => id)
+      .sort();
+    expect([...undoableOperationIds].sort()).toEqual(flagged);
+  });
+
+  it('never lists an operation as undoable that is not reversible', () => {
+    for (const id of undoableOperationIds) {
+      expect(operationDefinitions[id].reversible, `${id} is listed but not reversible`).toBe(true);
+    }
   });
 
   it('marks a high-risk operation reversible, or withholds it from agents', () => {
