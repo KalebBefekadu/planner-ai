@@ -10,6 +10,9 @@ export type TrashBatchView = {
   root_label: string;
   created_at: string;
   affectedCount: number;
+  /* Decided on the server. Comparing against Date.now() during render is
+     impure and can hydrate differently than it rendered. */
+  emptyEligible: boolean;
 };
 
 export function TrashManager({ batches }: { batches: TrashBatchView[] }) {
@@ -70,8 +73,15 @@ export function TrashManager({ batches }: { batches: TrashBatchView[] }) {
                   </p>
                 </div>
                 <div className="trash-meta">
+                  {/* Nothing is deleted on a timer — this date is when the item
+                      becomes eligible to be emptied, not when it disappears.
+                      "Permanent deletion available" read like a feature
+                      unlocking, on a screen whose job is reassurance. */}
                   <span>
-                    Permanent deletion available{' '}
+                    {batch.emptyEligible
+                      ? 'Old enough to be emptied'
+                      : 'Held until you empty Trash'}
+                    {' · '}
                     {new Intl.DateTimeFormat('en-US', { dateStyle: 'medium' }).format(eligibleAt)}
                   </span>
                   <button
