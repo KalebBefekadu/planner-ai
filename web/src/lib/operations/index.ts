@@ -1067,10 +1067,40 @@ export class OperationFailure extends Error {
 }
 
 function stableFailure(message: string) {
+  if (message.includes('authentication_required')) {
+    return new OperationFailure('authentication_required', 'Please sign in to continue.');
+  }
+  if (message.includes('workspace_access_revoked')) {
+    return new OperationFailure(
+      'workspace_access_revoked',
+      'Your access to this workspace changed.'
+    );
+  }
+  if (message.includes('permission_denied') || message.includes('permission denied')) {
+    return new OperationFailure('permission_denied', 'You do not have access to make this change.');
+  }
+  if (message.includes('operation_version_unsupported')) {
+    return new OperationFailure(
+      'operation_version_unsupported',
+      'Planner AI must be upgraded before this change can sync.'
+    );
+  }
+  if (message.includes('schema_version_unsupported')) {
+    return new OperationFailure(
+      'schema_version_unsupported',
+      'Planner AI must be upgraded before this change can sync.'
+    );
+  }
   if (message.includes('version_conflict_or_not_found')) {
     return new OperationFailure(
       'version_conflict',
       'This item changed elsewhere. Refresh and try again.'
+    );
+  }
+  if (message.includes('capture_source_is_immutable')) {
+    return new OperationFailure(
+      'capture_source_is_immutable',
+      'A Capture keeps the words you recorded. Save the change as a Note instead.'
     );
   }
   if (message.includes('vision_required')) {
