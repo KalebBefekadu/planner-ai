@@ -30,6 +30,7 @@ jobs:
       - run: npm run audit
       - run: npm run build
         env:
+          PLANNER_DATA_MODEL: canonical
           NEXT_PUBLIC_APP_URL: http://127.0.0.1:3000
           NEXT_PUBLIC_SUPABASE_URL: http://127.0.0.1:54321
           NEXT_PUBLIC_SUPABASE_ANON_KEY: local-ci-placeholder
@@ -71,6 +72,7 @@ jobs:
           echo "SUPABASE_SERVICE_ROLE_KEY=$SERVICE_ROLE_KEY" >> "$GITHUB_ENV"
       - run: npm run test:e2e
         env:
+          PLANNER_DATA_MODEL: canonical
           NEXT_PUBLIC_APP_URL: http://127.0.0.1:3000
 
   dependency-review:
