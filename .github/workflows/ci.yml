@@ -73,6 +73,8 @@ jobs:
       - run: npm run test:e2e
         env:
           PLANNER_DATA_MODEL: canonical
+          PLANNER_UI_PREVIEW: enabled
+          PLANNER_UI_V2: enabled
           NEXT_PUBLIC_APP_URL: http://127.0.0.1:3000
 
   dependency-review:
