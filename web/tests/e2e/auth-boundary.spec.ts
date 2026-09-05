@@ -1,19 +1,82 @@
 import { expect, test } from '@playwright/test';
 import { createClient } from '@supabase/supabase-js';
 
+const mcpAppOrigin = `http://localhost:${process.env.PLAYWRIGHT_PORT ?? '3100'}`;
+
 test('anonymous users cannot see the workspace', async ({ page }) => {
   await page.goto('/');
   await expect(page).toHaveURL(/\/login(?:\?|$)/);
   await expect(page).not.toHaveURL(/message=/);
-  await expect(page.getByRole('heading', { name: 'Continue planning' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Welcome back' })).toBeVisible();
   await expect(page.getByText('What is on your mind?')).toHaveCount(0);
+});
+
+test('the frontend preview is available without authentication', async ({ page }) => {
+  await page.goto('/preview');
+  await expect(page).toHaveURL(/\/preview$/);
+  await expect(page.getByRole('heading', { name: 'Personal operating system' })).toBeVisible();
+  await expect(page.getByRole('navigation', { name: 'Primary navigation' })).toBeVisible();
+
+  const openPage = async (name: string) => {
+    const pageButton = page.getByRole('button', { name, exact: true });
+    const menuButton = page.getByRole('button', { name: 'Open menu' });
+    await expect(pageButton.or(menuButton)).toBeVisible();
+    if (!(await pageButton.isVisible())) {
+      await menuButton.click();
+    }
+    await expect(pageButton).toBeVisible();
+    await pageButton.click();
+  };
+
+  await openPage('North star & values');
+  await expect(page.getByRole('heading', { name: 'North star & values' })).toBeVisible();
+
+  await openPage('Health reset');
+  await expect(page.getByRole('heading', { name: 'Health reset' })).toBeVisible();
+});
+
+test('planner and settings use their own navigation surfaces', async ({ page }) => {
+  await page.goto('/preview');
+  await page
+    .getByRole('navigation', { name: 'Primary navigation' })
+    .getByLabel('Planner', { exact: true })
+    .click();
+  await expect(page.getByRole('heading', { name: 'Make today count' })).toBeVisible();
+  await expect(page.getByText('Personal workspace')).toHaveCount(0);
+
+  const plannerNavigation = page.getByRole('complementary', { name: 'Planner navigation' });
+  if (!(await plannerNavigation.isVisible())) {
+    await page.getByRole('button', { name: 'Open menu' }).click();
+  }
+  await expect(plannerNavigation).toBeVisible();
+  await plannerNavigation.getByRole('button', { name: 'Calendar', exact: true }).click();
+  await expect(page.getByRole('heading', { name: 'Calendar', exact: true })).toBeVisible();
+
+  const railSettings = page
+    .getByRole('navigation', { name: 'Primary navigation' })
+    .getByLabel('Settings', { exact: true });
+  if (await railSettings.isVisible()) {
+    await railSettings.click();
+  } else {
+    await page.getByRole('button', { name: 'Open menu' }).click();
+    await page
+      .getByRole('complementary', { name: 'Planner navigation' })
+      .getByRole('button', { name: 'Settings', exact: true })
+      .click();
+  }
+  await expect(page.getByRole('heading', { name: 'Account', exact: true })).toBeVisible();
+  const settingsNavigation = page.getByRole('complementary', { name: 'Settings navigation' });
+  if (!(await settingsNavigation.isVisible())) {
+    await page.getByRole('button', { name: 'Open menu' }).click();
+  }
+  await expect(settingsNavigation).toBeVisible();
 });
 
 test('authentication screens expose complete recovery and invite flows', async ({ page }) => {
   await page.goto('/login');
   await expect(page.getByRole('button', { name: 'Continue with Google' })).toBeVisible();
-  await page.getByRole('link', { name: 'Forgot Password?' }).click();
-  await expect(page.getByRole('heading', { name: 'Reset password' })).toBeVisible();
+  await page.getByRole('link', { name: 'Forgot password?' }).click();
+  await expect(page.getByRole('heading', { name: 'Reset your password' })).toBeVisible();
 
   await page.goto('/signup');
   await expect(page.getByLabel('Invite code')).toBeVisible();
@@ -47,14 +110,65 @@ test('canonical users see the complete workspace navigation after login', async 
     await page.goto('/login');
     await page.getByLabel('Email').fill(email);
     await page.getByLabel('Password').fill(password);
-    await page.getByRole('button', { name: 'Sign In' }).click();
+    await page.getByRole('button', { name: 'Sign in' }).click();
 
-    await expect(page.getByRole('link', { name: 'Notes' })).toBeVisible();
-    await expect(page.getByRole('link', { name: 'Conversations' })).toBeVisible();
-    await expect(page.getByRole('link', { name: 'Notifications' })).toBeVisible();
-    await expect(page.getByRole('link', { name: 'Review' })).toBeVisible();
-    await expect(page.getByRole('link', { name: 'Activity' })).toBeVisible();
-    await expect(page.getByRole('link', { name: 'Trash' })).toBeVisible();
+    await expect(page.getByRole('heading', { name: 'Set your direction' })).toBeVisible();
+    await page.getByRole('button', { name: 'Continue', exact: true }).click();
+    await page.getByRole('textbox', { name: 'Vision' }).fill('Build a dependable planner.');
+    await page
+      .getByRole('textbox', { name: 'First yearly Goal' })
+      .fill('Invite ten private beta users.');
+    await page.getByRole('button', { name: 'Continue', exact: true }).click();
+    await page.getByRole('textbox', { name: 'First Action' }).fill('Prepare the beta invitation.');
+    await page
+      .getByRole('textbox', { name: 'First Capture' })
+      .fill('Validate the canonical workspace journey.');
+    await page.getByRole('button', { name: 'Enter workspace', exact: true }).click();
+    await expect(page).toHaveURL(/\/$/);
+
+    const experienceWorkspace = page.getByRole('link', { name: 'Workspace', exact: true }).last();
+    if ((await experienceWorkspace.count()) === 0 || !(await experienceWorkspace.isVisible())) {
+      await page.getByRole('button', { name: 'Open menu' }).click();
+    }
+    await expect(experienceWorkspace).toHaveCount(1);
+    await page.keyboard.press('Control+K');
+    await expect(page.getByRole('dialog', { name: 'Command palette' })).toBeVisible();
+    await expect(
+      page.getByRole('searchbox', { name: 'Search commands and workspace' })
+    ).toBeVisible();
+    await page.getByRole('button', { name: 'Close command palette' }).click();
+
+    if (!(await experienceWorkspace.isVisible())) {
+      await page.getByRole('button', { name: 'Open menu' }).click();
+    }
+    await experienceWorkspace.click();
+    await expect(page).toHaveURL(/\/notes(?:\?|$)/);
+    await expect(page.getByRole('heading', { name: 'Notes', exact: true })).toBeVisible();
+    const notesLink = page.getByRole('link', { name: 'Notes', exact: true });
+    if (!(await notesLink.isVisible())) {
+      await page.getByRole('button', { name: 'Open menu' }).click();
+    }
+    await expect(notesLink).toBeVisible();
+    await expect(page.getByRole('link', { name: 'Conversations', exact: true })).toBeVisible();
+    await expect(page.getByRole('link', { name: 'Activity', exact: true })).toBeVisible();
+    await expect(page.getByRole('link', { name: 'Trash', exact: true })).toBeVisible();
+
+    await page.getByRole('link', { name: 'Planner', exact: true }).last().click();
+    await expect(page).toHaveURL(/\/planner(?:\?|$)/);
+    await expect(
+      page.getByRole('heading', { name: 'Plan with a clear line of sight', exact: true })
+    ).toBeVisible();
+    await expect(page.getByRole('navigation', { name: 'Filter plan by horizon' })).toBeVisible();
+    await expect(page.getByRole('region', { name: 'Plan overview' })).toBeVisible();
+    const weeklyReview = page.getByRole('link', { name: 'Weekly review', exact: true });
+    if (!(await weeklyReview.isVisible())) {
+      await page.getByRole('button', { name: 'Open menu' }).click();
+    }
+    await expect(page.getByRole('link', { name: 'Calendar', exact: true })).toBeVisible();
+    await expect(weeklyReview).toBeVisible();
+    await expect(page.getByText('Personal workspace')).toHaveCount(0);
+
+    await expect(page.getByRole('link', { name: 'Notifications', exact: true })).toBeVisible();
   } finally {
     if (data.user) await admin.auth.admin.deleteUser(data.user.id);
   }
@@ -94,7 +208,7 @@ test('MCP publishes OAuth protected-resource metadata without authentication', a
   const response = await request.get('/.well-known/oauth-protected-resource/api/mcp');
   expect(response.status()).toBe(200);
   await expect(response.json()).resolves.toMatchObject({
-    resource: 'http://localhost:3000/api/mcp',
+    resource: `${mcpAppOrigin}/api/mcp`,
     resource_name: 'Planner AI MCP',
     bearer_methods_supported: ['header'],
   });
@@ -108,7 +222,7 @@ test('anonymous MCP requests fail before tools are disclosed', async ({ request 
   expect(response.status()).toBe(401);
   expect(response.headers()['content-type']).toContain('application/json');
   expect(response.headers()['www-authenticate']).toContain(
-    'resource_metadata="http://localhost:3000/.well-known/oauth-protected-resource/api/mcp"'
+    `resource_metadata="${mcpAppOrigin}/.well-known/oauth-protected-resource/api/mcp"`
   );
   await expect(response.json()).resolves.toMatchObject({
     jsonrpc: '2.0',

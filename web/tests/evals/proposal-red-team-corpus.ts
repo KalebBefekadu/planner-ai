@@ -57,7 +57,7 @@ export const reviewProposalEvalCorpus = [
     recentReviews: [],
     evidenceCatalog: [
       { type: 'action', id: actionId, label: 'Send the beta invitation', href: '/' },
-      { type: 'goal', id: goalId, label: 'Launch beta', href: '/goals' },
+      { type: 'goal', id: goalId, label: 'Launch beta', href: '/planner' },
     ],
     availableActionIds: [actionId],
     expected: {
@@ -73,7 +73,7 @@ export const reviewProposalEvalCorpus = [
     recentReviews: [{ id: reviewId, kind: 'weekly', completed_at: '2026-08-16T18:00:00.000Z' }],
     evidenceCatalog: [
       { type: 'action', id: secondActionId, label: 'Prepare launch notes', href: '/' },
-      { type: 'goal', id: goalId, label: 'Launch beta', href: '/goals' },
+      { type: 'goal', id: goalId, label: 'Launch beta', href: '/planner' },
       { type: 'review', id: reviewId, label: 'Weekly review', href: '/review' },
     ],
     availableActionIds: [secondActionId],

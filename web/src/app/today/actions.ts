@@ -2,8 +2,9 @@
 
 import { randomUUID } from 'node:crypto';
 import { revalidatePath } from 'next/cache';
-import { executeOperation } from '@/lib/operations';
 import type { CoachingIntensity } from '@/lib/coaching';
+import { dateInTimezone } from '@/lib/date';
+import { executeOperation } from '@/lib/operations';
 import { createClient } from '@/lib/supabase/server';
 
 export type TodayAction = {
@@ -29,18 +30,6 @@ function ensureCanonical() {
   if (process.env.PLANNER_DATA_MODEL !== 'canonical') {
     throw new Error('Today execution requires the canonical data model.');
   }
-}
-
-function dateInTimezone(timezone: string) {
-  const parts = new Intl.DateTimeFormat('en-US', {
-    timeZone: timezone,
-    year: 'numeric',
-    month: '2-digit',
-    day: '2-digit',
-  }).formatToParts(new Date());
-  const value = (type: Intl.DateTimeFormatPartTypes) =>
-    parts.find((part) => part.type === type)?.value ?? '';
-  return `${value('year')}-${value('month')}-${value('day')}`;
 }
 
 async function todayClient() {
@@ -160,7 +149,7 @@ export async function completeTodayAction(id: string, expectedVersion: number) {
     { idempotencyKey: randomUUID(), surface: 'ui' }
   );
   revalidatePath('/');
-  revalidatePath('/goals');
+  revalidatePath('/planner');
   revalidatePath('/review');
   revalidatePath('/activity');
   return result;
@@ -179,7 +168,7 @@ export async function editTodayAction(input: {
     surface: 'ui',
   });
   revalidatePath('/');
-  revalidatePath('/goals');
+  revalidatePath('/planner');
   revalidatePath('/review');
   revalidatePath('/activity');
   return result;

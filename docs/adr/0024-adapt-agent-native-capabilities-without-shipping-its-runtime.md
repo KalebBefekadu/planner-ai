@@ -6,7 +6,7 @@ Status: Accepted. Supersedes ADR-0002 and ADR-0014 for the first release.
 
 Planner AI will adapt the useful Agent Native patterns but will not deploy the imported Chat template or a separate Agent Native runtime in the first release. The Next.js product owns the docked assistant, durable Conversations, persisted Proposals, approvals, explicit Memory, Activity, and inbound MCP. Every AI surface calls the same versioned Planner AI Operations used by the click-first UI.
 
-The `planner` directory remains a read-only integration reference. Its framework database, auth shell, product navigation, plan-node model, extensions, terminal, code execution, secrets, and deployment tools are not production dependencies.
+The imported `planner` application was used as a read-only integration reference and then removed from the active tree after its useful patterns were captured. Its framework database, auth shell, product navigation, plan-node model, extensions, terminal, code execution, secrets, and deployment tools are not production dependencies.
 
 ## Evidence
 

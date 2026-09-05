@@ -2,8 +2,9 @@
 
 import { randomUUID } from 'node:crypto';
 import { revalidatePath } from 'next/cache';
-import { executeOperation } from '@/lib/operations';
 import type { CoachingIntensity } from '@/lib/coaching';
+import { dateInTimezone } from '@/lib/date';
+import { executeOperation } from '@/lib/operations';
 import { currentLongReviewPeriod, type LongReviewPeriod } from '@/lib/reviews/periods';
 import { parsePersistedReviewProposal, type ResolvedReviewProposal } from '@/lib/review-proposals';
 import { createClient } from '@/lib/supabase/server';
@@ -119,18 +120,6 @@ function ensureCanonical() {
   if (process.env.PLANNER_DATA_MODEL !== 'canonical') {
     throw new Error('Review is unavailable until the canonical data migration is complete.');
   }
-}
-
-function dateInTimezone(timezone: string) {
-  const parts = new Intl.DateTimeFormat('en-US', {
-    timeZone: timezone,
-    year: 'numeric',
-    month: '2-digit',
-    day: '2-digit',
-  }).formatToParts(new Date());
-  const value = (type: Intl.DateTimeFormatPartTypes) =>
-    parts.find((part) => part.type === type)?.value ?? '';
-  return `${value('year')}-${value('month')}-${value('day')}`;
 }
 
 function currentWeek(timezone: string) {
@@ -258,7 +247,7 @@ export async function completeWeeklyReview(input: {
     surface: 'ui',
   });
   revalidatePath('/');
-  revalidatePath('/goals');
+  revalidatePath('/planner');
   revalidatePath('/review');
   revalidatePath('/activity');
   return result;

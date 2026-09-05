@@ -6,6 +6,7 @@ const pages = [
   ['/signup', 'signup'],
   ['/forgot-password', 'password recovery'],
   ['/offline-capture.html', 'offline Capture'],
+  ['/preview', 'frontend preview'],
 ] as const;
 
 for (const [path, name] of pages) {

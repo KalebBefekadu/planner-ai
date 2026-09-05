@@ -1,21 +1,12 @@
-import { timingSafeEqual } from 'node:crypto';
 import { NextResponse } from 'next/server';
+import { isAuthorizedCronRequest } from '@/lib/api/cron';
 import { createAdminClient } from '@/lib/supabase/admin';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 
-function authorized(request: Request) {
-  const configured = process.env.CRON_SECRET;
-  const provided = request.headers.get('authorization')?.replace(/^Bearer\s+/i, '');
-  if (!configured || !provided) return false;
-  const left = Buffer.from(configured);
-  const right = Buffer.from(provided);
-  return left.length === right.length && timingSafeEqual(left, right);
-}
-
 export async function POST(request: Request) {
-  if (!authorized(request)) {
+  if (!isAuthorizedCronRequest(request)) {
     return NextResponse.json({ error: 'Not authorized.' }, { status: 401 });
   }
   const admin = createAdminClient();

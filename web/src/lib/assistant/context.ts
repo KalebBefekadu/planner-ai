@@ -16,7 +16,7 @@ export type AssistantContextScope =
   | 'vision';
 
 const routeScopes: Array<[prefix: string, scopes: AssistantContextScope[]]> = [
-  ['/goals', ['vision', 'goals', 'actions', 'actionTemplates', 'memories']],
+  ['/planner', ['vision', 'goals', 'actions', 'actionTemplates', 'memories']],
   ['/vision', ['vision', 'goals', 'memories']],
   ['/inbox', ['goals', 'notes', 'captureProposalBatches', 'memories']],
   ['/notes', ['notes', 'goals', 'actions', 'memories']],

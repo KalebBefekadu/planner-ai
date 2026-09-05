@@ -73,7 +73,7 @@ export async function completeGuidedOnboarding(
   revalidatePath('/', 'layout');
   revalidatePath('/onboarding');
   revalidatePath('/vision');
-  revalidatePath('/goals');
+  revalidatePath('/planner');
   revalidatePath('/today');
   revalidatePath('/inbox');
   return result;

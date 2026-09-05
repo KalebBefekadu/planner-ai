@@ -16,6 +16,8 @@ import { usePathname, useRouter } from 'next/navigation';
 import Link from 'next/link';
 import type { OperationId } from '@/lib/operations';
 import type { AssistantEvidence, ResolvedAssistantClaim } from '@/lib/assistant/evidence';
+import { GenUiRenderer } from '@/components/genui-renderer';
+import { parseGenUiSpec, type GenUiParseResult } from '@/lib/genui/schema';
 
 type Message = {
   id?: string;
@@ -23,6 +25,7 @@ type Message = {
   content: string;
   sources?: AssistantEvidence[];
   claims?: ResolvedAssistantClaim[];
+  genUi?: GenUiParseResult;
 };
 type Conversation = {
   id: string;
@@ -43,6 +46,7 @@ type AssistantResponse = {
   proposal?: Proposal | null;
   evidence?: AssistantEvidence[];
   claims?: ResolvedAssistantClaim[];
+  genUi?: unknown;
   undoableReceiptId?: string | null;
   conversationClosed?: boolean;
   error?: string;
@@ -157,6 +161,8 @@ export function AssistantDock() {
         throw new Error(data.error ?? 'Planner AI could not respond.');
       }
       if (data.reply) {
+        const genUi =
+          data.genUi === undefined || data.genUi === null ? undefined : parseGenUiSpec(data.genUi);
         setMessages((current) => [
           ...current,
           {
@@ -164,6 +170,7 @@ export function AssistantDock() {
             content: data.reply as string,
             sources: data.evidence ?? [],
             claims: data.claims ?? [],
+            genUi,
           },
         ]);
       }
@@ -306,6 +313,9 @@ export function AssistantDock() {
               >
                 <span>{message.role === 'user' ? 'You' : 'Planner AI'}</span>
                 <p>{message.content}</p>
+                {message.role === 'assistant' && message.genUi ? (
+                  <GenUiRenderer result={message.genUi} />
+                ) : null}
                 {message.role === 'assistant' && message.claims?.length ? (
                   <div className="assistant-claims" aria-label="Claim support">
                     {message.claims.map((claim, claimIndex) => (
@@ -327,6 +337,7 @@ export function AssistantDock() {
                 ) : null}
                 {message.role === 'assistant' &&
                 !message.claims?.length &&
+                !message.genUi &&
                 message.sources?.length ? (
                   <div className="assistant-evidence" aria-label="Sources used">
                     <span>Sources</span>

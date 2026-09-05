@@ -321,15 +321,16 @@ export function DumpUI({
   async function startRecording() {
     setError(null);
     setNotice(null);
-    if (!navigator.mediaDevices?.getUserMedia) {
+    if (!navigator.mediaDevices?.getUserMedia || typeof MediaRecorder === 'undefined') {
       setError(
         'This browser does not support microphone recording. You can still type your capture.'
       );
       return;
     }
 
+    let stream: MediaStream | null = null;
     try {
-      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      stream = await navigator.mediaDevices.getUserMedia({ audio: true });
       const mimeType = getMimeType();
       const recorder = new MediaRecorder(stream, mimeType ? { mimeType } : undefined);
       mediaRecorderRef.current = recorder;
@@ -385,6 +386,7 @@ export function DumpUI({
       setRecordingTime(0);
       setIsRecording(true);
     } catch (caught) {
+      stream?.getTracks().forEach((track) => track.stop());
       setError(messageFor(caught));
     }
   }

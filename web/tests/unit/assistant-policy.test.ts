@@ -99,7 +99,7 @@ describe('assistant policy', () => {
   it('requires explicit legitimate reads without allowing write confusion', () => {
     const prompt = buildAssistantSystemPrompt({
       canonical: true,
-      route: '/goals',
+      route: '/planner',
       productContext: {},
       evidenceCatalog: [],
     });

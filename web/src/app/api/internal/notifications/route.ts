@@ -1,6 +1,6 @@
-import { timingSafeEqual } from 'node:crypto';
 import { NextResponse } from 'next/server';
 import { Resend } from 'resend';
+import { isAuthorizedCronRequest } from '@/lib/api/cron';
 import { buildNotificationEmail } from '@/lib/notifications/email';
 import { createAdminClient } from '@/lib/supabase/admin';
 
@@ -17,15 +17,6 @@ type DeliveryClaim = {
   timezone: string;
 };
 
-function authorized(request: Request) {
-  const configured = process.env.CRON_SECRET;
-  const provided = request.headers.get('authorization')?.replace(/^Bearer\s+/i, '');
-  if (!configured || !provided) return false;
-  const left = Buffer.from(configured);
-  const right = Buffer.from(provided);
-  return left.length === right.length && timingSafeEqual(left, right);
-}
-
 function configuredDelivery() {
   const apiKey = process.env.RESEND_API_KEY;
   const from = process.env.NOTIFICATION_EMAIL_FROM;
@@ -40,7 +31,7 @@ function configuredDelivery() {
 }
 
 export async function POST(request: Request) {
-  if (!authorized(request)) {
+  if (!isAuthorizedCronRequest(request)) {
     return NextResponse.json({ error: 'Not authorized.' }, { status: 401 });
   }
   const delivery = configuredDelivery();

@@ -5,7 +5,7 @@ const noteId = '74000000-0000-4000-8000-000000000001';
 export const assistantReadCorpus = [
   {
     id: 'bounded-goal-search',
-    route: '/goals',
+    route: '/planner',
     userMessage: 'Search my Workspace goals for launch beta before answering.',
     expected: { operationId: 'workspace.search.v1', queryIncludes: 'launch' },
   },

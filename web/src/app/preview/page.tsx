@@ -46,7 +46,6 @@ import {
   Undo2,
   WandSparkles,
 } from 'lucide-react';
-import { Inter, Source_Serif_4 } from 'next/font/google';
 import { useState, useSyncExternalStore } from 'react';
 import { PanelResizer } from '@/components/panel-resizer';
 import { GoalsHorizonsView, VisionView } from './align-surfaces';
@@ -74,23 +73,6 @@ import {
   type PageId,
   type PreviewPage,
 } from './preview-data';
-
-// The old stack ('Avenir Next', 'Iowan Old Style') resolves only on Apple
-// platforms, so most reviewers were looking at a different design. These are
-// self-hosted by next/font, so there is no flash and no third-party request.
-const interUi = Inter({
-  subsets: ['latin'],
-  display: 'swap',
-  variable: '--font-planner-ui',
-  axes: ['opsz'],
-});
-const serifDisplay = Source_Serif_4({
-  subsets: ['latin'],
-  display: 'swap',
-  variable: '--font-planner-display',
-  weight: ['400', '600', '700'],
-  style: ['normal', 'italic'],
-});
 
 type SystemState =
   | 'offline'
@@ -247,7 +229,7 @@ export default function ProductPreviewPage() {
     </>
   );
 
-  const frameClass = `${styles.previewRoot} ${interUi.variable} ${serifDisplay.variable}`;
+  const frameClass = styles.previewRoot;
   const frameStyle = {
     '--v2-sidebar-w': `${sidebarWidth}px`,
     '--v2-context-w': `${contextWidth}px`,

@@ -1,11 +1,5 @@
-import { GoalsUI } from '@/components/goals-ui';
-import { getActionTemplates, getGoalsHierarchy } from '@/app/actions';
+import { permanentRedirect } from 'next/navigation';
 
 export default async function GoalsPage() {
-  const [initialData, initialTemplates] = await Promise.all([
-    getGoalsHierarchy(),
-    getActionTemplates(),
-  ]);
-
-  return <GoalsUI initialData={initialData} initialTemplates={initialTemplates} />;
+  permanentRedirect('/planner');
 }

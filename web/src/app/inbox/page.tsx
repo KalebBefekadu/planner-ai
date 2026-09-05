@@ -16,6 +16,10 @@ export default async function InboxPage() {
       coachingIntensity={preferences?.coachingIntensity ?? null}
       initialProposalBatches={proposalBatches}
       captureProposalsEnabled={process.env.PLANNER_DATA_MODEL === 'canonical'}
+      operationJournalEnabled={
+        process.env.PLANNER_DATA_MODEL === 'canonical' &&
+        process.env.PLANNER_OPERATION_JOURNAL_CAPTURE === 'enabled'
+      }
       initialAnalysisJobs={analysisJobs}
     />
   );

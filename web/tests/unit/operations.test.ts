@@ -85,6 +85,26 @@ describe('operation registry', () => {
     ).rejects.toMatchObject({ code: 'version_conflict' } satisfies Partial<OperationFailure>);
   });
 
+  it.each([
+    ['authentication_required', 'authentication_required'],
+    ['permission denied for function execute_ui_operation', 'permission_denied'],
+    ['workspace_access_revoked', 'workspace_access_revoked'],
+    ['operation_version_unsupported', 'operation_version_unsupported'],
+    ['schema_version_unsupported', 'schema_version_unsupported'],
+  ])('preserves stable policy and schema failure %s as %s', async (message, code) => {
+    const rpc = vi.fn().mockResolvedValue({ data: null, error: { message } });
+    const client = { rpc } as unknown as Pick<SupabaseClient, 'rpc'>;
+
+    await expect(
+      executeOperation(
+        client,
+        'capture.create.v1',
+        { rawText: 'Preserve this Capture', source: 'typed' },
+        { idempotencyKey: 'capture-policy-test', surface: 'ui' }
+      )
+    ).rejects.toMatchObject({ code } satisfies Partial<OperationFailure>);
+  });
+
   it('preserves optional raw Capture text through guided onboarding', async () => {
     const rawText = '  Keep this first thought exact.  ';
     const rpc = vi.fn().mockResolvedValue({

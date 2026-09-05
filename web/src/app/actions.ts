@@ -2,7 +2,8 @@
 
 import { randomUUID } from 'node:crypto';
 import { revalidatePath } from 'next/cache';
-import { executeOperation } from '@/lib/operations';
+import { dateInTimezone } from '@/lib/date';
+import { executeOperation, OperationFailure } from '@/lib/operations';
 import { createClient } from '@/lib/supabase/server';
 import type { GoalStatus } from '@/types/supabase';
 
@@ -42,6 +43,7 @@ export type CaptureView = {
   state: 'new' | 'proposed' | 'reviewed' | 'archived';
   created_at: string;
   archived_at: string | null;
+  operation_receipt_id?: string;
 };
 export type GoalsData = {
   vision: VisionView;
@@ -115,7 +117,7 @@ async function requireUser() {
   const {
     data: { user },
   } = await supabase.auth.getUser();
-  if (!user) throw new Error('Please sign in to continue.');
+  if (!user) throw new OperationFailure('authentication_required', 'Please sign in to continue.');
   return { supabase, user };
 }
 
@@ -133,19 +135,7 @@ async function requireWorkspaceId() {
 function revalidatePlanner() {
   revalidatePath('/');
   revalidatePath('/vision');
-  revalidatePath('/goals');
-}
-
-function todayInTimezone(timezone: string) {
-  const parts = new Intl.DateTimeFormat('en-US', {
-    timeZone: timezone,
-    year: 'numeric',
-    month: '2-digit',
-    day: '2-digit',
-  }).formatToParts(new Date());
-  const value = (type: Intl.DateTimeFormatPartTypes) =>
-    parts.find((part) => part.type === type)?.value ?? '';
-  return `${value('year')}-${value('month')}-${value('day')}`;
+  revalidatePath('/planner');
 }
 
 function toGoalStatus(status: CanonicalGoal['status'] | CanonicalAction['status']): GoalStatus {
@@ -584,7 +574,7 @@ export async function materializeActionTemplate(id: string, expectedVersion: num
   const result = await executeOperation(
     supabase,
     'action-template.materialize.v1',
-    { id, expectedVersion, throughOn: todayInTimezone(workspace.timezone as string) },
+    { id, expectedVersion, throughOn: dateInTimezone(workspace.timezone as string) },
     { idempotencyKey: randomUUID(), surface: 'ui' }
   );
   revalidatePlanner();
@@ -842,6 +832,19 @@ export async function saveTranscript(
       },
       { idempotencyKey, surface: 'ui' }
     );
+    let operationReceiptId: string | undefined;
+    if (process.env.PLANNER_OPERATION_JOURNAL_CAPTURE === 'enabled') {
+      const { data: receipt, error: receiptError } = await supabase
+        .from('operation_receipts')
+        .select('id')
+        .eq('operation_id', 'capture.create.v1')
+        .eq('idempotency_key', idempotencyKey)
+        .maybeSingle();
+      if (receiptError || !receipt) {
+        throw new Error('Capture saved, but its acceptance receipt is temporarily unavailable.');
+      }
+      operationReceiptId = receipt.id;
+    }
     revalidatePath('/');
     return {
       id: saved.id,
@@ -850,6 +853,7 @@ export async function saveTranscript(
       state: saved.state,
       created_at: saved.created_at,
       archived_at: saved.archived_at,
+      operation_receipt_id: operationReceiptId,
     } satisfies CaptureView;
   }
   const { supabase, user } = await requireUser();
@@ -868,4 +872,21 @@ export async function saveTranscript(
     created_at: data.created_at,
     archived_at: data.deleted_at,
   } satisfies CaptureView;
+}
+
+export type CaptureSyncResult = { ok: true; capture: CaptureView } | { ok: false; code: string };
+
+export async function syncTranscript(
+  rawText: string,
+  source: CaptureView['source'],
+  idempotencyKey: string
+): Promise<CaptureSyncResult> {
+  try {
+    return { ok: true, capture: await saveTranscript(rawText, source, idempotencyKey) };
+  } catch (error) {
+    return {
+      ok: false,
+      code: error instanceof OperationFailure ? error.code : 'service_unavailable',
+    };
+  }
 }

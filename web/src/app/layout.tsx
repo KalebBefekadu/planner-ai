@@ -8,6 +8,7 @@ import { NavLinks } from '@/components/nav-links';
 import { AssistantDock } from '@/components/assistant-dock';
 import { ServiceWorkerRegistration } from '@/components/service-worker-registration';
 import { ExperienceShell } from '@/components/experience-shell';
+import { experienceV2EnabledForOwner } from '@/lib/experience-rollout';
 
 export const metadata: Metadata = {
   title: 'Planner AI',
@@ -33,7 +34,7 @@ export default async function RootLayout({ children }: Readonly<{ children: Reac
     unreadNotifications = count ?? 0;
   }
   const canonical = process.env.PLANNER_DATA_MODEL === 'canonical';
-  const experienceV2 = process.env.PLANNER_UI_V2 === 'enabled';
+  const experienceV2 = user ? experienceV2EnabledForOwner(user.id) : false;
 
   return (
     <html lang="en" suppressHydrationWarning>

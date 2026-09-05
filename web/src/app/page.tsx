@@ -64,7 +64,7 @@ export default async function TodayPage() {
               <p className="eyebrow">Focus</p>
               <h2>This week&apos;s priorities</h2>
             </div>
-            <Link href="/goals" aria-label="Open plan">
+            <Link href="/planner" aria-label="Open plan">
               <ArrowRight size={18} />
             </Link>
           </div>
@@ -82,7 +82,7 @@ export default async function TodayPage() {
             ) : (
               <div className="inline-empty">
                 <p>No weekly priorities are set.</p>
-                <Link href="/goals">Choose from your plan</Link>
+                <Link href="/planner">Choose from your plan</Link>
               </div>
             )}
           </div>

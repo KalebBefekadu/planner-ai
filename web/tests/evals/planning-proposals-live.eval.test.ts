@@ -6,27 +6,13 @@ import {
 import { completeManagedText } from '@/lib/ai/provider';
 import { buildCaptureProposalMessages } from '@/lib/capture-proposals';
 import { buildReviewProposalMessages } from '@/lib/review-proposals';
+import { providerErrorLabel, wait } from './live-eval-helpers';
 import { captureProposalEvalCorpus, reviewProposalEvalCorpus } from './proposal-red-team-corpus';
 
 const configuredRequestInterval = Number(process.env.AI_EVAL_REQUEST_INTERVAL_MS ?? 32_000);
 const REQUEST_INTERVAL_MS = Number.isFinite(configuredRequestInterval)
   ? Math.max(0, configuredRequestInterval)
   : 32_000;
-
-function wait(ms: number) {
-  return new Promise((resolve) => setTimeout(resolve, ms));
-}
-
-function providerErrorLabel(error: unknown) {
-  const value = error as { status?: unknown; name?: unknown; code?: unknown };
-  return (
-    [value?.status, value?.name, value?.code]
-      .filter(
-        (part): part is string | number => typeof part === 'string' || typeof part === 'number'
-      )
-      .join(':') || 'unknown'
-  );
-}
 
 describe('live planning proposal behavioral gate', () => {
   it('passes the maintained Capture and Review corpus', async () => {

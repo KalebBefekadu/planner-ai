@@ -1,7 +1,17 @@
+import {
+  applyOperationJournalEvent,
+  createOperationJournalEntry,
+  operationJournalEntrySchema,
+  type OperationJournalEntry,
+  type OperationJournalEvent,
+} from '@/lib/operations/journal';
+
 const databaseName = 'planner-ai-capture-queue';
 const databaseVersion = 1;
 const keyId = 'capture-key-v1';
 const draftId = 'active-capture';
+const operationDeviceId = 'operation-device-id-v1';
+const operationSequenceId = 'operation-client-sequence-v1';
 const sevenDays = 7 * 24 * 60 * 60 * 1_000;
 
 type EncryptedValue = { iv: number[]; ciphertext: ArrayBuffer };
@@ -13,6 +23,7 @@ type StoredCapture = {
   attempts: number;
   nextRetryAt: string;
   lastErrorAt: string | null;
+  journal?: EncryptedValue;
 };
 type StoredVoice = {
   id: string;
@@ -22,7 +33,10 @@ type StoredVoice = {
   expiresAt: string;
 };
 
-export type QueuedCapture = Omit<StoredCapture, 'text'> & { rawText: string };
+export type QueuedCapture = Omit<StoredCapture, 'text' | 'journal'> & {
+  rawText: string;
+  journal?: OperationJournalEntry;
+};
 export type FailedVoice = Omit<StoredVoice, 'audio'>;
 
 function requestResult<T>(request: IDBRequest<T>): Promise<T> {
@@ -92,6 +106,65 @@ async function decrypt(key: CryptoKey, value: EncryptedValue): Promise<ArrayBuff
   );
 }
 
+async function nextOperationIdentity(database: IDBDatabase) {
+  const transaction = database.transaction('meta', 'readwrite');
+  const store = transaction.objectStore('meta');
+  const [storedDeviceId, storedSequence] = await Promise.all([
+    requestResult(store.get(operationDeviceId)),
+    requestResult(store.get(operationSequenceId)),
+  ]);
+  const deviceId = typeof storedDeviceId === 'string' ? storedDeviceId : crypto.randomUUID();
+  const clientSequence =
+    typeof storedSequence === 'number' && Number.isSafeInteger(storedSequence)
+      ? storedSequence + 1
+      : 1;
+  store.put(deviceId, operationDeviceId);
+  store.put(clientSequence, operationSequenceId);
+  await transactionDone(transaction);
+  return { deviceId, clientSequence };
+}
+
+export function createQueuedCaptureOperation(input: {
+  id: string;
+  rawText: string;
+  source: 'typed' | 'voice';
+  deviceId: string;
+  clientSequence: number;
+  requestedAt: string;
+}) {
+  const draft = createOperationJournalEntry({
+    operationId: input.id,
+    operationName: 'capture.create',
+    operationVersion: 1,
+    deviceId: input.deviceId,
+    dependencies: [],
+    clientSequence: input.clientSequence,
+    schemaVersion: 1,
+    requestedAt: input.requestedAt,
+    payload: { rawText: input.rawText, source: input.source },
+  });
+  return applyOperationJournalEvent(applyOperationJournalEvent(draft, { type: 'commit_local' }), {
+    type: 'enqueue',
+  });
+}
+
+export function captureMatchesJournal(
+  journal: OperationJournalEntry,
+  rawText: string,
+  source: 'typed' | 'voice'
+) {
+  if (journal.request.operationName !== 'capture.create') return false;
+  if (!journal.request.payload || typeof journal.request.payload !== 'object') return false;
+  const payload = journal.request.payload as { rawText?: unknown; source?: unknown };
+  return payload.rawText === rawText && payload.source === source;
+}
+
+async function decodeJournal(key: CryptoKey, value?: EncryptedValue) {
+  if (!value) return undefined;
+  const decoded = new TextDecoder().decode(await decrypt(key, value));
+  return operationJournalEntrySchema.parse(JSON.parse(decoded));
+}
+
 export async function saveCaptureDraft(rawText: string, source: 'typed' | 'voice') {
   const database = await openDatabase();
   const key = await encryptionKey(database);
@@ -155,6 +228,39 @@ export async function queueCapture(
   database.close();
 }
 
+export async function queueCaptureOperation(
+  id: string,
+  rawText: string,
+  source: 'typed' | 'voice'
+): Promise<void> {
+  const database = await openDatabase();
+  const key = await encryptionKey(database);
+  const identity = await nextOperationIdentity(database);
+  const now = new Date().toISOString();
+  const journal = createQueuedCaptureOperation({
+    id,
+    rawText,
+    source,
+    ...identity,
+    requestedAt: now,
+  });
+  const stored: StoredCapture = {
+    id,
+    text: await encrypt(key, new TextEncoder().encode(rawText)),
+    source,
+    createdAt: now,
+    attempts: 0,
+    nextRetryAt: now,
+    lastErrorAt: null,
+    journal: await encrypt(key, new TextEncoder().encode(JSON.stringify(journal))),
+  };
+  const transaction = database.transaction(['captures', 'drafts'], 'readwrite');
+  transaction.objectStore('captures').put(stored);
+  transaction.objectStore('drafts').delete(draftId);
+  await transactionDone(transaction);
+  database.close();
+}
+
 export async function listQueuedCaptures(): Promise<QueuedCapture[]> {
   const database = await openDatabase();
   const key = await encryptionKey(database);
@@ -172,10 +278,40 @@ export async function listQueuedCaptures(): Promise<QueuedCapture[]> {
       nextRetryAt: capture.nextRetryAt,
       lastErrorAt: capture.lastErrorAt,
       rawText: new TextDecoder().decode(await decrypt(key, capture.text)),
+      journal: await decodeJournal(key, capture.journal),
     }))
   );
   database.close();
   return captures.sort((left, right) => right.createdAt.localeCompare(left.createdAt));
+}
+
+export async function applyQueuedCaptureJournalEvents(
+  id: string,
+  events: OperationJournalEvent[]
+): Promise<OperationJournalEntry | undefined> {
+  const database = await openDatabase();
+  const key = await encryptionKey(database);
+  const read = database.transaction('captures', 'readonly');
+  const stored = (await requestResult(read.objectStore('captures').get(id))) as
+    | StoredCapture
+    | undefined;
+  await transactionDone(read);
+  if (!stored?.journal) {
+    database.close();
+    return undefined;
+  }
+  const current = await decodeJournal(key, stored.journal);
+  if (!current) {
+    database.close();
+    return undefined;
+  }
+  const journal = events.reduce(applyOperationJournalEvent, current);
+  const encryptedJournal = await encrypt(key, new TextEncoder().encode(JSON.stringify(journal)));
+  const write = database.transaction('captures', 'readwrite');
+  write.objectStore('captures').put({ ...stored, journal: encryptedJournal });
+  await transactionDone(write);
+  database.close();
+  return journal;
 }
 
 export async function removeQueuedCapture(id: string) {

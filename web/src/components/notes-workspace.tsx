@@ -1,9 +1,10 @@
 'use client';
 
-import { useEffect, useMemo, useRef, useState, useTransition } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState, useTransition } from 'react';
 import {
   Archive,
   Bold,
+  FileText,
   FileInput,
   Heading2,
   History,
@@ -21,6 +22,7 @@ import {
   Unlink,
 } from 'lucide-react';
 import ReactMarkdown from 'react-markdown';
+import remarkGfm from 'remark-gfm';
 import { useRouter } from 'next/navigation';
 import {
   archiveNote,
@@ -63,6 +65,29 @@ function errorMessage(error: unknown) {
   return error instanceof Error ? error.message : 'Unable to save this Note.';
 }
 
+export function NoteMarkdownPreview({ markdown }: { markdown: string }) {
+  return (
+    <article className="markdown-preview">
+      {markdown ? (
+        <ReactMarkdown
+          remarkPlugins={[remarkGfm]}
+          components={{
+            a: ({ children, ...props }) => (
+              <a {...props} rel="noreferrer" target="_blank">
+                {children}
+              </a>
+            ),
+          }}
+        >
+          {markdown}
+        </ReactMarkdown>
+      ) : (
+        <p className="note-inspector-empty">Nothing to preview</p>
+      )}
+    </article>
+  );
+}
+
 export function NotesWorkspace({
   notes,
   selectedId,
@@ -95,7 +120,46 @@ export function NotesWorkspace({
   const [importOpen, setImportOpen] = useState(initialImportOpen);
   const editorRef = useRef<HTMLTextAreaElement>(null);
   const initialRender = useRef(true);
+  const saveInFlightRef = useRef(false);
+  const queuedDraftRef = useRef<{ title: string; bodyMarkdown: string } | null>(null);
   const tree = useMemo(() => flattenNotes(notes), [notes]);
+  const wordCount = body.trim() ? body.trim().split(/\s+/).length : 0;
+
+  const queueAutosave = useCallback(
+    async (draft: { title: string; bodyMarkdown: string }) => {
+      if (!activeNoteId) return;
+      queuedDraftRef.current = draft;
+      if (saveInFlightRef.current) return;
+
+      saveInFlightRef.current = true;
+      setSaveState('saving');
+      try {
+        while (queuedDraftRef.current) {
+          const nextDraft = queuedDraftRef.current;
+          queuedDraftRef.current = null;
+          try {
+            const saved = await updateNote({
+              id: activeNoteId,
+              title: nextDraft.title.trim() || 'Untitled',
+              bodyMarkdown: nextDraft.bodyMarkdown,
+              expectedVersion: versionRef.current,
+            });
+            versionRef.current = saved.version;
+          } catch (caught) {
+            queuedDraftRef.current ??= nextDraft;
+            setError(errorMessage(caught));
+            setSaveState('error');
+            return;
+          }
+        }
+        setSaveState('saved');
+        router.refresh();
+      } finally {
+        saveInFlightRef.current = false;
+      }
+    },
+    [activeNoteId, router]
+  );
 
   useEffect(() => {
     if (!activeNoteId) return;
@@ -103,26 +167,11 @@ export function NotesWorkspace({
       initialRender.current = false;
       return;
     }
-    setSaveState('saving');
     const timer = window.setTimeout(() => {
-      void updateNote({
-        id: activeNoteId,
-        title: title.trim() || 'Untitled',
-        bodyMarkdown: body,
-        expectedVersion: versionRef.current,
-      })
-        .then((saved) => {
-          versionRef.current = saved.version;
-          setSaveState('saved');
-          router.refresh();
-        })
-        .catch((caught) => {
-          setError(errorMessage(caught));
-          setSaveState('error');
-        });
+      void queueAutosave({ title, bodyMarkdown: body });
     }, 800);
     return () => window.clearTimeout(timer);
-  }, [activeNoteId, body, router, title]);
+  }, [activeNoteId, body, queueAutosave, title]);
 
   useEffect(() => {
     if (selected?.version && selected.version > versionRef.current) {
@@ -175,7 +224,9 @@ export function NotesWorkspace({
         <div className="notes-sidebar-heading">
           <div>
             <p className="eyebrow">Vault</p>
-            <h1>Notes</h1>
+            <h1>
+              Notes <small aria-hidden="true">{notes.length}</small>
+            </h1>
           </div>
           <div className="notes-sidebar-actions">
             <button
@@ -229,13 +280,27 @@ export function NotesWorkspace({
         {selected ? (
           <>
             <div className="note-editor-header">
-              <input
-                className="note-title-input"
-                value={title}
-                onChange={(event) => setTitle(event.target.value)}
-                aria-label="Note title"
-                maxLength={300}
-              />
+              <div className="note-title-group">
+                <input
+                  className="note-title-input"
+                  value={title}
+                  onChange={(event) => setTitle(event.target.value)}
+                  aria-label="Note title"
+                  maxLength={300}
+                />
+                <p>
+                  <FileText size={13} aria-hidden="true" />
+                  Markdown
+                  <span aria-hidden="true">·</span>
+                  Edited{' '}
+                  {new Intl.DateTimeFormat('en-US', {
+                    month: 'short',
+                    day: 'numeric',
+                    hour: 'numeric',
+                    minute: '2-digit',
+                  }).format(new Date(selected.updatedAt))}
+                </p>
+              </div>
               <div className="note-header-actions">
                 <span className={`save-state save-state-${saveState}`} role="status">
                   {saveState === 'saving'
@@ -357,6 +422,9 @@ export function NotesWorkspace({
                 <Plus size={15} />
                 Child note
               </button>
+              <span className="note-word-count" aria-live="polite">
+                {wordCount} {wordCount === 1 ? 'word' : 'words'}
+              </span>
             </div>
             <div className="note-content-layout">
               {editorMode === 'edit' ? (
@@ -370,23 +438,7 @@ export function NotesWorkspace({
                   spellCheck
                 />
               ) : (
-                <article className="markdown-preview">
-                  {body ? (
-                    <ReactMarkdown
-                      components={{
-                        a: ({ children, ...props }) => (
-                          <a {...props} rel="noreferrer" target="_blank">
-                            {children}
-                          </a>
-                        ),
-                      }}
-                    >
-                      {body}
-                    </ReactMarkdown>
-                  ) : (
-                    <p className="note-inspector-empty">Nothing to preview</p>
-                  )}
-                </article>
+                <NoteMarkdownPreview markdown={body} />
               )}
               <aside className="note-inspector" aria-label="Note connections and history">
                 <section className="note-inspector-section">

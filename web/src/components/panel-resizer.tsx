@@ -1,7 +1,7 @@
 'use client';
 
 /* A shell panel separator that works with a pointer and with a keyboard.
-   planner_ai_next_ui_ux_direction.md §14.3 makes both shell panels resizable
+   docs/product/experience.md makes both shell panels resizable
    (sidebar 200–320, context 288–480), and §16 requires that every drag has a
    keyboard equivalent — so pointer drag and the arrow keys drive the same
    clamped handler. Shared by the app shell and the /preview reference. */

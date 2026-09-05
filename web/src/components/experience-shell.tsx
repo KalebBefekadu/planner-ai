@@ -79,7 +79,7 @@ export function ExperienceShell({
     count?: number;
   }> = [
     { area: 'home', href: '/', label: 'Home' },
-    { area: 'planner', href: '/goals', label: 'Planner' },
+    { area: 'planner', href: '/planner', label: 'Planner' },
     { area: 'workspace', href: workspaceHref, label: 'Workspace' },
     { area: 'search', href: '/search', label: 'Search' },
     ...(canonical
@@ -96,7 +96,7 @@ export function ExperienceShell({
   ];
   const commands = [
     { label: 'Today', detail: 'Home', href: '/' },
-    { label: 'Plan', detail: 'Planner', href: '/goals' },
+    { label: 'Plan', detail: 'Planner', href: '/planner' },
     ...(canonical
       ? [
           { label: 'Calendar', detail: 'Planner', href: '/planner/calendar' },

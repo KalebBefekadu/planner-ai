@@ -3,15 +3,14 @@ import type { NextConfig } from 'next';
 /* The app shipped with no security headers at all, on a surface that holds
    personal planning data, signs people in, and exposes an MCP endpoint.
    "Independent security review" is an open item on the release checklist in
-   docs/implementation-status.md; these are the headers that can be set without
+   docs/status.md; these are the headers that can be set without
    a behaviour change to verify.
 
+   The Content Security Policy is set in proxy.ts instead of this static list:
+   it uses a fresh request nonce so Next can safely authorize its own runtime
+   scripts without permitting arbitrary inline scripts.
+
    Deliberately NOT set here:
-   - Content-Security-Policy. Next.js inlines bootstrap scripts, so a real
-     policy needs per-request nonces wired through the framework. Doing that
-     blind — against authenticated screens that cannot be visually verified in
-     this environment — risks a blank app. It is the right next step, but it
-     needs a signed-in browser to confirm.
    - Cross-Origin-Embedder-Policy, which would break third-party embeds and
      needs the same verification. */
 
@@ -48,6 +47,10 @@ const securityHeaders = [
 
 const nextConfig: NextConfig = {
   allowedDevOrigins: ['127.0.0.1'],
+
+  // Playwright starts its own isolated development server. Keeping its build
+  // output separate means its server can run while a developer uses `npm run dev`.
+  distDir: process.env.NEXT_DIST_DIR ?? '.next',
 
   // Do not advertise the framework on every response.
   poweredByHeader: false,

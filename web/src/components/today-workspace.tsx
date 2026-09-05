@@ -258,7 +258,7 @@ export function TodayWorkspace({ data }: { data: TodayData }) {
               <p className="eyebrow">Available</p>
               <h2>Open Actions</h2>
             </div>
-            <Link href="/goals" aria-label="Open plan" title="Open Plan">
+            <Link href="/planner" aria-label="Open plan" title="Open Plan">
               <ArrowRight size={18} />
             </Link>
           </div>
@@ -267,7 +267,7 @@ export function TodayWorkspace({ data }: { data: TodayData }) {
             {!candidates.length ? (
               <div className="inline-empty">
                 <p>No more open Actions.</p>
-                <Link href="/goals">Open Plan</Link>
+                <Link href="/planner">Open Plan</Link>
               </div>
             ) : null}
           </div>

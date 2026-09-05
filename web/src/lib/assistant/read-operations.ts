@@ -144,7 +144,7 @@ export function parseAssistantReadOperation(
 }
 
 function href(type: AssistantReadRecordType, id: string) {
-  if (type === 'goal') return '/goals';
+  if (type === 'goal') return '/planner';
   if (type === 'action') return '/';
   if (type === 'note') return `/notes?note=${encodeURIComponent(id)}`;
   return '/settings/memory';

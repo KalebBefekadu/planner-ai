@@ -20,7 +20,7 @@ const links = [
   { name: 'Today', href: '/', icon: CalendarCheck2 },
   { name: 'Inbox', href: '/inbox', icon: Inbox },
   { name: 'Vision', href: '/vision', icon: Compass },
-  { name: 'Plan', href: '/goals', icon: Target },
+  { name: 'Plan', href: '/planner', icon: Target },
   { name: 'Settings', href: '/settings/security', icon: Settings },
 ];
 

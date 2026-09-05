@@ -67,7 +67,7 @@ export function buildEvidenceCatalog(context: unknown): AssistantEvidence[] {
     'goal',
     typedContext.goals,
     (item) => String(item.title ?? 'Goal'),
-    () => '/goals'
+    () => '/planner'
   );
   add(
     'action',

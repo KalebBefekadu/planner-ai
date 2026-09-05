@@ -52,21 +52,25 @@ select lives_ok(
   'the trusted provider route can create running job status'
 );
 select is(
-  (select status from public.ai_jobs limit 1),
+  (select status from public.ai_jobs
+   where request_id = 'a5100000-0000-4000-8000-000000000001'),
   'running', 'a new job starts in running state'
 );
 select throws_ok(
-  $$update public.ai_jobs set status = 'succeeded', completed_at = now()$$,
+  $$update public.ai_jobs set status = 'succeeded', completed_at = now()
+    where request_id = 'a5100000-0000-4000-8000-000000000001'$$,
   '23514', null,
   'a successful job requires a result target'
 );
 select lives_ok(
   $$update public.ai_jobs set status = 'failed', error_code = 'provider_timeout',
-    completed_at = now(), updated_at = now() where status = 'running'$$,
+    completed_at = now(), updated_at = now()
+    where request_id = 'a5100000-0000-4000-8000-000000000001'$$,
   'a trusted route can persist a stable failed state'
 );
 select is(
-  (select error_code from public.ai_jobs limit 1),
+  (select error_code from public.ai_jobs
+   where request_id = 'a5100000-0000-4000-8000-000000000001'),
   'provider_timeout', 'job status never stores provider error text'
 );
 select lives_ok(
@@ -87,7 +91,8 @@ select lives_ok(
 select throws_ok(
   $$select public.persist_capture_proposal_analysis_job(
     'a5000000-0000-0000-0000-000000000001',
-    (select id from public.captures limit 1),
+    (select source_capture_id from public.ai_jobs
+     where request_id = 'a5100000-0000-4000-8000-000000000002'),
     (select id from public.ai_jobs where request_id = 'a5100000-0000-4000-8000-000000000002'),
     '{"summary":"Stale result","insights":[],"proposals":[]}'::jsonb,
     'test-model', 'capture-analysis-v1'
@@ -98,7 +103,8 @@ select throws_ok(
 select lives_ok(
   $$select public.persist_capture_proposal_analysis_job(
     'a5000000-0000-0000-0000-000000000001',
-    (select id from public.captures limit 1),
+    (select source_capture_id from public.ai_jobs
+     where request_id = 'a5100000-0000-4000-8000-000000000003'),
     (select id from public.ai_jobs where request_id = 'a5100000-0000-4000-8000-000000000003'),
     '{"summary":"Newest result","insights":[],"proposals":[]}'::jsonb,
     'test-model', 'capture-analysis-v1'
@@ -106,7 +112,11 @@ select lives_ok(
   'the newest request may publish its result'
 );
 select is(
-  (select count(*)::integer from public.capture_proposal_batches),
+  (select count(*)::integer from public.capture_proposal_batches batch
+   where batch.source_capture_id = (
+     select source_capture_id from public.ai_jobs
+     where request_id = 'a5100000-0000-4000-8000-000000000003'
+   )),
   1, 'only the newest overlapping request creates a batch'
 );
 
@@ -117,7 +127,11 @@ select is(
   3, 'the owner can inspect job status and attempt history'
 );
 select is(
-  (select raw_text from public.captures limit 1),
+  (select raw_text from public.captures
+   where id = (
+     select source_capture_id from public.ai_jobs
+     where request_id = 'a5100000-0000-4000-8000-000000000001'
+   )),
   'Keep this source while analysis fails.',
   'a failed job does not change source input'
 );

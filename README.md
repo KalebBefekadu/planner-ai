@@ -1,42 +1,20 @@
 # Planner AI
 
-Planner AI is a private, voice-first planning and knowledge workspace with a full click-first interface, a docked AI assistant, and a deliberately scoped MCP surface.
+Planner AI is a private, voice-first planning and knowledge workspace with a complete click-first interface, a contextual AI assistant, and a deliberately scoped MCP surface.
 
-## Repository Authority
+The core promise is simple: people can always work directly, and AI can perform the same authorized Operations without becoming a hidden source of truth or an uncontrolled administrator.
 
-| Path | Status | Purpose |
-| --- | --- | --- |
-| `web/` | Product application | The only user-facing product shell to carry forward. |
-| `planner/` | Integration reference | Imported Agent Native prototype. Do not add product data or product UI here. |
-| `database/schema.sql` | Legacy reference | One-shot MVP schema. Do not apply to a new or production database. |
-| `database_schema.md` | Approved design | Canonical relational model to implement through migrations. |
-| `docs/adr/` | Approved decisions | Architectural decisions that constrain implementation. |
+## Repository
 
-Planner AI adapts Agent Native's useful patterns without shipping its runtime in the first release. The docked assistant, durable proposals, approvals, Activity, and MCP endpoint live inside `web` and call the same versioned Operations as the click-first UI. The decision and evidence are recorded in [ADR-0024](docs/adr/0024-adapt-agent-native-capabilities-without-shipping-its-runtime.md).
+| Path         | Role                                                               |
+| ------------ | ------------------------------------------------------------------ |
+| `web/`       | The only product application and deployment target.                |
+| `docs/`      | Product, architecture, roadmap, evidence, decisions, and runbooks. |
+| `CONTEXT.md` | Canonical product glossary.                                        |
 
-## Canonical Documents
+Start with the [documentation index](docs/README.md), then read the [status](docs/status.md) and [roadmap](docs/roadmap.md).
 
-Read these in order before implementation:
-
-1. [Product vision](vision.md)
-2. [Product requirements](product_requirements.md)
-3. [Product direction](planner_ai_product_direction.md)
-4. [Glossary](CONTEXT.md)
-5. [Target architecture](architecture.md)
-6. [Canonical data model](database_schema.md)
-7. [Intelligence architecture](ai_integration.md)
-8. [Experience guidelines](ui_ux_guidelines.md)
-9. [Decision register](planner_ai_decision_register.md)
-10. [Implementation roadmap](planner_ai_implementation_roadmap.md)
-11. [Current-state audit](docs/current-state-audit.md)
-12. [Production runbook](docs/production-runbook.md)
-13. [MCP setup and recovery](docs/mcp-setup-and-recovery.md)
-
-When prose conflicts, accepted ADRs and the decision register win. When code conflicts with the documents, treat the code as current state to migrate, not the intended design.
-
-## Local Applications
-
-The product app lives in `web`:
+## Local Development
 
 ```bash
 cd web
@@ -44,10 +22,22 @@ npm install
 npm run dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000). See [web/README.md](web/README.md) for configuration and verification.
+Open [http://localhost:3000](http://localhost:3000). Environment setup and verification commands are documented in [web/README.md](web/README.md).
 
-The `planner` app is retained as read-only implementation reference. It is not a deployment target and must not receive Planner AI product data or features.
+## Quality Baseline
 
-## Implementation Status
+```bash
+cd web
+npm run lint
+npm run typecheck
+npm run format:check
+npm test
+npm run test:db
+npm run build
+```
 
-The application, canonical migrations, CI, secure AI routes, daily execution, editable planning, Weekly/Monthly/Quarterly Review, Notes vault, onboarding/privacy controls, evidence-linked assistant, Activity, recoverable Trash, export, cancellable deletion, PWA Capture queue, and scoped OAuth/manual MCP endpoint are implemented locally. Remote Supabase migration, private attachment infrastructure, provider configuration, authenticated production journeys, and recovery drills remain open. See the [implementation status](docs/implementation-status.md) for verified evidence and blockers, then use the [implementation roadmap](planner_ai_implementation_roadmap.md) for ticket acceptance criteria.
+Authenticated browser, live-provider, production preflight, backup, and release checks require their documented environments and are never implied by the local baseline.
+
+## Current Direction
+
+`web/` already contains the canonical schema, Operation layer, core workspace routes, governed assistant, and MCP foundations. The immediate work is to converge the refined `/preview` experience with the authenticated canonical product, complete production migration and recovery gates, and prove the end-to-end daily planning loop. Advanced databases, graph, canvas, true local-first sync, collaboration, and extensions remain staged north-star capabilities rather than current-release promises.

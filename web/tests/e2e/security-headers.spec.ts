@@ -14,6 +14,21 @@ test('sends the baseline security headers', async ({ request }) => {
   expect(headers['cross-origin-opener-policy']).toBe('same-origin');
 });
 
+test('uses a strict per-request Content Security Policy', async ({ request }) => {
+  const first = (await request.get('/login')).headers()['content-security-policy'] ?? '';
+  const second = (await request.get('/login')).headers()['content-security-policy'] ?? '';
+
+  expect(first).toContain("default-src 'self'");
+  expect(first).toMatch(/script-src 'self' 'nonce-[^']+' 'strict-dynamic'/);
+  expect(first).toContain("object-src 'none'");
+  expect(first).toContain("base-uri 'self'");
+  expect(first).toContain("form-action 'self'");
+  expect(first).toContain("frame-ancestors 'none'");
+  expect(first).toContain("media-src 'self' blob:");
+  expect(first).not.toContain("script-src 'self' 'unsafe-inline'");
+  expect(first).not.toBe(second);
+});
+
 test('keeps the microphone available to voice capture, and shuts off the rest', async ({
   request,
 }) => {

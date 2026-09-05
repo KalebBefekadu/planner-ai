@@ -21,7 +21,7 @@ import { useState } from 'react';
 import styles from './preview.module.css';
 
 /* The Operation proposal, built to the anatomy in
-   planner_ai_next_ui_ux_direction.md 18.1:
+   docs/product/experience.md:
 
      user goal - context chips - exact object count - grouped before/after diff
      - evidence vs inference labels - risk level - estimated cost

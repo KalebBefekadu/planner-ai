@@ -84,7 +84,7 @@ describe('assistant read Operations', () => {
     expect(
       mergeAssistantReadRecords(
         { goals: [{ id, title: 'Old title' }], notifications: [{ id: 'notification' }] },
-        [{ type: 'goal', id, label: 'Launch beta', href: '/goals' }]
+        [{ type: 'goal', id, label: 'Launch beta', href: '/planner' }]
       )
     ).toEqual({
       goals: [{ id, title: 'Launch beta' }],

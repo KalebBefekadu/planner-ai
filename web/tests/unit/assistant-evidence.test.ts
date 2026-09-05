@@ -10,7 +10,7 @@ describe('assistant evidence', () => {
       type: 'goal',
       id: goalId,
       label: 'Launch beta',
-      href: '/goals',
+      href: '/planner',
     });
   });
 
@@ -25,7 +25,7 @@ describe('assistant evidence', () => {
         ],
         catalog
       )
-    ).toEqual([{ type: 'goal', id: goalId, label: 'Launch beta', href: '/goals' }]);
+    ).toEqual([{ type: 'goal', id: goalId, label: 'Launch beta', href: '/planner' }]);
   });
 
   it('defensively excludes Notes marked outside AI processing', () => {

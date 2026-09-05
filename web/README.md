@@ -64,7 +64,7 @@ The MCP endpoint is `${NEXT_PUBLIC_APP_URL}/api/mcp`. It publishes RFC 9728 prot
 
 Official references: [Supabase MCP authentication](https://supabase.com/docs/guides/auth/oauth-server/mcp-authentication) and [MCP authorization](https://modelcontextprotocol.io/specification/2025-11-25/basic/authorization).
 
-See [MCP setup and recovery](../docs/mcp-setup-and-recovery.md) for host connection, minimum grants, revocation, and error recovery. Production response, cutover, backup, and restore procedures live in the [production runbook](../docs/production-runbook.md).
+See [MCP setup and recovery](../docs/runbooks/mcp.md) for host connection, minimum grants, revocation, and error recovery. Production response, cutover, backup, and restore procedures live in the [production runbook](../docs/runbooks/production.md).
 
 ## Architecture Boundary
 
@@ -74,4 +74,4 @@ See [MCP setup and recovery](../docs/mcp-setup-and-recovery.md) for host connect
 - Raw Capture text must be preserved exactly before AI interpretation.
 - Agent Native is a source of reviewed patterns, not a first-release runtime or second data owner.
 
-See the [repository README](../README.md), [current-state audit](../docs/current-state-audit.md), and [target architecture](../architecture.md) before changing product boundaries.
+See the [repository README](../README.md), [current status](../docs/status.md), and [target architecture](../docs/engineering/architecture.md) before changing product boundaries.

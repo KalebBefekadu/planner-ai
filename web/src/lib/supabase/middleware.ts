@@ -10,9 +10,9 @@ export function isMissingAuthSession(error: unknown) {
   );
 }
 
-export async function updateSession(request: NextRequest) {
+export async function updateSession(request: NextRequest, requestHeaders = request.headers) {
   let supabaseResponse = NextResponse.next({
-    request,
+    request: { headers: requestHeaders },
   });
 
   const supabase = createServerClient(
@@ -26,7 +26,7 @@ export async function updateSession(request: NextRequest) {
         setAll(cookiesToSet) {
           cookiesToSet.forEach(({ name, value }) => request.cookies.set(name, value));
           supabaseResponse = NextResponse.next({
-            request,
+            request: { headers: requestHeaders },
           });
           cookiesToSet.forEach(({ name, value, options }) =>
             supabaseResponse.cookies.set(name, value, options)
@@ -47,9 +47,10 @@ export async function updateSession(request: NextRequest) {
   const pathname = request.nextUrl.pathname;
   const isApiRoute = pathname.startsWith('/api/');
   const isDiscoveryRoute = pathname.startsWith('/.well-known/');
-  const isPublicRoute =
-    isDiscoveryRoute ||
-    ['/login', '/signup', '/forgot-password', '/auth/callback'].includes(pathname);
+  const isPublicAuthRoute = ['/login', '/signup', '/forgot-password', '/auth/callback'].includes(
+    pathname
+  );
+  const isPublicRoute = isDiscoveryRoute || isPublicAuthRoute || pathname === '/preview';
 
   if (!user && !isPublicRoute && !isApiRoute) {
     const url = request.nextUrl.clone();
@@ -65,7 +66,7 @@ export async function updateSession(request: NextRequest) {
     return NextResponse.redirect(url);
   }
 
-  if (user && isPublicRoute && !isDiscoveryRoute && pathname !== '/auth/callback') {
+  if (user && isPublicAuthRoute && pathname !== '/auth/callback') {
     // user is logged in, redirect them away from auth pages
     const url = request.nextUrl.clone();
     url.pathname = '/';

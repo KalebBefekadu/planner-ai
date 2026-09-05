@@ -139,7 +139,7 @@ export async function POST(request: Request) {
         type: 'goal' as const,
         id: String(goal.id),
         label: String(goal.title).slice(0, 120),
-        href: '/goals',
+        href: '/planner',
       })),
       ...reviews.map((review) => ({
         type: 'review' as const,

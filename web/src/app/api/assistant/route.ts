@@ -12,6 +12,7 @@ import {
   type AiUsageDetails,
   type RequestContext,
 } from '@/lib/api/ai-route';
+import { dateInTimezone } from '@/lib/date';
 import {
   buildEvidenceCatalog,
   resolveClaims,
@@ -54,6 +55,7 @@ import {
 import { createClient } from '@/lib/supabase/server';
 import { serializeUntrustedAiData } from '@/lib/ai/untrusted-data';
 import { assistantSafetyIntercept } from '@/lib/assistant/safety';
+import { buildReadOnlyAssistantGenUi } from '@/lib/genui/assistant';
 
 const MAX_JSON_BYTES = 48_000;
 const MODEL_ID = GROQ_TEXT_MODEL;
@@ -86,18 +88,6 @@ const inputSchema = z
       ].filter(Boolean).length === 1,
     'Send one message or one proposal decision.'
   );
-
-function dateInTimezone(timezone: string) {
-  const parts = new Intl.DateTimeFormat('en-US', {
-    timeZone: timezone,
-    year: 'numeric',
-    month: '2-digit',
-    day: '2-digit',
-  }).formatToParts(new Date());
-  const value = (type: Intl.DateTimeFormatPartTypes) =>
-    parts.find((part) => part.type === type)?.value ?? '';
-  return `${value('year')}-${value('month')}-${value('day')}`;
-}
 
 function hydrateMessageClaims(message: {
   claims?: unknown;
@@ -693,6 +683,10 @@ export async function POST(request: Request) {
       [...modelOutput.evidence, ...modelOutput.claims.flatMap((claim) => claim.evidence)],
       evidenceCatalog
     );
+    const genUi =
+      canonical && process.env.PLANNER_GENUI_READ_ONLY === 'enabled' && !validatedProposal
+        ? buildReadOnlyAssistantGenUi({ reply: modelOutput.reply, evidence: persistedSources })
+        : null;
 
     let conversationId = input.conversationId;
     let proposalId: string | null = null;
@@ -722,6 +716,7 @@ export async function POST(request: Request) {
         reply: modelOutput.reply,
         evidence: persistedSources,
         claims,
+        genUi,
         conversationId,
         proposal: validatedProposal
           ? {

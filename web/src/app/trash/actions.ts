@@ -22,7 +22,7 @@ export async function restoreTrashBatchAction(batchId: string): Promise<TrashAct
     revalidatePath('/trash');
     revalidatePath('/');
     revalidatePath('/notes');
-    revalidatePath('/goals');
+    revalidatePath('/planner');
     revalidatePath('/settings/memory');
     return { ok: true };
   } catch {

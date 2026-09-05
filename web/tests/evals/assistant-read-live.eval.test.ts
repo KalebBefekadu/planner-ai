@@ -8,6 +8,7 @@ import {
 import { assistantManagedResponseSchema, buildAssistantSystemPrompt } from '@/lib/assistant/policy';
 import { completeManagedText, GROQ_PROVIDER, OPENAI_PROVIDER } from '@/lib/ai/provider';
 import { assistantReadCorpus } from './assistant-read-corpus';
+import { debugProviderError, providerErrorLabel, wait } from './live-eval-helpers';
 
 const evalProvider =
   process.env.AI_EVAL_PROVIDER === OPENAI_PROVIDER ? OPENAI_PROVIDER : GROQ_PROVIDER;
@@ -19,35 +20,6 @@ const REQUEST_INTERVAL_MS = Number.isFinite(configuredRequestInterval)
   : evalProvider === GROQ_PROVIDER
     ? 32_000
     : 1_000;
-
-function wait(ms: number) {
-  return new Promise((resolve) => setTimeout(resolve, ms));
-}
-
-function providerErrorLabel(error: unknown) {
-  const value = error as { status?: unknown; name?: unknown; code?: unknown };
-  return (
-    [value?.status, value?.name, value?.code]
-      .filter(
-        (part): part is string | number => typeof part === 'string' || typeof part === 'number'
-      )
-      .join(':') || 'unknown'
-  );
-}
-
-function debugProviderError(error: unknown) {
-  if (process.env.AI_EVAL_DEBUG !== '1') return;
-  const value = error as { status?: unknown; name?: unknown; code?: unknown; message?: unknown };
-  console.error(
-    JSON.stringify({
-      event: 'live_read_eval_provider_error',
-      status: value?.status ?? null,
-      name: value?.name ?? null,
-      code: value?.code ?? null,
-      message: typeof value?.message === 'string' ? value.message.slice(0, 800) : null,
-    })
-  );
-}
 
 describe('live assistant scoped-read gate', () => {
   it('passes the maintained read corpus', async () => {
@@ -116,7 +88,7 @@ describe('live assistant scoped-read gate', () => {
         );
         if (!result.passed) failures.push(`${fixture.id}: ${result.failures.join(', ')}`);
       } catch (error) {
-        debugProviderError(error);
+        debugProviderError('live_read_eval_provider_error', error);
         failures.push(`${fixture.id}: provider_error (${providerErrorLabel(error)})`);
       }
     }

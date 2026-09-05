@@ -6,7 +6,7 @@ import type { ReactNode } from 'react';
    logo and empty space. Server component — none of this needs client JS.
 
    Design follows the /preview reference implementation and
-   planner_ai_next_ui_ux_direction.md §14. */
+   docs/product/experience.md. */
 
 const promises = [
   {

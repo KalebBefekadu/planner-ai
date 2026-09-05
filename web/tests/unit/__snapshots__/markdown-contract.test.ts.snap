@@ -1,0 +1,473 @@
+// Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
+
+exports[`Planner Markdown semantic contract > keeps the normalized corpus stable as a golden snapshot 1`] = `
+{
+  "autolink": "Visit [https://example.com](https://example.com) or contact [person@example.com](mailto:person@example.com).
+",
+  "blank-quote": "> Thought after blank quote.
+",
+  "blockquote": "> A quoted idea
+>
+> With a second paragraph.
+",
+  "character-entities": "Copyright © and ampersand &.
+",
+  "code-1": "Before code 1.
+
+\`\`\`ts
+const goal1 = { done: false }
+\`\`\`
+
+After code.
+",
+  "code-10": "Before code 10.
+
+\`\`\`ts
+const goal10 = { done: false }
+\`\`\`
+
+After code.
+",
+  "code-2": "Before code 2.
+
+\`\`\`ts
+const goal2 = { done: false }
+\`\`\`
+
+After code.
+",
+  "code-3": "Before code 3.
+
+\`\`\`ts
+const goal3 = { done: false }
+\`\`\`
+
+After code.
+",
+  "code-4": "Before code 4.
+
+\`\`\`ts
+const goal4 = { done: false }
+\`\`\`
+
+After code.
+",
+  "code-5": "Before code 5.
+
+\`\`\`ts
+const goal5 = { done: false }
+\`\`\`
+
+After code.
+",
+  "code-6": "Before code 6.
+
+\`\`\`ts
+const goal6 = { done: false }
+\`\`\`
+
+After code.
+",
+  "code-7": "Before code 7.
+
+\`\`\`ts
+const goal7 = { done: false }
+\`\`\`
+
+After code.
+",
+  "code-8": "Before code 8.
+
+\`\`\`ts
+const goal8 = { done: false }
+\`\`\`
+
+After code.
+",
+  "code-9": "Before code 9.
+
+\`\`\`ts
+const goal9 = { done: false }
+\`\`\`
+
+After code.
+",
+  "code-with-fence": "\`\`\`\`md
+\`\`\`inside\`\`\`
+\`\`\`\`
+",
+  "combined-emphasis": "A _**deeply important**_ goal.
+",
+  "deep-quote": "> Level 1
+>
+> > Level 2
+> >
+> > > Level 3
+",
+  "definition-title": "[ref]: https://example.com "Evidence"
+
+Use [ref].
+",
+  "emphasis": "A _careful_ choice.
+",
+  "empty": "",
+  "empty-table-cell": "| A | B     |
+| - | ----- |
+|   | value |
+",
+  "escaped-punctuation": "\\*literal asterisks\\*
+",
+  "escaped-table-pipe": "| Value  |
+| ------ |
+| a \\| b |
+",
+  "final-no-newline": "# Final
+",
+  "footnote": "A claim.[^source]
+
+[^source]: Supporting context.
+",
+  "frontmatter-1": "---
+planner:
+  id: object-1
+  type: page
+  schema: 1
+tags: [planning, review-1]
+---
+
+# Page 1
+",
+  "frontmatter-10": "---
+planner:
+  id: object-10
+  type: page
+  schema: 1
+tags: [planning, review-10]
+---
+
+# Page 10
+",
+  "frontmatter-2": "---
+planner:
+  id: object-2
+  type: page
+  schema: 1
+tags: [planning, review-2]
+---
+
+# Page 2
+",
+  "frontmatter-3": "---
+planner:
+  id: object-3
+  type: page
+  schema: 1
+tags: [planning, review-3]
+---
+
+# Page 3
+",
+  "frontmatter-4": "---
+planner:
+  id: object-4
+  type: page
+  schema: 1
+tags: [planning, review-4]
+---
+
+# Page 4
+",
+  "frontmatter-5": "---
+planner:
+  id: object-5
+  type: page
+  schema: 1
+tags: [planning, review-5]
+---
+
+# Page 5
+",
+  "frontmatter-6": "---
+planner:
+  id: object-6
+  type: page
+  schema: 1
+tags: [planning, review-6]
+---
+
+# Page 6
+",
+  "frontmatter-7": "---
+planner:
+  id: object-7
+  type: page
+  schema: 1
+tags: [planning, review-7]
+---
+
+# Page 7
+",
+  "frontmatter-8": "---
+planner:
+  id: object-8
+  type: page
+  schema: 1
+tags: [planning, review-8]
+---
+
+# Page 8
+",
+  "frontmatter-9": "---
+planner:
+  id: object-9
+  type: page
+  schema: 1
+tags: [planning, review-9]
+---
+
+# Page 9
+",
+  "frontmatter-dashes": "---
+title: "A -- B"
+---
+
+Body.
+",
+  "hard-break": "First line\\
+second line
+",
+  "heading-1": "# Heading 1
+",
+  "heading-2": "## Heading 2
+",
+  "heading-3": "### Heading 3
+",
+  "heading-4": "#### Heading 4
+",
+  "heading-5": "##### Heading 5
+",
+  "heading-6": "###### Heading 6
+",
+  "html-preserved": "<details><summary>Source</summary>Raw</details>
+",
+  "image": "![A planning board](https://example.com/board.png)
+",
+  "inline-code": "Use \`planner sync\` here.
+",
+  "inline-html": "Before <kbd>Cmd</kbd> after.
+",
+  "link": "[Planner](https://example.com "Example")
+",
+  "long-word": "Abbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb.
+",
+  "loose-list": "- First paragraph
+
+- Second paragraph
+",
+  "malformed-emphasis": "This \\*\\*never closes.
+",
+  "malformed-link": "A \\[link without destination
+",
+  "mixed-list": "- Bullet
+
+  1. Ordered
+  2. Ordered
+
+- Bullet
+",
+  "multiple-code-spans": "Use \`\` \`inside\` \`\` safely.
+",
+  "nested-formatting": "> - [x] **Done** with [evidence](https://example.com)
+",
+  "nested-ordered-list": "1. First
+   1. Nested
+   2. Nested again
+2. Second
+",
+  "null-byte-text": "Before � after.
+",
+  "paragraph": "A plain paragraph.
+",
+  "planner-extension": "\`\`\`planner-callout
+kind: decision
+text: Preserve me
+\`\`\`
+",
+  "reference-link": "[Planner][app]
+
+[app]: https://example.com
+",
+  "soft-break": "First line
+second line
+",
+  "start-number": "4. Fourth
+5. Fifth
+",
+  "strikethrough": "Keep ~~old~~ current thinking.
+",
+  "strong": "A **clear** commitment.
+",
+  "table-1": "| Goal   | Status | Score |
+| :----- | :----: | ----: |
+| Goal 1 | Active |    0% |
+",
+  "table-10": "| Goal    | Status | Score |
+| :------ | :----: | ----: |
+| Goal 10 | Active |   90% |
+",
+  "table-2": "| Goal   | Status | Score |
+| :----- | :----: | ----: |
+| Goal 2 | Active |   10% |
+",
+  "table-3": "| Goal   | Status | Score |
+| :----- | :----: | ----: |
+| Goal 3 | Active |   20% |
+",
+  "table-4": "| Goal   | Status | Score |
+| :----- | :----: | ----: |
+| Goal 4 | Active |   30% |
+",
+  "table-5": "| Goal   | Status | Score |
+| :----- | :----: | ----: |
+| Goal 5 | Active |   40% |
+",
+  "table-6": "| Goal   | Status | Score |
+| :----- | :----: | ----: |
+| Goal 6 | Active |   50% |
+",
+  "table-7": "| Goal   | Status | Score |
+| :----- | :----: | ----: |
+| Goal 7 | Active |   60% |
+",
+  "table-8": "| Goal   | Status | Score |
+| :----- | :----: | ----: |
+| Goal 8 | Active |   70% |
+",
+  "table-9": "| Goal   | Status | Score |
+| :----- | :----: | ----: |
+| Goal 9 | Active |   80% |
+",
+  "table-pipes": "| A      | B |
+| ------ | - |
+| \`a\\|b\` | c |
+",
+  "task-list-1": "- [ ] Task 1
+  - Nested detail 1
+- [ ] Follow-up
+",
+  "task-list-10": "- [x] Task 10
+  - Nested detail 10
+- [ ] Follow-up
+",
+  "task-list-11": "- [ ] Task 11
+  - Nested detail 11
+- [ ] Follow-up
+",
+  "task-list-12": "- [x] Task 12
+  - Nested detail 12
+- [ ] Follow-up
+",
+  "task-list-13": "- [ ] Task 13
+  - Nested detail 13
+- [ ] Follow-up
+",
+  "task-list-14": "- [x] Task 14
+  - Nested detail 14
+- [ ] Follow-up
+",
+  "task-list-15": "- [ ] Task 15
+  - Nested detail 15
+- [ ] Follow-up
+",
+  "task-list-16": "- [x] Task 16
+  - Nested detail 16
+- [ ] Follow-up
+",
+  "task-list-17": "- [ ] Task 17
+  - Nested detail 17
+- [ ] Follow-up
+",
+  "task-list-18": "- [x] Task 18
+  - Nested detail 18
+- [ ] Follow-up
+",
+  "task-list-19": "- [ ] Task 19
+  - Nested detail 19
+- [ ] Follow-up
+",
+  "task-list-2": "- [x] Task 2
+  - Nested detail 2
+- [ ] Follow-up
+",
+  "task-list-20": "- [x] Task 20
+  - Nested detail 20
+- [ ] Follow-up
+",
+  "task-list-3": "- [ ] Task 3
+  - Nested detail 3
+- [ ] Follow-up
+",
+  "task-list-4": "- [x] Task 4
+  - Nested detail 4
+- [ ] Follow-up
+",
+  "task-list-5": "- [ ] Task 5
+  - Nested detail 5
+- [ ] Follow-up
+",
+  "task-list-6": "- [x] Task 6
+  - Nested detail 6
+- [ ] Follow-up
+",
+  "task-list-7": "- [ ] Task 7
+  - Nested detail 7
+- [ ] Follow-up
+",
+  "task-list-8": "- [x] Task 8
+  - Nested detail 8
+- [ ] Follow-up
+",
+  "task-list-9": "- [ ] Task 9
+  - Nested detail 9
+- [ ] Follow-up
+",
+  "task-with-paragraph": "- [ ] Task
+
+  Supporting paragraph.
+",
+  "thematic-break": "Before
+
+***
+
+After
+",
+  "unicode-1": "Amharic: ዕቅድ እና ተግባር
+",
+  "unicode-10": "Symbols: ✓ → ★
+",
+  "unicode-2": "Arabic: التخطيط للحياة
+",
+  "unicode-3": "Japanese: 人生計画
+",
+  "unicode-4": "Korean: 인생 계획
+",
+  "unicode-5": "Hindi: जीवन योजना
+",
+  "unicode-6": "Accents: café and naïve
+",
+  "unicode-7": "Math text: Σ, π, and ∞
+",
+  "unicode-8": "Currency: $10, €20, £30, ¥40
+",
+  "unicode-9": "Direction: English עברית English
+",
+  "unicode-heading": "# ዕቅድ 人生 인생
+",
+  "url-parentheses": "[Link](https://example.com/a_\\(b\\))
+",
+  "whitespace": "Indented but not code
+
+Trailing spaces
+",
+}
+`;

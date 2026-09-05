@@ -27,7 +27,7 @@ describe('assistant context routing', () => {
   it('accepts explicit Note selection only on the Notes route', () => {
     const selection = { type: 'note' as const, id: noteId };
     expect(assistantSelectionForRoute('/notes', selection)).toEqual(selection);
-    expect(assistantSelectionForRoute('/goals', selection)).toBeUndefined();
+    expect(assistantSelectionForRoute('/planner', selection)).toBeUndefined();
   });
 
   it('bounds an explicitly selected Note body before model use', () => {
