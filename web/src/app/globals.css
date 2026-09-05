@@ -808,9 +808,12 @@ button:disabled {
   font-size: var(--fs-body);
 }
 .status-message-error {
-  border-color: var(--coral);
-  background: var(--coral-soft);
-  color: var(--coral);
+  /* Coral is a brand accent, not an error colour, and coral-on-coral-soft is
+     only 3.99:1. The danger pair carries the same meaning and clears AA in
+     both themes. */
+  border-color: var(--danger);
+  background: var(--danger-soft);
+  color: var(--danger);
 }
 .vision-layout {
   display: grid;
@@ -3334,6 +3337,8 @@ button:disabled {
   text-transform: uppercase;
 }
 .ai-usage-metrics dd {
+  display: grid;
+  gap: 5px;
   margin: 0;
   color: var(--ink);
   font-size: var(--fs-title);
@@ -3416,6 +3421,13 @@ button:disabled {
 .ai-operation-table {
   display: grid;
   border-top: 1px solid var(--line);
+}
+/* The table is a tab stop so it can be scrolled sideways without a pointer.
+   Match the shell's focus ring rather than leaving the browser default, which
+   reads as a rendering glitch next to every other focusable thing here. */
+.ai-operation-table:focus-visible {
+  outline: 2px solid var(--link);
+  outline-offset: 2px;
 }
 .ai-operation-table > div {
   display: grid;

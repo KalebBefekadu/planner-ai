@@ -85,22 +85,28 @@ export function AiUsageDashboard({ initial }: { initial: AiUsageDashboardData })
           <dt>
             <CircleDollarSign size={15} /> Estimated spend
           </dt>
-          <dd>{dollars(initial.estimatedCostMicros)}</dd>
-          <span>Since {new Date(initial.monthStartedAt).toLocaleDateString()}</span>
+          <dd>
+            {dollars(initial.estimatedCostMicros)}
+            <span>Since {new Date(initial.monthStartedAt).toLocaleDateString()}</span>
+          </dd>
         </div>
         <div>
           <dt>
             <Activity size={15} /> Requests
           </dt>
-          <dd>{initial.requests}</dd>
-          <span>{successRate.toFixed(1)}% completed</span>
+          <dd>
+            {initial.requests}
+            <span>{successRate.toFixed(1)}% completed</span>
+          </dd>
         </div>
         <div>
           <dt>
             <Gauge size={15} /> Text tokens
           </dt>
-          <dd>{(initial.inputTokens + initial.outputTokens).toLocaleString()}</dd>
-          <span>{initial.audioSeconds.toFixed(1)} audio seconds</span>
+          <dd>
+            {(initial.inputTokens + initial.outputTokens).toLocaleString()}
+            <span>{initial.audioSeconds.toFixed(1)} audio seconds</span>
+          </dd>
         </div>
       </dl>
 
@@ -118,7 +124,12 @@ export function AiUsageDashboard({ initial }: { initial: AiUsageDashboardData })
         </div>
         <div
           className="ai-budget-progress"
-          aria-label={`${budgetPercent.toFixed(1)}% of soft budget used`}
+          role="progressbar"
+          aria-labelledby="ai-budget-heading"
+          aria-valuemin={0}
+          aria-valuemax={100}
+          aria-valuenow={Math.round(budgetPercent)}
+          aria-valuetext={`${budgetPercent.toFixed(1)}% of soft budget used`}
         >
           <span style={{ width: `${budgetPercent}%` }} />
         </div>
@@ -179,7 +190,15 @@ export function AiUsageDashboard({ initial }: { initial: AiUsageDashboardData })
             <h2 id="ai-operation-heading">Provider activity</h2>
           </div>
         </div>
-        <div className="ai-operation-table" role="table" aria-label="AI usage by capability">
+        {/* Narrow viewports scroll this table sideways. Without a tab stop
+            the only way to reach the right-hand columns is a pointer, so a
+            keyboard user simply cannot read them. */}
+        <div
+          className="ai-operation-table"
+          role="table"
+          aria-label="AI usage by capability"
+          tabIndex={0}
+        >
           <div role="row" className="ai-operation-table-heading">
             <span role="columnheader">Capability</span>
             <span role="columnheader">Requests</span>

@@ -322,6 +322,13 @@ export function ExperienceShell({
             <button
               className="experience-command-trigger"
               type="button"
+              /* The label and shortcut are hidden at the mobile breakpoint and
+                 the icon is decorative, which left this button with no
+                 accessible name on every authenticated page. Naming it here
+                 does not depend on which parts CSS chooses to show. It leads
+                 with the visible word so the spoken name still matches the
+                 written one wherever both appear. */
+              aria-label="Search commands and workspace"
               onClick={() => {
                 setCommandQuery('');
                 setCommandOpen(true);

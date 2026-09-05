@@ -1,4 +1,13 @@
+import { existsSync } from 'node:fs';
+
 import { defineConfig, devices } from '@playwright/test';
+
+// The dev server started below reads .env.local itself, but the test process
+// does not. Without this the authenticated specs cannot see the Supabase URL,
+// so their local-stack guard skips them -- and a suite that skips its only
+// authenticated coverage still reports green. Load the file into the runner so
+// the guard reflects the stack rather than the absence of configuration.
+if (existsSync('.env.local')) process.loadEnvFile('.env.local');
 
 const port = Number(process.env.PLAYWRIGHT_PORT ?? 3100);
 const origin = `http://127.0.0.1:${port}`;
