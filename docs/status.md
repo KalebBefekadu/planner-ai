@@ -39,6 +39,8 @@ Implemented local capability includes verified authentication boundaries, canoni
 - The two duplicate remote migration entries were reconciled to the reviewed local versions.
 - The complete canonical migration sequence was applied successfully and the guarded preflight now passes.
 - Count-only production verification found 53 public tables, all 53 RLS-enabled, two Auth users mapped to two Workspaces, no unmigrated users, and 56 registered Operations.
+- Vercel built release commit `1d570e4` successfully. Its team-scoped production alias is currently protected by Vercel Authentication, so anonymous application smoke tests remain blocked at the platform edge.
+- `planner-ai.vercel.app` is not this application: it still serves the older Planner-AI Telegram-bot site and must not be published as the current product URL.
 - [Migration reconciliation](runbooks/migration-reconciliation.md) records the completed procedure and evidence.
 
 Legacy tables remain available for rollback while the deployed application is switched to canonical mode.
@@ -55,10 +57,9 @@ Legacy tables remain available for rollback while the deployed application is sw
 
 ### Production data and operations
 
-- Canonical schema cutover is complete; the Vercel application switch and deployed smoke test are in progress.
+- Canonical schema cutover is complete; the Vercel build is deployed, but the application-mode switch and anonymous/authenticated smoke tests still require access to the current Vercel project settings.
 - Database backup integrity and local isolated restoration are proven; off-machine custody and a hosted recovery-project drill covering Auth, Storage, and managed configuration remain unverified.
-- Remote migration history must be reconciled before any push.
-- Vercel production environment values, latest deployment, custom SMTP/domain, monitoring, alerts, cron ownership, and authenticated production journeys are not fully re-verified.
+- Vercel production environment values, deployment protection, production domain ownership, custom SMTP/domain, monitoring, alerts, cron ownership, and authenticated production journeys are not fully re-verified.
 
 ### AI and external agents
 
