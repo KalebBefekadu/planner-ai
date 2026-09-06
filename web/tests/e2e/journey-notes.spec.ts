@@ -1,0 +1,63 @@
+import { test, expect, goTo } from './support/workspace';
+
+// Journey 5 of the delivery rule: knowledge stays understandable after the
+// moment it was written. Notes are not a disposable editor; they preserve
+// Markdown, expose deliberate connections, and let a person travel either
+// direction through those connections.
+
+async function createRootNote(page: import('@playwright/test').Page, title: string, body: string) {
+  await page.getByRole('button', { name: 'New root note' }).click();
+  await expect(page).toHaveURL(/\/notes\?note=/);
+  const titleEditor = page.getByRole('textbox', { name: 'Note title' });
+  await expect(titleEditor).toHaveValue('Untitled');
+  await titleEditor.fill(title);
+  await page.getByRole('textbox', { name: 'Note body, Markdown' }).fill(body);
+  await page.waitForTimeout(1_000);
+  await expect(page.getByRole('status')).toHaveText('Saved');
+  // Router refresh after autosave updates the tree. This proves the next
+  // navigation leaves a persisted Note, not a client-only draft.
+  await expect(page.getByRole('button', { name: title, exact: true })).toBeVisible();
+}
+
+test('a Markdown Note persists across navigation instead of living only in the editor', async ({
+  workspace,
+}) => {
+  const { page } = workspace;
+  const title = 'Launch decisions';
+  const body = '## Launch\n\n- Keep the scope small.\n- Ship the daily loop first.';
+
+  await goTo(page, '/notes');
+  await createRootNote(page, title, body);
+
+  await goTo(page, '/');
+  await goTo(page, '/notes');
+
+  await page.getByRole('button', { name: title, exact: true }).click();
+  await expect(page.getByRole('textbox', { name: 'Note title' })).toHaveValue(title);
+  await expect(page.getByRole('textbox', { name: 'Note body, Markdown' })).toHaveValue(body);
+});
+
+test('a Note link becomes a navigable backlink from the related Note', async ({ workspace }) => {
+  const { page } = workspace;
+  const sourceTitle = 'Product direction';
+  const targetTitle = 'Research evidence';
+
+  await goTo(page, '/notes');
+  await createRootNote(page, sourceTitle, 'The core workflow must work without AI.');
+
+  await createRootNote(page, targetTitle, 'Evidence and open questions.');
+
+  await page.getByRole('button', { name: sourceTitle, exact: true }).click();
+  const noteSelector = page.getByRole('combobox', { name: 'Note to link' });
+  await noteSelector.selectOption({ label: targetTitle });
+  await page.getByRole('button', { name: 'Add link' }).click();
+
+  await expect(page.getByRole('button', { name: `related ${targetTitle}` })).toBeVisible();
+  await page.getByRole('button', { name: `related ${targetTitle}` }).click();
+
+  await expect(page.getByRole('textbox', { name: 'Note title' })).toHaveValue(targetTitle);
+  const backlink = page.getByRole('button', { name: `backlink · related ${sourceTitle}` });
+  await expect(backlink).toBeVisible();
+  await backlink.click();
+  await expect(page.getByRole('textbox', { name: 'Note title' })).toHaveValue(sourceTitle);
+});

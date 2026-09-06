@@ -119,7 +119,10 @@ export function NotesWorkspace({
   const [editorMode, setEditorMode] = useState<'edit' | 'preview'>('edit');
   const [importOpen, setImportOpen] = useState(initialImportOpen);
   const editorRef = useRef<HTMLTextAreaElement>(null);
-  const initialRender = useRef(true);
+  const persistedDraftRef = useRef({
+    title: selected?.title ?? '',
+    bodyMarkdown: selected?.bodyMarkdown ?? '',
+  });
   const saveInFlightRef = useRef(false);
   const queuedDraftRef = useRef<{ title: string; bodyMarkdown: string } | null>(null);
   const tree = useMemo(() => flattenNotes(notes), [notes]);
@@ -145,6 +148,7 @@ export function NotesWorkspace({
               expectedVersion: versionRef.current,
             });
             versionRef.current = saved.version;
+            persistedDraftRef.current = nextDraft;
           } catch (caught) {
             queuedDraftRef.current ??= nextDraft;
             setError(errorMessage(caught));
@@ -163,8 +167,10 @@ export function NotesWorkspace({
 
   useEffect(() => {
     if (!activeNoteId) return;
-    if (initialRender.current) {
-      initialRender.current = false;
+    if (
+      persistedDraftRef.current.title === title &&
+      persistedDraftRef.current.bodyMarkdown === body
+    ) {
       return;
     }
     const timer = window.setTimeout(() => {
@@ -184,7 +190,6 @@ export function NotesWorkspace({
       try {
         const note = await createNote(parentNoteId);
         router.push(`/notes?note=${note.id}`);
-        router.refresh();
       } catch (caught) {
         setError(errorMessage(caught));
       }
