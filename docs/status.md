@@ -72,7 +72,7 @@ Legacy tables remain available for rollback while the deployed application is sw
 
 ### Beta readiness
 
-- Private attachment ingestion and Storage recovery are incomplete.
+- Private Notes attachment intake, owner-scoped metadata, Storage reads, checksums, and quarantine state are implemented. Malware scanning, approval, safe download, deletion/purge, and Storage recovery are still incomplete.
 - Manual keyboard and screen-reader evidence, restore/rollback drills, AI-outage drills, load/SLO evidence, and independent security review remain open.
 - Supabase free-tier pausing and test-sender email are not appropriate for an external beta.
 
