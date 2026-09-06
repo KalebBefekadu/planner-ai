@@ -54,7 +54,9 @@ npm run audit
 
 Database tests require Docker or another compatible local Supabase runtime. Remote migration, generated-type drift, OAuth/SMTP configuration, and recovery drills must be completed against the owned Supabase project before beta.
 
-Schedule an authenticated `POST` to `${NEXT_PUBLIC_APP_URL}/api/internal/account-deletions` after configuring `CRON_SECRET`. The worker claims due requests in batches and permanently deletes the Supabase identity only after its seven-day cancellation window.
+Vercel production deployments register the daily Cron Jobs in `vercel.json`. Vercel invokes each configured `GET` with `Authorization: Bearer $CRON_SECRET`; the same routes also accept authenticated `POST` for an operator-triggered run. Hobby plans support daily schedules only. On a plan supporting more frequent jobs, review notification cadence before changing its schedule.
+
+Schedule an authenticated request to `${NEXT_PUBLIC_APP_URL}/api/internal/account-deletions` after configuring `CRON_SECRET`. The worker claims due requests in batches and permanently deletes the Supabase identity only after its seven-day cancellation window.
 
 Schedule an authenticated `POST` to `${NEXT_PUBLIC_APP_URL}/api/internal/notifications` at least hourly after configuring `CRON_SECRET`, `RESEND_API_KEY`, and `NOTIFICATION_EMAIL_FROM`. The worker honors each Workspace timezone and quiet hours, sends at most one generic count-only reminder per local day, and retries transient failures with the same provider idempotency key.
 

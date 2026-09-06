@@ -268,13 +268,17 @@ test('anonymous users cannot inspect or stage Notes imports', async ({ request }
 });
 
 test('notification delivery requires the private scheduler secret', async ({ request }) => {
-  const response = await request.post('/api/internal/notifications');
-  expect(response.status()).toBe(401);
-  await expect(response.json()).resolves.toMatchObject({ error: 'Not authorized.' });
+  for (const method of ['get', 'post'] as const) {
+    const response = await request[method]('/api/internal/notifications');
+    expect(response.status()).toBe(401);
+    await expect(response.json()).resolves.toMatchObject({ error: 'Not authorized.' });
+  }
 });
 
 test('attachment purge requires the private scheduler secret', async ({ request }) => {
-  const response = await request.post('/api/internal/note-attachment-purge');
-  expect(response.status()).toBe(401);
-  await expect(response.json()).resolves.toMatchObject({ error: 'Not authorized.' });
+  for (const method of ['get', 'post'] as const) {
+    const response = await request[method]('/api/internal/note-attachment-purge');
+    expect(response.status()).toBe(401);
+    await expect(response.json()).resolves.toMatchObject({ error: 'Not authorized.' });
+  }
 });

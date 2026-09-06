@@ -1,0 +1,8 @@
+{
+  "$schema": "https://openapi.vercel.sh/vercel.json",
+  "crons": [
+    { "path": "/api/internal/notifications", "schedule": "0 13 * * *" },
+    { "path": "/api/internal/account-deletions", "schedule": "17 13 * * *" },
+    { "path": "/api/internal/note-attachment-purge", "schedule": "34 13 * * *" }
+  ]
+}
