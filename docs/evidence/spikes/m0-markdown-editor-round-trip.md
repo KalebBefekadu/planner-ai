@@ -26,9 +26,9 @@ The initial adapter is an identity mdast bridge. It exists to prove the semantic
 
 The authenticated Notes workspace now includes a Tiptap 3 rich mode using the official React, ProseMirror, and StarterKit packages. It is not a second persistence model: every edit is converted back to canonical Markdown before the existing autosave path runs.
 
-`web/src/lib/markdown/rich-editor.ts` accepts only the reversible subset: paragraphs, headings, emphasis, strong, strikethrough, inline code, links without titles, hard breaks, blockquotes, thematic breaks, fenced code, tight ordered or unordered lists, and GFM task lists including checked state. The full golden corpus runs through this compatibility gate. A document is offered rich mode only when its Markdown-to-Tiptap-to-Markdown result is semantically equivalent.
+`web/src/lib/markdown/rich-editor.ts` accepts only the reversible subset: paragraphs, headings, emphasis, strong, strikethrough, inline code, links without titles, hard breaks, blockquotes, thematic breaks, fenced code, tight ordered or unordered lists, GFM task lists including checked state, and GFM tables with column alignment. The full golden corpus runs through this compatibility gate. A document is offered rich mode only when its Markdown-to-Tiptap-to-Markdown result is semantically equivalent.
 
-Frontmatter, raw HTML, tables, footnotes, images, reference links, loose lists, and any other unrepresented construct remain in Source mode. The workspace makes that visible rather than attempting a lossy conversion. Desktop and mobile browser journeys verify that rich formatting and task completion write back to the same portable Markdown Note.
+Frontmatter, raw HTML, footnotes, images, reference links, loose lists, merged table cells, multi-block table cells, and any other unrepresented construct remain in Source mode. The workspace makes that visible rather than attempting a lossy conversion. Desktop and mobile browser journeys verify that rich formatting and task completion write back to the same portable Markdown Note.
 
 ## Golden Corpus
 

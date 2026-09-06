@@ -22,7 +22,7 @@ Fresh checks on 2026-09-06:
 - TypeScript passes with no emitted output.
 - Prettier passes for source and tests.
 - Next.js production build passes and generates 38 routes, including canonical `/planner` and compatibility redirect `/goals`.
-- Vitest passes: 41 files, 502 tests.
+- Vitest passes: 41 files, 507 tests.
 - pgTAP passes: 46 files, 910 assertions.
 - The local Supabase reset/migration chain and database advisors passed in the preceding full verification.
 - The canonical authenticated Playwright corpus passes 114 desktop and mobile tests, including Capture, Planner, Today, authenticated accessibility, and auth-boundary journeys.
@@ -55,7 +55,7 @@ Legacy tables remain available for rollback while the deployed application is sw
 - Planner now adds real-data horizon filtering, progress summaries, and a stronger direction-to-action hierarchy; Notes adds clearer document metadata, serialized autosave, backlinks, caret-aware voice dictation, and portable Markdown vault export/restore.
 - Legacy/canonical mode branches remain until the deployed canonical release is verified and the rollback window closes.
 - Several north-star screens are illustrative rather than connected to real Operations.
-- Notes now offer a source-authoritative rich editor for a proven reversible Markdown subset, but they are not yet the complete editor, attachment system, graph, canvas, or database system in the long-term vision.
+- Notes now offer a source-authoritative rich editor for a proven reversible Markdown subset, including GFM task lists and tables, but they are not yet the complete editor, graph, canvas, or database system in the long-term vision.
 
 ### Production data and operations
 

@@ -2255,6 +2255,27 @@ button:disabled {
   min-width: 0;
   flex: 1;
 }
+.rich-markdown-editor .tiptap table {
+  width: 100%;
+  margin: 1.25em 0;
+  border-collapse: collapse;
+  table-layout: fixed;
+}
+.rich-markdown-editor .tiptap th,
+.rich-markdown-editor .tiptap td {
+  min-width: 96px;
+  border: 1px solid var(--line);
+  padding: 8px 10px;
+  vertical-align: top;
+}
+.rich-markdown-editor .tiptap th {
+  background: var(--surface-muted);
+  font-weight: 650;
+}
+.rich-markdown-editor .tiptap th p,
+.rich-markdown-editor .tiptap td p {
+  margin: 0;
+}
 .markdown-preview > :first-child {
   margin-top: 0;
 }

@@ -102,6 +102,23 @@ test('the rich editor preserves task completion as portable Markdown', async ({ 
   );
 });
 
+test('the rich editor inserts a table as portable GFM Markdown', async ({ workspace }) => {
+  const { page } = workspace;
+  await goTo(page, '/notes');
+  await createRootNote(page, 'Planning table', 'Start with the next decision.');
+
+  await page.getByRole('button', { name: 'Rich', exact: true }).click();
+  await page
+    .getByRole('toolbar', { name: 'Markdown formatting' })
+    .getByRole('button', { name: 'Table' })
+    .click();
+  await expect(page.locator('.rich-markdown-editor table')).toBeVisible();
+
+  await page.getByRole('button', { name: 'Source' }).click();
+  const source = page.getByRole('textbox', { name: 'Note body, Markdown' });
+  await expect.poll(() => source.inputValue()).toMatch(/\|\s*-+\s*\|/);
+});
+
 test('a Note link becomes a navigable backlink from the related Note', async ({ workspace }) => {
   const { page } = workspace;
   const sourceTitle = 'Product direction';

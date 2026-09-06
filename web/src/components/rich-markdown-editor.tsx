@@ -4,6 +4,7 @@ import { useEffect, useMemo } from 'react';
 import type { Editor } from '@tiptap/core';
 import { EditorContent, useEditor } from '@tiptap/react';
 import { ListKit } from '@tiptap/extension-list';
+import { TableKit } from '@tiptap/extension-table';
 import StarterKit from '@tiptap/starter-kit';
 import {
   plannerMarkdownToRichDocument,
@@ -29,6 +30,7 @@ export function RichMarkdownEditor({
         orderedList: false,
       }),
       ListKit,
+      TableKit.configure({ table: { resizable: false } }),
     ],
     content: document ?? { type: 'doc', content: [{ type: 'paragraph' }] },
     immediatelyRender: false,

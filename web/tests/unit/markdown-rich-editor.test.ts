@@ -26,7 +26,45 @@ describe('Planner rich Markdown adapter', () => {
 
   it('rejects a construct without a reversible representation', () => {
     expect(plannerMarkdownToRichDocument('---\ntitle: Private\n---\n\n# Note')).toBeNull();
-    expect(plannerMarkdownToRichDocument('| One | Two |\n| --- | --- |\n| A | B |')).toBeNull();
+  });
+
+  it('preserves table alignment through the rich editor document', () => {
+    const markdown = '| Goal | Status | Score |\n| :--- | :---: | ---: |\n| Build | Active | 80% |';
+    const document = plannerMarkdownToRichDocument(markdown);
+
+    expect(document?.content?.[0]?.content?.[0]?.content).toMatchObject([
+      { type: 'tableHeader', attrs: { align: 'left' } },
+      { type: 'tableHeader', attrs: { align: 'center' } },
+      { type: 'tableHeader', attrs: { align: 'right' } },
+    ]);
+    expect(
+      plannerMarkdownIsSemanticallyEquivalent(markdown, richDocumentToPlannerMarkdown(document!)!)
+    ).toBe(true);
+  });
+
+  it('refuses a rich table that cannot be represented as GFM Markdown', () => {
+    expect(
+      richDocumentToPlannerMarkdown({
+        type: 'doc',
+        content: [
+          {
+            type: 'table',
+            content: [
+              {
+                type: 'tableRow',
+                content: [
+                  {
+                    type: 'tableHeader',
+                    attrs: { colspan: 2 },
+                    content: [{ type: 'paragraph', content: [{ type: 'text', text: 'Merged' }] }],
+                  },
+                ],
+              },
+            ],
+          },
+        ],
+      })
+    ).toBeNull();
   });
 
   it('keeps checked state and nested detail blocks in portable task lists', () => {

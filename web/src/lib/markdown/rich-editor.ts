@@ -18,6 +18,7 @@ type MarkdownNode = {
   lang?: unknown;
   meta?: unknown;
   spread?: unknown;
+  align?: unknown;
   children?: unknown;
 };
 
@@ -68,6 +69,8 @@ function markdownInlineChildrenToRich(value: MarkdownNode, marks: RichMark[]) {
 
 function markdownBlockToRich(value: MarkdownNode): JSONContent | null {
   switch (value.type) {
+    case 'table':
+      return markdownTableToRich(value);
     case 'paragraph': {
       const content = markdownInlineChildrenToRich(value, []);
       return content ? { type: 'paragraph', ...(content.length ? { content } : {}) } : null;
@@ -119,6 +122,47 @@ function markdownBlockToRich(value: MarkdownNode): JSONContent | null {
     default:
       return null;
   }
+}
+
+function tableAlignments(value: MarkdownNode, columnCount: number) {
+  if (!Array.isArray(value.align) || value.align.length !== columnCount) return null;
+  const alignments = value.align.map((alignment) =>
+    alignment === 'left' || alignment === 'right' || alignment === 'center' || alignment === null
+      ? alignment
+      : null
+  );
+  return alignments;
+}
+
+function markdownTableToRich(value: MarkdownNode): JSONContent | null {
+  const rows = markdownChildren(value);
+  if (rows.length === 0 || rows.some((row) => row.type !== 'tableRow')) return null;
+  const firstRowCells = markdownChildren(rows[0]!);
+  if (firstRowCells.length === 0 || firstRowCells.some((cell) => cell.type !== 'tableCell'))
+    return null;
+  const alignments = tableAlignments(value, firstRowCells.length);
+  if (!alignments) return null;
+
+  const content: JSONContent[] = [];
+  for (const [rowIndex, row] of rows.entries()) {
+    const cells = markdownChildren(row);
+    if (cells.length !== firstRowCells.length || cells.some((cell) => cell.type !== 'tableCell')) {
+      return null;
+    }
+    const rowContent: JSONContent[] = [];
+    for (const [columnIndex, cell] of cells.entries()) {
+      const inline = markdownInlineChildrenToRich(cell, []);
+      if (!inline) return null;
+      const align = alignments[columnIndex];
+      rowContent.push({
+        type: rowIndex === 0 ? 'tableHeader' : 'tableCell',
+        ...(align ? { attrs: { align } } : {}),
+        content: [{ type: 'paragraph', ...(inline.length ? { content: inline } : {}) }],
+      });
+    }
+    content.push({ type: 'tableRow', content: rowContent });
+  }
+  return { type: 'table', content };
 }
 
 function markdownListItemToRich(value: MarkdownNode, taskItem: boolean): JSONContent | null {
@@ -208,8 +252,59 @@ function richInlineChildrenToMarkdown(value: JSONContent) {
   return output;
 }
 
+function richTableCellToMarkdown(value: JSONContent): MarkdownNode | null {
+  const colspan = value.attrs?.colspan;
+  const rowspan = value.attrs?.rowspan;
+  if ((colspan !== undefined && colspan !== 1) || (rowspan !== undefined && rowspan !== 1))
+    return null;
+  if (value.content?.length !== 1 || value.content[0]?.type !== 'paragraph') return null;
+
+  const children: MarkdownNode[] = [];
+  for (const child of value.content[0].content ?? []) {
+    if (child.type === 'hardBreak') return null;
+    const converted = richMarksToMarkdown(child);
+    if (!converted) return null;
+    children.push(converted);
+  }
+  return { type: 'tableCell', children };
+}
+
+function richTableToMarkdown(value: JSONContent): MarkdownNode | null {
+  const rows = value.content ?? [];
+  if (rows.length === 0 || rows.some((row) => row.type !== 'tableRow')) return null;
+  const firstRow = rows[0];
+  const firstRowCells = firstRow?.content ?? [];
+  if (firstRowCells.length === 0) return null;
+
+  const alignments = firstRowCells.map((cell) => {
+    const align = cell.attrs?.align;
+    return align === 'left' || align === 'right' || align === 'center' ? align : null;
+  });
+  const convertedRows: MarkdownNode[] = [];
+  for (const row of rows) {
+    const cells = row.content ?? [];
+    if (cells.length !== firstRowCells.length) return null;
+    const convertedCells: MarkdownNode[] = [];
+    for (const [columnIndex, cell] of cells.entries()) {
+      if (cell.type !== 'tableCell' && cell.type !== 'tableHeader') return null;
+      const align = cell.attrs?.align;
+      const normalizedAlign =
+        align === 'left' || align === 'right' || align === 'center' ? align : null;
+      if (normalizedAlign !== alignments[columnIndex]) return null;
+      const converted = richTableCellToMarkdown(cell);
+      if (!converted) return null;
+      convertedCells.push(converted);
+    }
+    convertedRows.push({ type: 'tableRow', children: convertedCells });
+  }
+
+  return { type: 'table', align: alignments, children: convertedRows };
+}
+
 function richNodeToMarkdown(value: JSONContent): MarkdownNode | null {
   switch (value.type) {
+    case 'table':
+      return richTableToMarkdown(value);
     case 'paragraph': {
       const children = richInlineChildrenToMarkdown(value);
       return children ? { type: 'paragraph', children } : null;

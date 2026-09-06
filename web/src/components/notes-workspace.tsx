@@ -28,6 +28,7 @@ import {
   RotateCcw,
   Search,
   ShieldOff,
+  Table2,
   Tags,
   Target,
   Trash2,
@@ -269,6 +270,25 @@ export function NotesWorkspace({
     window.requestAnimationFrame(() => {
       editor.focus();
       editor.setSelectionRange(edit.selectionStart, edit.selectionEnd);
+    });
+  }
+
+  function insertMarkdownTable() {
+    const editor = editorRef.current;
+    if (!editor) return;
+    const start = editor.selectionStart;
+    const end = editor.selectionEnd;
+    const before = body.slice(0, start);
+    const after = body.slice(end);
+    const table = '| Column | Column |\n| --- | --- |\n| Value | Value |';
+    const prefix = before && !before.endsWith('\n') ? '\n\n' : '';
+    const suffix = after && !after.startsWith('\n') ? '\n\n' : '';
+    const nextBody = `${before}${prefix}${table}${suffix}${after}`;
+    const selectionStart = before.length + prefix.length + 2;
+    setBody(nextBody);
+    window.requestAnimationFrame(() => {
+      editor.focus();
+      editor.setSelectionRange(selectionStart, selectionStart + 'Column'.length);
     });
   }
 
@@ -615,6 +635,26 @@ export function NotesWorkspace({
                   disabled={activeEditorMode === 'preview'}
                 >
                   <ListTodo size={16} />
+                </button>
+                <button
+                  type="button"
+                  title="Table"
+                  aria-label="Table"
+                  onMouseDown={(event) => {
+                    if (activeEditorMode === 'rich') event.preventDefault();
+                  }}
+                  onClick={() =>
+                    formatRichOrSource(insertMarkdownTable, (editor) =>
+                      editor
+                        .chain()
+                        .focus()
+                        .insertTable({ rows: 3, cols: 3, withHeaderRow: true })
+                        .run()
+                    )
+                  }
+                  disabled={activeEditorMode === 'preview'}
+                >
+                  <Table2 size={16} />
                 </button>
                 <button
                   type="button"
