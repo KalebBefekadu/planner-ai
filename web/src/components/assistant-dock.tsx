@@ -14,6 +14,7 @@ import {
 } from 'lucide-react';
 import { usePathname, useRouter } from 'next/navigation';
 import Link from 'next/link';
+import { boundedAssistantHistory } from '@/lib/assistant/history';
 import type { OperationId } from '@/lib/operations';
 import type { AssistantEvidence, ResolvedAssistantClaim } from '@/lib/assistant/evidence';
 import { GenUiRenderer } from '@/components/genui-renderer';
@@ -150,7 +151,7 @@ export function AssistantDock({ className }: { className?: string }) {
         headers: { 'content-type': 'application/json' },
         body: JSON.stringify({
           ...options,
-          history: historySource.slice(-12).map(({ role, content }) => ({ role, content })),
+          history: boundedAssistantHistory(historySource),
           route: pathname,
           selection,
           conversationId: conversationId ?? undefined,

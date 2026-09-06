@@ -56,18 +56,19 @@ import { createClient } from '@/lib/supabase/server';
 import { serializeUntrustedAiData } from '@/lib/ai/untrusted-data';
 import { assistantSafetyIntercept } from '@/lib/assistant/safety';
 import { buildReadOnlyAssistantGenUi } from '@/lib/genui/assistant';
-import { boundedAssistantHistory } from '@/lib/assistant/history';
+import { boundedAssistantHistory, MAX_ASSISTANT_HISTORY_MESSAGES } from '@/lib/assistant/history';
 
 const MAX_JSON_BYTES = 48_000;
 const MODEL_ID = GROQ_TEXT_MODEL;
 const PROMPT_VERSION = 'assistant-v11';
+const MAX_ASSISTANT_COMPLETION_TOKENS = 1_000;
 const messageSchema = z
   .object({ role: z.enum(['user', 'assistant']), content: z.string().trim().min(1).max(4_000) })
   .strict();
 const inputSchema = z
   .object({
     message: z.string().trim().min(1).max(4_000).optional(),
-    history: z.array(messageSchema).max(12).optional(),
+    history: z.array(messageSchema).max(MAX_ASSISTANT_HISTORY_MESSAGES).optional(),
     route: z.string().startsWith('/').max(200),
     selection: z
       .object({ type: z.literal('note'), id: z.uuid() })
@@ -569,7 +570,7 @@ export async function POST(request: Request) {
       response_format: { type: 'json_object' },
       managed_response_schema: assistantManagedResponseSchema(canonical),
       temperature: 0.2,
-      max_completion_tokens: 1_600,
+      max_completion_tokens: MAX_ASSISTANT_COMPLETION_TOKENS,
       tools: canonical && !explicitRead ? assistantReadTools() : undefined,
     });
     usageIdentity = {
@@ -649,7 +650,7 @@ export async function POST(request: Request) {
           response_format: { type: 'json_object' },
           managed_response_schema: assistantManagedResponseSchema(canonical),
           temperature: 0.2,
-          max_completion_tokens: 1_600,
+          max_completion_tokens: MAX_ASSISTANT_COMPLETION_TOKENS,
         },
         { provider: servedProvider }
       );

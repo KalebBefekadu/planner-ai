@@ -78,7 +78,7 @@ describe('live assistant scoped-read gate', () => {
             response_format: { type: 'json_object' },
             managed_response_schema: assistantManagedResponseSchema(),
             temperature: 0,
-            max_completion_tokens: 1_600,
+            max_completion_tokens: 1_000,
           },
           { provider: evalProvider }
         );
