@@ -108,3 +108,52 @@ export async function POST(request: Request) {
     return error('Attachment upload could not be completed.', 400);
   }
 }
+
+export async function DELETE(request: Request) {
+  if (process.env.PLANNER_DATA_MODEL !== 'canonical') {
+    return error('Notes attachments are unavailable before data migration.', 503);
+  }
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) return error('Authentication required.', 401);
+
+  try {
+    const body = (await request.json()) as { attachmentId?: unknown };
+    if (typeof body.attachmentId !== 'string') return error('Choose an attachment to remove.', 400);
+    const { data: workspace } = await supabase
+      .from('workspaces')
+      .select('id')
+      .eq('owner_user_id', user.id)
+      .single();
+    if (!workspace) return error('Workspace is unavailable.', 503);
+    const { data: attachment } = await supabase
+      .from('note_attachments')
+      .select('id,object_key')
+      .eq('id', body.attachmentId)
+      .eq('workspace_id', workspace.id)
+      .is('removed_at', null)
+      .maybeSingle();
+    if (!attachment) return error('Attachment not found.', 404);
+
+    const admin = createAdminClient();
+    const { error: storageError } = await admin.storage
+      .from(bucket)
+      .remove([attachment.object_key]);
+    if (storageError) return error('Attachment removal could not be completed.', 503);
+    const { error: updateError } = await admin
+      .from('note_attachments')
+      .update({ removed_at: new Date().toISOString() })
+      .eq('id', attachment.id)
+      .eq('workspace_id', workspace.id)
+      .is('removed_at', null);
+    if (updateError) return error('Attachment removal could not be completed.', 503);
+    return new NextResponse(null, {
+      status: 204,
+      headers: { 'Cache-Control': 'private, no-store' },
+    });
+  } catch {
+    return error('Attachment removal could not be completed.', 400);
+  }
+}

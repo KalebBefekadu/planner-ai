@@ -2440,6 +2440,13 @@ button:disabled {
   overflow-wrap: anywhere;
 }
 
+.note-attachment-row > div {
+  align-items: center;
+  display: flex;
+  gap: 6px;
+  justify-content: space-between;
+}
+
 .note-attachment-row span {
   color: var(--muted);
   font-size: 12px;

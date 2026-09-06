@@ -21,6 +21,7 @@ import {
   ShieldOff,
   Tags,
   Target,
+  Trash2,
   Unlink,
 } from 'lucide-react';
 import ReactMarkdown from 'react-markdown';
@@ -260,6 +261,28 @@ export function NotesWorkspace({
     } finally {
       setIsUploadingAttachment(false);
       if (attachmentInputRef.current) attachmentInputRef.current.value = '';
+    }
+  }
+
+  async function removeAttachment(attachmentId: string) {
+    if (!window.confirm('Remove this attachment?')) return;
+    setError(null);
+    setIsUploadingAttachment(true);
+    try {
+      const response = await fetch('/api/notes/attachments', {
+        method: 'DELETE',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ attachmentId }),
+      });
+      const payload =
+        response.status === 204 ? null : ((await response.json()) as { error?: string });
+      if (!response.ok)
+        throw new Error(payload?.error ?? 'Attachment removal could not be completed.');
+      router.refresh();
+    } catch (caught) {
+      setError(errorMessage(caught));
+    } finally {
+      setIsUploadingAttachment(false);
     }
   }
 
@@ -532,7 +555,19 @@ export function NotesWorkspace({
                   <div className="note-attachment-list">
                     {knowledge?.attachments.map((attachment) => (
                       <div key={attachment.id} className="note-attachment-row">
-                        <strong>{attachment.originalName}</strong>
+                        <div>
+                          <strong>{attachment.originalName}</strong>
+                          <button
+                            type="button"
+                            className="note-icon-quiet"
+                            title="Remove attachment"
+                            aria-label={`Remove attachment ${attachment.originalName}`}
+                            disabled={isUploadingAttachment}
+                            onClick={() => void removeAttachment(attachment.id)}
+                          >
+                            <Trash2 size={14} />
+                          </button>
+                        </div>
                         <span>
                           {attachment.scanState === 'quarantined'
                             ? 'Security review pending'
