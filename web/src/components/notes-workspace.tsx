@@ -14,6 +14,7 @@ import {
   List,
   ListTodo,
   Mic,
+  Paperclip,
   Plus,
   RotateCcw,
   Search,
@@ -120,7 +121,9 @@ export function NotesWorkspace({
     useState<NoteKnowledgeContext['links'][number]['relationType']>('related');
   const [editorMode, setEditorMode] = useState<'edit' | 'preview'>('edit');
   const [importOpen, setImportOpen] = useState(initialImportOpen);
+  const [isUploadingAttachment, setIsUploadingAttachment] = useState(false);
   const editorRef = useRef<HTMLTextAreaElement>(null);
+  const attachmentInputRef = useRef<HTMLInputElement>(null);
   const persistedDraftRef = useRef({
     title: selected?.title ?? '',
     bodyMarkdown: selected?.bodyMarkdown ?? '',
@@ -237,6 +240,27 @@ export function NotesWorkspace({
         setError(errorMessage(caught));
       }
     });
+  }
+
+  async function uploadAttachment(file: File) {
+    if (!selected) return;
+    setError(null);
+    setIsUploadingAttachment(true);
+    try {
+      const form = new FormData();
+      form.append('noteId', selected.id);
+      form.append('file', file);
+      const response = await fetch('/api/notes/attachments', { method: 'POST', body: form });
+      const payload = (await response.json()) as { error?: string };
+      if (!response.ok)
+        throw new Error(payload.error ?? 'Attachment upload could not be completed.');
+      router.refresh();
+    } catch (caught) {
+      setError(errorMessage(caught));
+    } finally {
+      setIsUploadingAttachment(false);
+      if (attachmentInputRef.current) attachmentInputRef.current.value = '';
+    }
   }
 
   const availableTargets = notes.filter((note) => note.id !== selected?.id);
@@ -480,6 +504,48 @@ export function NotesWorkspace({
                 <NoteMarkdownPreview markdown={body} />
               )}
               <aside className="note-inspector" aria-label="Note connections and history">
+                <section className="note-inspector-section">
+                  <h2>
+                    <Paperclip size={15} aria-hidden="true" />
+                    Attachments
+                  </h2>
+                  <input
+                    ref={attachmentInputRef}
+                    type="file"
+                    className="sr-only"
+                    accept="application/pdf,image/jpeg,image/png,text/markdown,text/plain,.md,.txt"
+                    aria-label="Attach a file"
+                    onChange={(event) => {
+                      const file = event.target.files?.[0];
+                      if (file) void uploadAttachment(file);
+                    }}
+                  />
+                  <button
+                    type="button"
+                    className="note-attachment-upload"
+                    disabled={isUploadingAttachment}
+                    onClick={() => attachmentInputRef.current?.click()}
+                  >
+                    <Paperclip size={14} />
+                    {isUploadingAttachment ? 'Uploading' : 'Attach file'}
+                  </button>
+                  <div className="note-attachment-list">
+                    {knowledge?.attachments.map((attachment) => (
+                      <div key={attachment.id} className="note-attachment-row">
+                        <strong>{attachment.originalName}</strong>
+                        <span>
+                          {attachment.scanState === 'quarantined'
+                            ? 'Security review pending'
+                            : attachment.scanState}
+                        </span>
+                      </div>
+                    ))}
+                    {!knowledge?.attachments.length ? (
+                      <p className="note-inspector-empty">No attachments</p>
+                    ) : null}
+                  </div>
+                </section>
+
                 <section className="note-inspector-section">
                   <h2>
                     <Tags size={15} aria-hidden="true" />

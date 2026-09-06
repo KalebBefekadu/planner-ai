@@ -2417,6 +2417,33 @@ button:disabled {
   color: var(--muted);
   font-size: var(--fs-label);
 }
+
+.note-attachment-upload {
+  align-items: center;
+  display: inline-flex;
+  gap: 6px;
+}
+
+.note-attachment-list {
+  display: grid;
+  gap: 6px;
+  margin-top: 10px;
+}
+
+.note-attachment-row {
+  display: grid;
+  gap: 2px;
+}
+
+.note-attachment-row strong {
+  font-size: 13px;
+  overflow-wrap: anywhere;
+}
+
+.note-attachment-row span {
+  color: var(--muted);
+  font-size: 12px;
+}
 .note-empty {
   display: grid;
   place-items: center;
