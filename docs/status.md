@@ -22,13 +22,13 @@ Fresh checks on 2026-09-06:
 - TypeScript passes with no emitted output.
 - Prettier passes for source and tests.
 - Next.js production build passes and generates 38 routes, including canonical `/planner` and compatibility redirect `/goals`.
-- Vitest passes: 37 files, 372 tests.
+- Vitest passes: 41 files, 502 tests.
 - pgTAP passes: 46 files, 910 assertions.
 - The local Supabase reset/migration chain and database advisors passed in the preceding full verification.
 - The canonical authenticated Playwright corpus passes 114 desktop and mobile tests, including Capture, Planner, Today, authenticated accessibility, and auth-boundary journeys.
 - The dependency audit reports no known vulnerabilities at the configured high-severity threshold.
 
-Implemented local capability includes verified authentication boundaries, canonical relational migrations, owner-isolating RLS, versioned Operation dispatch, Activity and undo, Today, Vision/Goals/Actions, Planner calendar, Capture and voice transcription routes, atomic Proposals, Weekly/Monthly/Quarterly Review, Notes and Markdown contracts, exact search, onboarding, settings, notifications, Conversations, explicit Memory, AI Exclusion, Trash, export, cancellable account deletion, PWA Capture recovery, assistant evidence/safety controls, GenUI schema validation, and scoped MCP endpoints.
+Implemented local capability includes verified authentication boundaries, canonical relational migrations, owner-isolating RLS, versioned Operation dispatch, Activity and undo, Today, Vision/Goals/Actions, Planner calendar, Capture and voice transcription routes, atomic Proposals, Weekly/Monthly/Quarterly Review, Notes with source-authoritative Markdown and a guarded rich-editor adapter, exact search, onboarding, settings, notifications, Conversations, explicit Memory, AI Exclusion, Trash, export, cancellable account deletion, PWA Capture recovery, assistant evidence/safety controls, GenUI schema validation, and scoped MCP endpoints.
 
 The daily-planning loop now has browser evidence that a typed Capture persists into Today, Vision-to-yearly/quarterly/monthly/weekly planning creates the expected hierarchy, a completed Goal remains visible rather than being accidentally archived, daily focus survives reload, completed Actions leave the open list, and the five-item focus cap limits commitment rather than creation.
 
@@ -55,7 +55,7 @@ Legacy tables remain available for rollback while the deployed application is sw
 - Planner now adds real-data horizon filtering, progress summaries, and a stronger direction-to-action hierarchy; Notes adds clearer document metadata, serialized autosave, backlinks, caret-aware voice dictation, and portable Markdown vault export/restore.
 - Legacy/canonical mode branches remain until the deployed canonical release is verified and the rollback window closes.
 - Several north-star screens are illustrative rather than connected to real Operations.
-- Notes are a credible foundation but not yet the polished editor, attachment system, graph, canvas, or database system in the long-term vision.
+- Notes now offer a source-authoritative rich editor for a proven reversible Markdown subset, but they are not yet the complete editor, attachment system, graph, canvas, or database system in the long-term vision.
 
 ### Production data and operations
 

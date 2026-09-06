@@ -33,6 +33,7 @@ import {
   Trash2,
   Unlink,
 } from 'lucide-react';
+import type { Editor } from '@tiptap/core';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import { useRouter } from 'next/navigation';
@@ -54,9 +55,11 @@ import {
   type NoteView,
 } from '@/app/notes/actions';
 import { NoteImportDialog } from '@/components/note-import-dialog';
+import { RichMarkdownEditor } from '@/components/rich-markdown-editor';
 import { useVoiceTranscription } from '@/lib/use-voice-transcription';
 import { extractPlannerMarkdownHeadings } from '@/lib/markdown/contract';
 import { continueMarkdownList, wrapMarkdownSelection } from '@/lib/markdown/editing';
+import { plannerMarkdownSupportsRichEditing } from '@/lib/markdown/rich-editor';
 
 function flattenNotes(notes: NoteView[]) {
   const children = new Map<string | null, NoteView[]>();
@@ -131,7 +134,8 @@ export function NotesWorkspace({
   const [targetActionId, setTargetActionId] = useState('');
   const [relationType, setRelationType] =
     useState<NoteKnowledgeContext['links'][number]['relationType']>('related');
-  const [editorMode, setEditorMode] = useState<'edit' | 'preview'>('edit');
+  const [editorMode, setEditorMode] = useState<'source' | 'rich' | 'preview'>('source');
+  const [richEditor, setRichEditor] = useState<Editor | null>(null);
   const [importOpen, setImportOpen] = useState(initialImportOpen);
   const [isUploadingAttachment, setIsUploadingAttachment] = useState(false);
   const [recentlyRemovedAttachment, setRecentlyRemovedAttachment] = useState<{
@@ -148,10 +152,12 @@ export function NotesWorkspace({
   const queuedDraftRef = useRef<{ title: string; bodyMarkdown: string } | null>(null);
   const tree = useMemo(() => flattenNotes(notes), [notes]);
   const outline = useMemo(() => extractPlannerMarkdownHeadings(body), [body]);
+  const richEditable = useMemo(() => plannerMarkdownSupportsRichEditing(body), [body]);
+  const activeEditorMode = editorMode === 'rich' && !richEditable ? 'source' : editorMode;
   const wordCount = body.trim() ? body.trim().split(/\s+/).length : 0;
 
   function focusOutlineLine(line: number) {
-    setEditorMode('edit');
+    setEditorMode('source');
     window.requestAnimationFrame(() => {
       const editor = editorRef.current;
       if (!editor) return;
@@ -165,6 +171,10 @@ export function NotesWorkspace({
   }
   const insertTranscript = useCallback(
     (transcript: string) => {
+      if (activeEditorMode === 'rich' && richEditor) {
+        richEditor.chain().focus().insertContent(transcript).run();
+        return;
+      }
       const editor = editorRef.current;
       const start = editor?.selectionStart ?? body.length;
       const end = editor?.selectionEnd ?? body.length;
@@ -177,7 +187,7 @@ export function NotesWorkspace({
         editor?.setSelectionRange(cursor, cursor);
       });
     },
-    [body]
+    [activeEditorMode, body, richEditor]
   );
   const voice = useVoiceTranscription({ onTranscript: insertTranscript });
 
@@ -283,6 +293,14 @@ export function NotesWorkspace({
       editor.focus();
       editor.setSelectionRange(edit.selectionStart, edit.selectionEnd);
     });
+  }
+
+  function formatRichOrSource(sourceEdit: () => void, richEdit: (editor: Editor) => void) {
+    if (activeEditorMode === 'rich') {
+      if (richEditor) richEdit(richEditor);
+      return;
+    }
+    sourceEdit();
   }
 
   function runKnowledgeAction(action: () => Promise<unknown>) {
@@ -517,8 +535,16 @@ export function NotesWorkspace({
                   type="button"
                   title="Heading"
                   aria-label="Heading"
-                  onClick={() => wrapSelection('## ', '')}
-                  disabled={editorMode === 'preview'}
+                  onMouseDown={(event) => {
+                    if (activeEditorMode === 'rich') event.preventDefault();
+                  }}
+                  onClick={() =>
+                    formatRichOrSource(
+                      () => wrapSelection('## ', ''),
+                      (editor) => editor.chain().focus().toggleHeading({ level: 2 }).run()
+                    )
+                  }
+                  disabled={activeEditorMode === 'preview'}
                 >
                   <Heading2 size={16} />
                 </button>
@@ -526,8 +552,16 @@ export function NotesWorkspace({
                   type="button"
                   title="Bold"
                   aria-label="Bold"
-                  onClick={() => wrapSelection('**')}
-                  disabled={editorMode === 'preview'}
+                  onMouseDown={(event) => {
+                    if (activeEditorMode === 'rich') event.preventDefault();
+                  }}
+                  onClick={() =>
+                    formatRichOrSource(
+                      () => wrapSelection('**'),
+                      (editor) => editor.chain().focus().toggleBold().run()
+                    )
+                  }
+                  disabled={activeEditorMode === 'preview'}
                 >
                   <Bold size={16} />
                 </button>
@@ -535,8 +569,16 @@ export function NotesWorkspace({
                   type="button"
                   title="Italic"
                   aria-label="Italic"
-                  onClick={() => wrapSelection('_')}
-                  disabled={editorMode === 'preview'}
+                  onMouseDown={(event) => {
+                    if (activeEditorMode === 'rich') event.preventDefault();
+                  }}
+                  onClick={() =>
+                    formatRichOrSource(
+                      () => wrapSelection('_'),
+                      (editor) => editor.chain().focus().toggleItalic().run()
+                    )
+                  }
+                  disabled={activeEditorMode === 'preview'}
                 >
                   <Italic size={16} />
                 </button>
@@ -544,8 +586,16 @@ export function NotesWorkspace({
                   type="button"
                   title="List"
                   aria-label="List"
-                  onClick={() => wrapSelection('- ', '')}
-                  disabled={editorMode === 'preview'}
+                  onMouseDown={(event) => {
+                    if (activeEditorMode === 'rich') event.preventDefault();
+                  }}
+                  onClick={() =>
+                    formatRichOrSource(
+                      () => wrapSelection('- ', ''),
+                      (editor) => editor.chain().focus().toggleBulletList().run()
+                    )
+                  }
+                  disabled={activeEditorMode === 'preview'}
                 >
                   <List size={16} />
                 </button>
@@ -555,7 +605,7 @@ export function NotesWorkspace({
                   aria-label={voice.isRecording ? 'Stop dictation' : 'Start dictation'}
                   aria-pressed={voice.isRecording}
                   onClick={() => (voice.isRecording ? voice.stop() : void voice.start())}
-                  disabled={editorMode === 'preview' || voice.isTranscribing}
+                  disabled={activeEditorMode === 'preview' || voice.isTranscribing}
                 >
                   <Mic size={16} />
                 </button>
@@ -563,17 +613,32 @@ export function NotesWorkspace({
               <div className="editor-mode-control" aria-label="Editor mode">
                 <button
                   type="button"
-                  className={editorMode === 'edit' ? 'editor-mode-active' : undefined}
-                  aria-pressed={editorMode === 'edit'}
-                  onClick={() => setEditorMode('edit')}
+                  className={activeEditorMode === 'source' ? 'editor-mode-active' : undefined}
+                  aria-pressed={activeEditorMode === 'source'}
+                  onClick={() => setEditorMode('source')}
                 >
                   <FileInput size={14} />
-                  Edit
+                  Source
                 </button>
                 <button
                   type="button"
-                  className={editorMode === 'preview' ? 'editor-mode-active' : undefined}
-                  aria-pressed={editorMode === 'preview'}
+                  className={activeEditorMode === 'rich' ? 'editor-mode-active' : undefined}
+                  aria-pressed={activeEditorMode === 'rich'}
+                  disabled={!richEditable}
+                  title={
+                    richEditable
+                      ? 'Edit with rich formatting'
+                      : 'This Note has Markdown that must stay in source mode to preserve it.'
+                  }
+                  onClick={() => setEditorMode('rich')}
+                >
+                  <FileText size={14} />
+                  Rich
+                </button>
+                <button
+                  type="button"
+                  className={activeEditorMode === 'preview' ? 'editor-mode-active' : undefined}
+                  aria-pressed={activeEditorMode === 'preview'}
                   onClick={() => setEditorMode('preview')}
                 >
                   <Eye size={14} />
@@ -592,8 +657,14 @@ export function NotesWorkspace({
                 {wordCount} {wordCount === 1 ? 'word' : 'words'}
               </span>
             </div>
+            {!richEditable ? (
+              <p className="note-editor-notice" role="status">
+                This Note includes portable Markdown that stays in source mode until every construct
+                can be preserved.
+              </p>
+            ) : null}
             <div className="note-content-layout">
-              {editorMode === 'edit' ? (
+              {activeEditorMode === 'source' ? (
                 <textarea
                   ref={editorRef}
                   aria-label="Note body, Markdown"
@@ -603,6 +674,12 @@ export function NotesWorkspace({
                   onKeyDown={onEditorKeyDown}
                   placeholder="Write in Markdown..."
                   spellCheck
+                />
+              ) : activeEditorMode === 'rich' ? (
+                <RichMarkdownEditor
+                  markdown={body}
+                  onChange={setBody}
+                  onEditorChange={setRichEditor}
                 />
               ) : (
                 <NoteMarkdownPreview markdown={body} />

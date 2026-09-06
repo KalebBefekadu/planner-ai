@@ -60,6 +60,29 @@ test('the Markdown editor keeps fast source-native formatting and list continuat
   await expect(editor).toHaveValue('- First\n');
 });
 
+test('the rich editor writes back to the same portable Markdown Note', async ({ workspace }) => {
+  const { page } = workspace;
+  await goTo(page, '/notes');
+  await createRootNote(page, 'Rich editing', 'Plan');
+
+  await page.getByRole('button', { name: 'Rich', exact: true }).click();
+  const richEditor = page.locator('.rich-markdown-editor .tiptap');
+  await expect(richEditor).toBeEditable();
+  await richEditor.click();
+  await richEditor.press('ControlOrMeta+A');
+  await richEditor.type('Better plan');
+  await richEditor.press('ControlOrMeta+A');
+  await page
+    .getByRole('toolbar', { name: 'Markdown formatting' })
+    .getByRole('button', { name: 'Bold' })
+    .click();
+
+  await page.getByRole('button', { name: 'Source' }).click();
+  await expect(page.getByRole('textbox', { name: 'Note body, Markdown' })).toHaveValue(
+    '**Better plan**\n'
+  );
+});
+
 test('a Note link becomes a navigable backlink from the related Note', async ({ workspace }) => {
   const { page } = workspace;
   const sourceTitle = 'Product direction';

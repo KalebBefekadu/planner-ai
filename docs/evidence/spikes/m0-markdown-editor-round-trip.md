@@ -1,6 +1,6 @@
 # M0 Spike: Markdown And Editor Round Trip
 
-Status: In progress  
+Status: In progress; guarded rich-editor candidate implemented
 Owner: Planner AI engineering  
 Started: 2026-08-25
 
@@ -21,6 +21,14 @@ Normalized CommonMark plus the selected GFM subset and reserved YAML frontmatter
 - portable fenced `planner-*` extension blocks.
 
 The initial adapter is an identity mdast bridge. It exists to prove the semantic contract and test harness before a rich-text editor is introduced.
+
+## Guarded Tiptap Candidate
+
+The authenticated Notes workspace now includes a Tiptap 3 rich mode using the official React, ProseMirror, and StarterKit packages. It is not a second persistence model: every edit is converted back to canonical Markdown before the existing autosave path runs.
+
+`web/src/lib/markdown/rich-editor.ts` accepts only the reversible subset: paragraphs, headings, emphasis, strong, strikethrough, inline code, links without titles, hard breaks, blockquotes, thematic breaks, fenced code, and tight ordered or unordered lists. The full golden corpus runs through this compatibility gate. A document is offered rich mode only when its Markdown-to-Tiptap-to-Markdown result is semantically equivalent.
+
+Frontmatter, raw HTML, tables, task lists, footnotes, images, reference links, loose lists, and any other unrepresented construct remain in Source mode. The workspace makes that visible rather than attempting a lossy conversion. Desktop and mobile browser journeys verify that rich formatting writes back to the same portable Markdown Note.
 
 ## Golden Corpus
 
@@ -50,11 +58,10 @@ The initial adapter is an identity mdast bridge. It exists to prove the semantic
 
 ## Work Still Required Before Editor ADR Acceptance
 
-1. Implement a Tiptap/ProseMirror adapter against this exact corpus.
+1. Broaden the Tiptap adapter only one reversible Markdown feature at a time, with corpus and browser proof for each addition.
 2. Implement or select one fallback editor adapter for comparison.
 3. Add copy/paste, undo/redo, selection, source-mode, and external-file-edit scenarios.
 4. Test large documents and representative low-end hardware.
-5. Define visible degradation for editor features that cannot represent a semantic node.
-6. Run the corpus through Notion and Obsidian import/export samples.
+5. Run the corpus through Notion and Obsidian import/export samples.
 
 Tiptap remains a candidate until its adapter passes. The semantic Markdown contract does not weaken to accommodate a library limitation.
