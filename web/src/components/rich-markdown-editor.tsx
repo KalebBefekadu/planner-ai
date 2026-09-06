@@ -23,6 +23,13 @@ export function RichMarkdownEditor({
     extensions: [StarterKit],
     content: document ?? { type: 'doc', content: [{ type: 'paragraph' }] },
     immediatelyRender: false,
+    editorProps: {
+      attributes: {
+        'aria-label': 'Note body, rich text',
+        'aria-multiline': 'true',
+        role: 'textbox',
+      },
+    },
     onUpdate: ({ editor: updatedEditor }) => {
       const nextMarkdown = richDocumentToPlannerMarkdown(updatedEditor.getJSON());
       if (nextMarkdown !== null) onChange(nextMarkdown);

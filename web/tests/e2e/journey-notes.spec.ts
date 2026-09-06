@@ -66,7 +66,7 @@ test('the rich editor writes back to the same portable Markdown Note', async ({ 
   await createRootNote(page, 'Rich editing', 'Plan');
 
   await page.getByRole('button', { name: 'Rich', exact: true }).click();
-  const richEditor = page.locator('.rich-markdown-editor .tiptap');
+  const richEditor = page.getByRole('textbox', { name: 'Note body, rich text' });
   await expect(richEditor).toBeEditable();
   await richEditor.click();
   await richEditor.press('ControlOrMeta+A');
