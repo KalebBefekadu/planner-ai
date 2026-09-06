@@ -48,13 +48,14 @@ in the intended state with `npx supabase migration list --output json`, then run
   versions with no remote-only entries.
 - `supabase db push --dry-run --include-all` proposed only the expected canonical
   migration sequence.
-- The canonical sequence was applied successfully through
-  `20260904172530_rls_auth_uid_initplan.sql`.
+- After a fresh encrypted backup and a no-surprise dry run, the reviewed
+  additive sequence was applied successfully through
+  `20260906114500_recoverable_note_attachment_removal.sql`.
 - Post-cutover count-only inspection found 53 public tables, all 53 with RLS,
   two Auth users mapped to two canonical Workspaces, no unmigrated users, and 56
   registered Operations.
-- The legacy tables remain available for rollback while the application moves
-  to `PLANNER_DATA_MODEL=canonical`.
+- The legacy tables remain available for rollback while the deployed application
+  awaits canonical-mode verification.
 
 ## Stop Conditions
 
