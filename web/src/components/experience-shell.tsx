@@ -437,6 +437,7 @@ function MobileDrawer({ children, onClose }: { children: React.ReactNode; onClos
         className="experience-mobile-scrim"
         type="button"
         aria-label="Close menu"
+        tabIndex={-1}
         onClick={onClose}
       />
       {children}
