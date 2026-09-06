@@ -64,6 +64,54 @@ describe('operation registry', () => {
     expect(rpc).not.toHaveBeenCalled();
   });
 
+  it('keeps chat and MCP writes behind their trusted gateways', async () => {
+    const rpc = vi.fn();
+    const client = { rpc } as unknown as Pick<SupabaseClient, 'rpc'>;
+
+    await expect(
+      executeOperation(
+        client,
+        'capture.create.v1',
+        { rawText: 'A deliberate thought', source: 'typed' },
+        { idempotencyKey: 'trusted-gateway-0001', surface: 'mcp' }
+      )
+    ).rejects.toMatchObject({
+      code: 'trusted_gateway_required',
+    } satisfies Partial<OperationFailure>);
+    expect(rpc).not.toHaveBeenCalled();
+  });
+
+  it.each(['short', 'x'.repeat(201)])('rejects unsafe idempotency keys', async (idempotencyKey) => {
+    const rpc = vi.fn();
+    const client = { rpc } as unknown as Pick<SupabaseClient, 'rpc'>;
+
+    await expect(
+      executeOperation(
+        client,
+        'capture.create.v1',
+        { rawText: 'A deliberate thought', source: 'typed' },
+        { idempotencyKey, surface: 'ui' }
+      )
+    ).rejects.toMatchObject({
+      code: 'invalid_idempotency_key',
+    } satisfies Partial<OperationFailure>);
+    expect(rpc).not.toHaveBeenCalled();
+  });
+
+  it('rejects malformed database output before it reaches the UI', async () => {
+    const rpc = vi.fn().mockResolvedValue({ data: { id: 'not-a-uuid' }, error: null });
+    const client = { rpc } as unknown as Pick<SupabaseClient, 'rpc'>;
+
+    await expect(
+      executeOperation(
+        client,
+        'capture.create.v1',
+        { rawText: 'A deliberate thought', source: 'typed' },
+        { idempotencyKey: 'invalid-output-0001', surface: 'ui' }
+      )
+    ).rejects.toMatchObject({ code: 'invalid_output' } satisfies Partial<OperationFailure>);
+  });
+
   it('maps concurrency errors to a stable user-safe failure', async () => {
     const rpc = vi.fn().mockResolvedValue({
       data: null,
