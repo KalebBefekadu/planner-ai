@@ -58,7 +58,7 @@ type ConversationResponse = {
   error?: string;
 };
 
-export function AssistantDock() {
+export function AssistantDock({ className }: { className?: string }) {
   const pathname = usePathname();
   const router = useRouter();
   const [open, setOpen] = useState(false);
@@ -227,7 +227,7 @@ export function AssistantDock() {
   return (
     <>
       <button
-        className="assistant-launch"
+        className={`assistant-launch${className ? ` ${className}` : ''}`}
         type="button"
         onClick={() => {
           setOpen(true);

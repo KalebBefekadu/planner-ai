@@ -3129,6 +3129,9 @@ button:disabled {
   background: var(--brand);
   color: var(--on-brand);
 }
+.experience-mobile-assistant {
+  display: none;
+}
 .assistant-panel {
   position: fixed;
   z-index: 20;
@@ -3204,6 +3207,7 @@ button:disabled {
   color: var(--on-brand);
 }
 .assistant-messages {
+  grid-row: 3;
   display: flex;
   min-height: 0;
   flex-direction: column;
@@ -3430,6 +3434,7 @@ button:disabled {
 }
 
 .assistant-composer {
+  grid-row: 4;
   display: grid;
   grid-template-columns: minmax(0, 1fr) 36px;
   align-items: end;
@@ -5492,8 +5497,13 @@ button:disabled {
   .oauth-deny-form {
     padding: 0 18px 18px;
   }
-  .assistant-launch {
-    position: absolute;
+  .experience-sidebar-footer .assistant-launch {
+    display: none;
+  }
+  .experience-mobile-assistant {
+    display: inline-flex;
+    position: fixed;
+    z-index: 13;
     top: 8px;
     right: 52px;
     width: 40px;

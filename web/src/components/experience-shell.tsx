@@ -249,6 +249,7 @@ export function ExperienceShell({
           <Menu size={19} />
         </button>
       </header>
+      <AssistantDock className="experience-mobile-assistant" />
 
       <nav className="experience-rail" aria-label="Primary navigation">
         <Link className="experience-brand-mark" href="/" aria-label="Planner AI home">
