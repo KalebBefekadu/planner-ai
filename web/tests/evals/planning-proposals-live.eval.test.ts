@@ -34,7 +34,7 @@ describe('live planning proposal behavioral gate', () => {
         const { completion } = await completeManagedText('structured_analysis', {
           response_format: { type: 'json_object' },
           temperature: 0,
-          max_completion_tokens: 2_000,
+          max_completion_tokens: entry.kind === 'capture' ? 1_600 : 1_200,
           messages:
             entry.kind === 'capture'
               ? buildCaptureProposalMessages(entry.fixture)

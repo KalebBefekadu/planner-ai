@@ -28,6 +28,8 @@ import { createClient } from '@/lib/supabase/server';
 
 const MAX_JSON_BYTES = 2_000;
 const PROMPT_VERSION = 'review-analysis-v1';
+// Reviews are short, evidence-backed recommendations rather than generated reports.
+const MAX_REVIEW_ANALYSIS_COMPLETION_TOKENS = 1_200;
 const inputSchema = z
   .object({
     kind: z.enum(['weekly', 'monthly', 'quarterly']),
@@ -154,7 +156,7 @@ export async function POST(request: Request) {
     const result = await completeManagedText('structured_analysis', {
       response_format: { type: 'json_object' },
       temperature: 0.2,
-      max_completion_tokens: 2_000,
+      max_completion_tokens: MAX_REVIEW_ANALYSIS_COMPLETION_TOKENS,
       messages: buildReviewProposalMessages({
         period: input,
         actions,

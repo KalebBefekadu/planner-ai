@@ -19,6 +19,8 @@ import {
 import { serializeUntrustedAiData } from '@/lib/ai/untrusted-data';
 
 const MAX_JSON_BYTES = 12_000;
+// Two short questions plus the JSON envelope fit comfortably below this ceiling.
+const MAX_SOCRATIC_COMPLETION_TOKENS = 320;
 const inputSchema = z
   .object({
     visionText: z.string().trim().min(20).max(8_000),
@@ -56,7 +58,7 @@ export async function POST(request: Request) {
         },
       ],
       response_format: { type: 'json_object' },
-      max_completion_tokens: 800,
+      max_completion_tokens: MAX_SOCRATIC_COMPLETION_TOKENS,
       temperature: 0.4,
     });
     providerIdentity = result;

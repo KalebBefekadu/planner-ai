@@ -28,6 +28,8 @@ import { createClient } from '@/lib/supabase/server';
 
 const MAX_JSON_BYTES = 2_000;
 const PROMPT_VERSION = 'capture-analysis-v2';
+// This supports a concise multi-item proposal batch without funding long prose.
+const MAX_CAPTURE_ANALYSIS_COMPLETION_TOKENS = 1_600;
 const inputSchema = z
   .object({ captureId: z.uuid(), confirmExpensive: z.literal(true).optional() })
   .strict();
@@ -122,7 +124,7 @@ export async function POST(request: Request) {
     const result = await completeManagedText('structured_analysis', {
       response_format: { type: 'json_object' },
       temperature: 0.1,
-      max_completion_tokens: 2_400,
+      max_completion_tokens: MAX_CAPTURE_ANALYSIS_COMPLETION_TOKENS,
       messages: buildCaptureProposalMessages({
         captureText: String(capture.raw_text),
         today: new Intl.DateTimeFormat('en-CA', {
