@@ -1,6 +1,7 @@
 import { PassThrough } from 'node:stream';
 import { ZipArchive } from 'archiver';
 import { NextResponse } from 'next/server';
+import { createAdminClient } from '@/lib/supabase/admin';
 import { createClient } from '@/lib/supabase/server';
 
 export const runtime = 'nodejs';
@@ -15,6 +16,16 @@ type ExportNote = {
   ai_excluded: boolean;
   created_at: string;
   updated_at: string;
+};
+
+type ExportAttachment = {
+  id: string;
+  note_id: string;
+  object_key: string;
+  original_name: string;
+  media_type: string;
+  byte_size: number;
+  checksum_sha256: string;
 };
 
 function safeFileStem(value: string) {
@@ -44,7 +55,18 @@ function markdownNote(note: ExportNote) {
   return `${frontmatter}${note.body_markdown}${note.body_markdown.endsWith('\n') ? '' : '\n'}`;
 }
 
-async function zipNotes(notes: ExportNote[]) {
+function safeAttachmentName(value: string) {
+  const normalized = value
+    .normalize('NFC')
+    .replace(/[\\/:*?"<>|\u0000-\u001f]/g, ' ')
+    .trim();
+  return (normalized.replace(/\s+/g, ' ').slice(0, 180) || 'attachment').replace(
+    /^\.+$/,
+    'attachment'
+  );
+}
+
+export async function zipNotes(notes: ExportNote[], attachments: ExportAttachment[]) {
   const archive = new ZipArchive({ zlib: { level: 9 } });
   const output = new PassThrough();
   const chunks: Buffer[] = [];
@@ -71,6 +93,31 @@ async function zipNotes(notes: ExportNote[]) {
       sortKey: note.sort_key,
     };
   });
+  const attachmentManifest = [] as Array<{
+    id: string;
+    noteId: string;
+    path: string;
+    originalName: string;
+    mediaType: string;
+    byteSize: number;
+    checksumSha256: string;
+  }>;
+  const storage = createAdminClient().storage.from('note-attachments');
+  for (const attachment of attachments) {
+    const { data, error } = await storage.download(attachment.object_key);
+    if (error || !data) throw new Error('Attachment export failed.');
+    const path = `Attachments/${attachment.note_id}/${attachment.id}-${safeAttachmentName(attachment.original_name)}`;
+    archive.append(Buffer.from(await data.arrayBuffer()), { name: path });
+    attachmentManifest.push({
+      id: attachment.id,
+      noteId: attachment.note_id,
+      path,
+      originalName: attachment.original_name,
+      mediaType: attachment.media_type,
+      byteSize: attachment.byte_size,
+      checksumSha256: attachment.checksum_sha256,
+    });
+  }
   archive.append(
     JSON.stringify(
       {
@@ -78,6 +125,7 @@ async function zipNotes(notes: ExportNote[]) {
         schemaVersion: 1,
         exportedAt: new Date().toISOString(),
         notes: manifest,
+        attachments: attachmentManifest,
       },
       null,
       2
@@ -116,18 +164,30 @@ export async function GET() {
   if (workspaceError || !workspace) {
     return NextResponse.json({ error: 'Workspace is unavailable.' }, { status: 503 });
   }
-  const { data, error } = await supabase
-    .from('notes')
-    .select('id,parent_note_id,title,body_markdown,sort_key,ai_excluded,created_at,updated_at')
-    .eq('workspace_id', workspace.id)
-    .is('archived_at', null)
-    .is('trashed_at', null)
-    .order('sort_key');
-  if (error)
+  const [notesResult, attachmentsResult] = await Promise.all([
+    supabase
+      .from('notes')
+      .select('id,parent_note_id,title,body_markdown,sort_key,ai_excluded,created_at,updated_at')
+      .eq('workspace_id', workspace.id)
+      .is('archived_at', null)
+      .is('trashed_at', null)
+      .order('sort_key'),
+    supabase
+      .from('note_attachments')
+      .select('id,note_id,object_key,original_name,media_type,byte_size,checksum_sha256')
+      .eq('workspace_id', workspace.id)
+      .eq('scan_state', 'approved')
+      .is('removed_at', null)
+      .order('created_at'),
+  ]);
+  if (notesResult.error || attachmentsResult.error)
     return NextResponse.json({ error: 'Planner AI could not read your Notes.' }, { status: 500 });
 
   try {
-    const archive = await zipNotes((data ?? []) as ExportNote[]);
+    const archive = await zipNotes(
+      (notesResult.data ?? []) as ExportNote[],
+      (attachmentsResult.data ?? []) as ExportAttachment[]
+    );
     const date = new Date().toISOString().slice(0, 10);
     return new NextResponse(new Uint8Array(archive), {
       headers: {
