@@ -3,6 +3,7 @@
 import { useEffect, useMemo } from 'react';
 import type { Editor } from '@tiptap/core';
 import { EditorContent, useEditor } from '@tiptap/react';
+import { ListKit } from '@tiptap/extension-list';
 import StarterKit from '@tiptap/starter-kit';
 import {
   plannerMarkdownToRichDocument,
@@ -20,7 +21,15 @@ export function RichMarkdownEditor({
 }) {
   const document = useMemo(() => plannerMarkdownToRichDocument(markdown), [markdown]);
   const editor = useEditor({
-    extensions: [StarterKit],
+    extensions: [
+      StarterKit.configure({
+        bulletList: false,
+        listItem: false,
+        listKeymap: false,
+        orderedList: false,
+      }),
+      ListKit,
+    ],
     content: document ?? { type: 'doc', content: [{ type: 'paragraph' }] },
     immediatelyRender: false,
     editorProps: {

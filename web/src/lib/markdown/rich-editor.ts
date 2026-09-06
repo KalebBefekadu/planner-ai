@@ -96,10 +96,17 @@ function markdownBlockToRich(value: MarkdownNode): JSONContent | null {
     case 'list': {
       if (value.ordered !== true && value.ordered !== false) return null;
       if (value.spread === true) return null;
-      const content = markdownBlockChildrenToRich(value);
-      if (!content || content.some((child) => child.type !== 'listItem')) return null;
+      const items = markdownChildren(value);
+      const isTaskList =
+        value.ordered === false &&
+        items.length > 0 &&
+        items.every(
+          (item) => item.type === 'listItem' && (item.checked === true || item.checked === false)
+        );
+      const content = items.map((item) => markdownListItemToRich(item, isTaskList));
+      if (!content.every((item): item is JSONContent => item !== null)) return null;
       return {
-        type: value.ordered ? 'orderedList' : 'bulletList',
+        type: isTaskList ? 'taskList' : value.ordered ? 'orderedList' : 'bulletList',
         ...(value.ordered && typeof value.start === 'number' && value.start !== 1
           ? { attrs: { start: value.start } }
           : {}),
@@ -107,14 +114,25 @@ function markdownBlockToRich(value: MarkdownNode): JSONContent | null {
       };
     }
     case 'listItem': {
-      if (value.checked !== null && value.checked !== undefined) return null;
-      if (value.spread === true) return null;
-      const content = markdownBlockChildrenToRich(value);
-      return content ? { type: 'listItem', content } : null;
+      return markdownListItemToRich(value, false);
     }
     default:
       return null;
   }
+}
+
+function markdownListItemToRich(value: MarkdownNode, taskItem: boolean): JSONContent | null {
+  if (value.type !== 'listItem' || value.spread === true) return null;
+  const checked = value.checked === true || value.checked === false ? value.checked : null;
+  if ((taskItem && checked === null) || (!taskItem && checked !== null)) return null;
+  const content = markdownBlockChildrenToRich(value);
+  return content
+    ? {
+        type: taskItem ? 'taskItem' : 'listItem',
+        ...(taskItem ? { attrs: { checked } } : {}),
+        content,
+      }
+    : null;
 }
 
 function markdownBlockChildrenToRich(value: MarkdownNode) {
@@ -233,9 +251,27 @@ function richNodeToMarkdown(value: JSONContent): MarkdownNode | null {
         children,
       };
     }
+    case 'taskList': {
+      const children = richChildrenToMarkdown(value);
+      if (!children || children.some((child) => child.type !== 'listItem')) return null;
+      return {
+        type: 'list',
+        ordered: false,
+        start: null,
+        spread: false,
+        children,
+      };
+    }
     case 'listItem': {
       const children = richChildrenToMarkdown(value);
       return children ? { type: 'listItem', spread: false, checked: null, children } : null;
+    }
+    case 'taskItem': {
+      const children = richChildrenToMarkdown(value);
+      const checked = value.attrs?.checked;
+      return typeof checked === 'boolean' && children
+        ? { type: 'listItem', spread: false, checked, children }
+        : null;
     }
     default:
       return null;

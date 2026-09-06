@@ -83,6 +83,25 @@ test('the rich editor writes back to the same portable Markdown Note', async ({ 
   );
 });
 
+test('the rich editor preserves task completion as portable Markdown', async ({ workspace }) => {
+  const { page } = workspace;
+  await goTo(page, '/notes');
+  await createRootNote(page, 'Task list', '- [ ] Prepare the first invitation');
+
+  await page.getByRole('button', { name: 'Rich', exact: true }).click();
+  const task = page.getByRole('checkbox', {
+    name: 'Task item checkbox for Prepare the first invitation',
+  });
+  await expect(task).not.toBeChecked();
+  await task.check();
+  await expect(task).toBeChecked();
+
+  await page.getByRole('button', { name: 'Source' }).click();
+  await expect(page.getByRole('textbox', { name: 'Note body, Markdown' })).toHaveValue(
+    '- [x] Prepare the first invitation\n\n'
+  );
+});
+
 test('a Note link becomes a navigable backlink from the related Note', async ({ workspace }) => {
   const { page } = workspace;
   const sourceTitle = 'Product direction';

@@ -601,6 +601,23 @@ export function NotesWorkspace({
                 </button>
                 <button
                   type="button"
+                  title="Task list"
+                  aria-label="Task list"
+                  onMouseDown={(event) => {
+                    if (activeEditorMode === 'rich') event.preventDefault();
+                  }}
+                  onClick={() =>
+                    formatRichOrSource(
+                      () => wrapSelection('- [ ] ', ''),
+                      (editor) => editor.chain().focus().toggleTaskList().run()
+                    )
+                  }
+                  disabled={activeEditorMode === 'preview'}
+                >
+                  <ListTodo size={16} />
+                </button>
+                <button
+                  type="button"
                   title={voice.isRecording ? 'Stop dictation' : 'Start dictation'}
                   aria-label={voice.isRecording ? 'Stop dictation' : 'Start dictation'}
                   aria-pressed={voice.isRecording}

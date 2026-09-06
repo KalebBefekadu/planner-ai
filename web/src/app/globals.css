@@ -2237,6 +2237,24 @@ button:disabled {
 .rich-markdown-editor .tiptap pre code {
   padding: 0;
 }
+.rich-markdown-editor .tiptap ul[data-type='taskList'] {
+  margin-left: 0;
+  padding-left: 0;
+  list-style: none;
+}
+.rich-markdown-editor .tiptap li[data-type='taskItem'] {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+}
+.rich-markdown-editor .tiptap li[data-type='taskItem'] > label {
+  display: flex;
+  padding-top: 0.45em;
+}
+.rich-markdown-editor .tiptap li[data-type='taskItem'] > div {
+  min-width: 0;
+  flex: 1;
+}
 .markdown-preview > :first-child {
   margin-top: 0;
 }
