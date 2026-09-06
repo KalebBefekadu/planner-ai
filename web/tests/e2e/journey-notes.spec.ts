@@ -38,6 +38,28 @@ test('a Markdown Note persists across navigation instead of living only in the e
   await expect(page.getByRole('textbox', { name: 'Note body, Markdown' })).toHaveValue(body);
 });
 
+test('the Markdown editor keeps fast source-native formatting and list continuation', async ({
+  workspace,
+}) => {
+  const { page } = workspace;
+  await goTo(page, '/notes');
+  await createRootNote(page, 'Source editing', 'Plan');
+
+  const editor = page.getByRole('textbox', { name: 'Note body, Markdown' });
+  await editor.focus();
+  await editor.press('ControlOrMeta+A');
+  await editor.press('ControlOrMeta+B');
+  await expect(editor).toHaveValue('**Plan**');
+
+  await editor.fill('- First');
+  await editor.press('End');
+  await editor.press('Enter');
+  await expect(editor).toHaveValue('- First\n- ');
+
+  await editor.press('Enter');
+  await expect(editor).toHaveValue('- First\n');
+});
+
 test('a Note link becomes a navigable backlink from the related Note', async ({ workspace }) => {
   const { page } = workspace;
   const sourceTitle = 'Product direction';

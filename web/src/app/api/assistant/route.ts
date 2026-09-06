@@ -56,6 +56,7 @@ import { createClient } from '@/lib/supabase/server';
 import { serializeUntrustedAiData } from '@/lib/ai/untrusted-data';
 import { assistantSafetyIntercept } from '@/lib/assistant/safety';
 import { buildReadOnlyAssistantGenUi } from '@/lib/genui/assistant';
+import { boundedAssistantHistory } from '@/lib/assistant/history';
 
 const MAX_JSON_BYTES = 48_000;
 const MODEL_ID = GROQ_TEXT_MODEL;
@@ -548,10 +549,11 @@ export async function POST(request: Request) {
       productContext = mergeAssistantReadRecords(productContext, records);
     }
     let evidenceCatalog = buildEvidenceCatalog(productContext);
-    const history =
+    const rawHistory =
       canonical && input.conversationId
         ? await persistedHistory(input.conversationId)
         : (input.history ?? []);
+    const history = boundedAssistantHistory(rawHistory);
     let systemPrompt = buildAssistantSystemPrompt({
       canonical,
       route: input.route,
