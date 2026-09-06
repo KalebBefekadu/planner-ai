@@ -1365,6 +1365,7 @@ export type Database = {
           object_key: string;
           original_name: string;
           removed_at: string | null;
+          purge_after: string | null;
           scan_state: string;
           workspace_id: string;
         };
@@ -1378,6 +1379,7 @@ export type Database = {
           object_key: string;
           original_name: string;
           removed_at?: string | null;
+          purge_after?: string | null;
           scan_state?: string;
           workspace_id: string;
         };
@@ -1391,6 +1393,7 @@ export type Database = {
           object_key?: string;
           original_name?: string;
           removed_at?: string | null;
+          purge_after?: string | null;
           scan_state?: string;
           workspace_id?: string;
         };

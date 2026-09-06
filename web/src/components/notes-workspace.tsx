@@ -123,6 +123,10 @@ export function NotesWorkspace({
   const [editorMode, setEditorMode] = useState<'edit' | 'preview'>('edit');
   const [importOpen, setImportOpen] = useState(initialImportOpen);
   const [isUploadingAttachment, setIsUploadingAttachment] = useState(false);
+  const [recentlyRemovedAttachment, setRecentlyRemovedAttachment] = useState<{
+    id: string;
+    originalName: string;
+  } | null>(null);
   const editorRef = useRef<HTMLTextAreaElement>(null);
   const attachmentInputRef = useRef<HTMLInputElement>(null);
   const persistedDraftRef = useRef({
@@ -278,6 +282,32 @@ export function NotesWorkspace({
         response.status === 204 ? null : ((await response.json()) as { error?: string });
       if (!response.ok)
         throw new Error(payload?.error ?? 'Attachment removal could not be completed.');
+      const removed = knowledge?.attachments.find((attachment) => attachment.id === attachmentId);
+      if (removed) {
+        setRecentlyRemovedAttachment({ id: removed.id, originalName: removed.originalName });
+      }
+      router.refresh();
+    } catch (caught) {
+      setError(errorMessage(caught));
+    } finally {
+      setIsUploadingAttachment(false);
+    }
+  }
+
+  async function restoreAttachment(attachmentId: string) {
+    setError(null);
+    setIsUploadingAttachment(true);
+    try {
+      const response = await fetch('/api/notes/attachments', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ attachmentId }),
+      });
+      if (!response.ok) {
+        const payload = (await response.json()) as { error?: string };
+        throw new Error(payload.error ?? 'Attachment restoration could not be completed.');
+      }
+      setRecentlyRemovedAttachment(null);
       router.refresh();
     } catch (caught) {
       setError(errorMessage(caught));
@@ -577,6 +607,21 @@ export function NotesWorkspace({
                     ))}
                     {!knowledge?.attachments.length ? (
                       <p className="note-inspector-empty">No attachments</p>
+                    ) : null}
+                    {recentlyRemovedAttachment ? (
+                      <div className="note-attachment-row">
+                        <span>{recentlyRemovedAttachment.originalName} removed</span>
+                        <button
+                          type="button"
+                          className="note-icon-quiet"
+                          title="Restore attachment"
+                          aria-label={`Restore attachment ${recentlyRemovedAttachment.originalName}`}
+                          disabled={isUploadingAttachment}
+                          onClick={() => void restoreAttachment(recentlyRemovedAttachment.id)}
+                        >
+                          <RotateCcw size={14} />
+                        </button>
+                      </div>
                     ) : null}
                   </div>
                 </section>

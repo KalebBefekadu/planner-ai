@@ -263,3 +263,9 @@ test('notification delivery requires the private scheduler secret', async ({ req
   expect(response.status()).toBe(401);
   await expect(response.json()).resolves.toMatchObject({ error: 'Not authorized.' });
 });
+
+test('attachment purge requires the private scheduler secret', async ({ request }) => {
+  const response = await request.post('/api/internal/note-attachment-purge');
+  expect(response.status()).toBe(401);
+  await expect(response.json()).resolves.toMatchObject({ error: 'Not authorized.' });
+});

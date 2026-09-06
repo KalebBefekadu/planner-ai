@@ -69,7 +69,7 @@ Goal: a trustworthy personal Markdown vault, not a partial Notion clone.
 - Add exact search with source links.
 - Complete dry-run Notion and Obsidian import with duplicate and unsupported-content reports.
 - Complete full Markdown export and restore.
-- Complete quarantined private attachments: owner-scoped Storage policies and intake are in place; add scanner approval, safe download, deletion/purge, and lifecycle coverage.
+- Complete quarantined private attachments: owner-scoped Storage policies, intake, download gating, recoverable removal, and protected purge are in place; add scanner approval and production recovery evidence.
 
 Exit gate: the supported Markdown corpus round-trips without loss and Notes remain usable during AI failure.
 

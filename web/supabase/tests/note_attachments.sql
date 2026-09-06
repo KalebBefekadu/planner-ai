@@ -1,7 +1,8 @@
 begin;
-select plan(10);
+select plan(11);
 
 select has_table('public', 'note_attachments', 'Note attachments metadata exists');
+select has_column('public', 'note_attachments', 'purge_after', 'Attachment removal has a purge deadline');
 select row_security_active('public.note_attachments'), 'Note attachments metadata has RLS';
 select table_privs_are(
   'public', 'note_attachments', 'authenticated', array['SELECT'],

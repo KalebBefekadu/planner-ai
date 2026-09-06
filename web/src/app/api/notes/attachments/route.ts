@@ -16,6 +16,7 @@ const acceptedTypes = new Set([
   'text/markdown',
   'text/plain',
 ]);
+const attachmentRetentionMs = 30 * 24 * 60 * 60 * 1000;
 
 function error(message: string, status: number) {
   return NextResponse.json(
@@ -181,30 +182,73 @@ export async function DELETE(request: Request) {
     if (!workspace) return error('Workspace is unavailable.', 503);
     const { data: attachment } = await supabase
       .from('note_attachments')
-      .select('id,object_key')
+      .select('id')
       .eq('id', body.attachmentId)
       .eq('workspace_id', workspace.id)
       .is('removed_at', null)
       .maybeSingle();
     if (!attachment) return error('Attachment not found.', 404);
 
-    const admin = createAdminClient();
-    const { error: storageError } = await admin.storage
-      .from(bucket)
-      .remove([attachment.object_key]);
-    if (storageError) return error('Attachment removal could not be completed.', 503);
-    const { error: updateError } = await admin
+    const purgeAfter = new Date(Date.now() + attachmentRetentionMs).toISOString();
+    const { error: updateError } = await createAdminClient()
       .from('note_attachments')
-      .update({ removed_at: new Date().toISOString() })
+      .update({ removed_at: new Date().toISOString(), purge_after: purgeAfter })
       .eq('id', attachment.id)
       .eq('workspace_id', workspace.id)
       .is('removed_at', null);
     if (updateError) return error('Attachment removal could not be completed.', 503);
+    return NextResponse.json(
+      { attachmentId: attachment.id, purgeAfter },
+      { headers: { 'Cache-Control': 'private, no-store' } }
+    );
+  } catch {
+    return error('Attachment removal could not be completed.', 400);
+  }
+}
+
+export async function PATCH(request: Request) {
+  if (process.env.PLANNER_DATA_MODEL !== 'canonical') {
+    return error('Notes attachments are unavailable before data migration.', 503);
+  }
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) return error('Authentication required.', 401);
+
+  try {
+    const body = (await request.json()) as { attachmentId?: unknown };
+    if (typeof body.attachmentId !== 'string')
+      return error('Choose an attachment to restore.', 400);
+    const { data: workspace } = await supabase
+      .from('workspaces')
+      .select('id')
+      .eq('owner_user_id', user.id)
+      .single();
+    if (!workspace) return error('Workspace is unavailable.', 503);
+    const now = new Date().toISOString();
+    const { data: attachment } = await supabase
+      .from('note_attachments')
+      .select('id')
+      .eq('id', body.attachmentId)
+      .eq('workspace_id', workspace.id)
+      .not('removed_at', 'is', null)
+      .gt('purge_after', now)
+      .maybeSingle();
+    if (!attachment) return error('This attachment can no longer be restored.', 404);
+    const { error: restoreError } = await createAdminClient()
+      .from('note_attachments')
+      .update({ removed_at: null, purge_after: null })
+      .eq('id', attachment.id)
+      .eq('workspace_id', workspace.id)
+      .not('removed_at', 'is', null)
+      .gt('purge_after', now);
+    if (restoreError) return error('Attachment restoration could not be completed.', 503);
     return new NextResponse(null, {
       status: 204,
       headers: { 'Cache-Control': 'private, no-store' },
     });
   } catch {
-    return error('Attachment removal could not be completed.', 400);
+    return error('Attachment restoration could not be completed.', 400);
   }
 }

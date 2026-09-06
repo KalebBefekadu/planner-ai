@@ -78,4 +78,10 @@ test('a supported attachment is retained in quarantine instead of becoming an un
 
   await expect(page.getByText('research.md', { exact: true })).toBeVisible();
   await expect(page.getByText('Security review pending', { exact: true })).toBeVisible();
+
+  page.once('dialog', (dialog) => dialog.accept());
+  await page.getByRole('button', { name: 'Remove attachment research.md' }).click();
+  await expect(page.getByText('research.md removed', { exact: true })).toBeVisible();
+  await page.getByRole('button', { name: 'Restore attachment research.md' }).click();
+  await expect(page.getByText('research.md', { exact: true })).toBeVisible();
 });
