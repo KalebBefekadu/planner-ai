@@ -2,7 +2,7 @@ import path from 'node:path';
 import { randomUUID } from 'node:crypto';
 import { NextResponse } from 'next/server';
 import {
-  candidatesFromFiles,
+  candidatesFromVaultOrFiles,
   filesFromZip,
   IMPORT_LIMITS,
   type ImportSourceFile,
@@ -156,7 +156,7 @@ export async function POST(request: Request) {
       const firstPath = String(paths[0] || uploads[0].name);
       sourceName = firstPath.includes('/') ? firstPath.split('/')[0] : uploads[0].name;
     }
-    const items = candidatesFromFiles(sourceFiles);
+    const items = candidatesFromVaultOrFiles(sourceFiles);
     if (!items.length) return jsonError('No supported Notes were found.', 400);
     const result = await executeOperation(
       context.supabase,

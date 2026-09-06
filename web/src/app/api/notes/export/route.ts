@@ -67,6 +67,7 @@ async function zipNotes(notes: ExportNote[]) {
       id: note.id,
       parentNoteId: note.parent_note_id,
       path,
+      title: note.title,
       sortKey: note.sort_key,
     };
   });

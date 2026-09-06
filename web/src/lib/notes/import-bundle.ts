@@ -193,6 +193,59 @@ export function candidatesFromFiles(files: ImportSourceFile[]) {
   return candidates;
 }
 
+type VaultManifestItem = {
+  id: string;
+  parentNoteId: string | null;
+  path: string;
+  title: string;
+  sortKey: number;
+};
+
+function vaultCandidates(files: ImportSourceFile[]) {
+  const manifestFile = files.find((file) => file.path === 'planner-ai-vault.json');
+  if (!manifestFile) return null;
+  let manifest: { format?: string; schemaVersion?: number; notes?: VaultManifestItem[] };
+  try {
+    manifest = JSON.parse(decodeText(manifestFile.bytes)) as typeof manifest;
+  } catch {
+    return null;
+  }
+  if (
+    manifest.format !== 'planner-ai-notes-vault' ||
+    manifest.schemaVersion !== 1 ||
+    !Array.isArray(manifest.notes)
+  )
+    return null;
+  const byPath = new Map(files.map((file) => [file.path, file]));
+  const ids = new Set(manifest.notes.map((note) => note.id));
+  if (ids.size !== manifest.notes.length)
+    throw new Error('The Planner AI vault manifest contains duplicate Note IDs.');
+  return manifest.notes.map((note) => {
+    if (
+      !/^[0-9a-f-]{36}$/i.test(note.id) ||
+      (note.parentNoteId !== null && !ids.has(note.parentNoteId))
+    ) {
+      throw new Error('The Planner AI vault manifest contains an invalid Note hierarchy.');
+    }
+    const file = byPath.get(note.path);
+    if (!file || path.posix.extname(note.path).toLowerCase() !== '.md') {
+      throw new Error('The Planner AI vault is missing a Markdown Note listed in its manifest.');
+    }
+    const body = decodeText(file.bytes).replace(/^---\n(?:[^\n]*\n)*?---\n\n/, '');
+    return {
+      sourcePath: `planner-ai-vault/${note.id}`,
+      parentSourcePath: note.parentNoteId ? `planner-ai-vault/${note.parentNoteId}` : null,
+      title: String(note.title || 'Imported Note').slice(0, 300),
+      bodyMarkdown: body,
+      unsupportedReason: null,
+    } satisfies NoteImportCandidate;
+  });
+}
+
+export function candidatesFromVaultOrFiles(files: ImportSourceFile[]) {
+  return vaultCandidates(files) ?? candidatesFromFiles(files);
+}
+
 function openZip(buffer: Buffer) {
   return new Promise<yauzl.ZipFile>((resolve, reject) => {
     yauzl.fromBuffer(buffer, { lazyEntries: true, validateEntrySizes: true }, (error, zip) => {
