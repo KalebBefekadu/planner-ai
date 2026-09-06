@@ -55,7 +55,10 @@ export async function completeOnboarding(page: Page) {
   await page.getByRole('textbox', { name: 'First Action' }).fill(onboardingSeed.action);
   await page.getByRole('textbox', { name: 'First Capture' }).fill(onboardingSeed.capture);
   await page.getByRole('button', { name: 'Enter workspace', exact: true }).click();
-  await expect(page).toHaveURL(/\/$/);
+  // Finishing onboarding writes a Vision, a Goal, an Action and a Capture in
+  // one go. Under parallel workers on the local stack that is comfortably the
+  // slowest step in any journey.
+  await expect(page).toHaveURL(/\/$/, { timeout: 60_000 });
 }
 
 export async function signIn(page: Page, email: string, baseURL?: string) {
@@ -135,7 +138,7 @@ export const test = base.extend<{ workspace: Workspace }>({
  * worker and reuse its saved storage state.
  */
 export const scanTest = base.extend<
-  NonNullable<unknown>,
+  { localStackGuard: void },
   { seededStorageState: string | undefined }
 >({
   seededStorageState: [
@@ -177,13 +180,21 @@ export const scanTest = base.extend<
   storageState: async ({ seededStorageState }, provide) => {
     await provide(seededStorageState);
   },
-});
 
-scanTest.beforeEach(({ seededStorageState }) => {
-  scanTest.skip(
-    seededStorageState === undefined,
-    'Authenticated scans are restricted to the isolated local Supabase stack.'
-  );
+  // A worker fixture cannot skip, and a module-level beforeEach would attach
+  // itself to whichever spec file imported this module. An automatic
+  // test-scoped fixture is the one place the guard can run per test and still
+  // belong to scanTest alone.
+  localStackGuard: [
+    async ({ seededStorageState }, provide) => {
+      base.skip(
+        seededStorageState === undefined,
+        'Authenticated scans are restricted to the isolated local Supabase stack.'
+      );
+      await provide();
+    },
+    { auto: true },
+  ],
 });
 
 export { expect };

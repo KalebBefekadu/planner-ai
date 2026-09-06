@@ -499,7 +499,12 @@ export function PlannerWorkspace({
               onClick={createItem}
               disabled={isPending || content.trim().length < 3}
             >
-              {isPending ? 'Saving...' : `Add ${composer.label}`}
+              {/* "Add Yearly goal" here collided with the "Add yearly goal"
+                  button that opens this composer: the two differ only in case,
+                  so they are the same name to a screen reader and ambiguous to
+                  voice control. Saving is also the more accurate verb for the
+                  second step. */}
+              {isPending ? 'Saving...' : `Save ${composer.label.toLowerCase()}`}
             </button>
           </div>
         </section>

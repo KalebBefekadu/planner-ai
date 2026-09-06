@@ -233,11 +233,11 @@ export function TodayWorkspace({ data }: { data: TodayData }) {
       </section>
 
       <div className="today-execution-grid">
-        <section className="today-section">
+        <section className="today-section" aria-labelledby="today-committed-actions">
           <div className="section-heading">
             <div>
               <p className="eyebrow">Focus</p>
-              <h2>Committed Actions</h2>
+              <h2 id="today-committed-actions">Committed Actions</h2>
             </div>
             <span className="focus-capacity">{focus.length} / 5</span>
           </div>
@@ -252,11 +252,14 @@ export function TodayWorkspace({ data }: { data: TodayData }) {
           </div>
         </section>
 
-        <section className="today-section available-actions-section">
+        <section
+          className="today-section available-actions-section"
+          aria-labelledby="today-open-actions"
+        >
           <div className="section-heading">
             <div>
               <p className="eyebrow">Available</p>
-              <h2>Open Actions</h2>
+              <h2 id="today-open-actions">Open Actions</h2>
             </div>
             <Link href="/planner" aria-label="Open plan" title="Open Plan">
               <ArrowRight size={18} />
@@ -274,11 +277,17 @@ export function TodayWorkspace({ data }: { data: TodayData }) {
         </section>
       </div>
 
-      <section className="today-section today-capture-strip">
+      {/* A section with no accessible name is not exposed as a landmark, so
+          this block was unreachable by landmark navigation while every other
+          region on the page was named. */}
+      <section
+        className="today-section today-capture-strip"
+        aria-labelledby="today-recent-captures"
+      >
         <div className="section-heading">
           <div>
             <p className="eyebrow">Inbox</p>
-            <h2>Recent captures</h2>
+            <h2 id="today-recent-captures">Recent captures</h2>
           </div>
           <Link href="/inbox" aria-label="Open Inbox" title="Open Inbox">
             <Inbox size={18} />

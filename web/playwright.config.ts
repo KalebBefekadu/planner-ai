@@ -16,6 +16,19 @@ const publicOrigin = `http://localhost:${port}`;
 export default defineConfig({
   testDir: './tests/e2e',
   fullyParallel: true,
+  // Authenticated specs sign up and onboard a fresh account, and they run
+  // against `next dev`, which compiles each route on first request. Five
+  // seconds is a reasonable default against a built app and far too short
+  // here, where a slow assertion means contention rather than a defect.
+  expect: { timeout: 15_000 },
+  // A journey signs up, onboards, then walks a multi-step flow, each step a
+  // round trip through the dev server and the local database. Thirty seconds
+  // is the Playwright default for a single interaction, not for a journey.
+  timeout: 120_000,
+  // The local Supabase Auth stack is intentionally small. Four concurrent
+  // signup/onboarding flows still exercise independent workspaces without
+  // turning local infrastructure saturation into a false product failure.
+  workers: process.env.CI ? 1 : 4,
   forbidOnly: Boolean(process.env.CI),
   retries: process.env.CI ? 2 : 0,
   reporter: process.env.CI ? 'github' : 'list',

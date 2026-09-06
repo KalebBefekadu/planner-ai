@@ -245,8 +245,16 @@ select ok(
 
 set local role authenticated;
 select set_config('request.jwt.claim.sub', 'd2000000-0000-0000-0000-000000000002', true);
-select is((select count(*)::integer from public.notifications), 0,
-  'RLS hides another owner''s notifications');
+select is(
+  (
+    select count(*)::integer
+    from public.notifications notification
+    join public.workspaces workspace on workspace.id = notification.workspace_id
+    where workspace.owner_user_id = 'd2000000-0000-0000-0000-000000000001'
+  ),
+  0,
+  'RLS hides another owner''s notifications even when this owner has their own feed'
+);
 
 select * from finish();
 rollback;

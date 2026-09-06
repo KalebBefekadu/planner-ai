@@ -538,10 +538,10 @@ export function DumpUI({
             </div>
           </div>
         </section>
-        <aside className="card capture-history">
+        <aside className="card capture-history" aria-labelledby="capture-inbox-history">
           <div>
             <p className="eyebrow">Recent</p>
-            <h2>Inbox history</h2>
+            <h2 id="capture-inbox-history">Inbox history</h2>
           </div>
           <div className="history-list">
             {transcripts.length ? (
