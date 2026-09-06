@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { isAuthorizedCronRequest } from '@/lib/api/cron';
+import { finishLifecycleJobRun, startLifecycleJobRun } from '@/lib/api/lifecycle-job';
 import { createAdminClient } from '@/lib/supabase/admin';
 
 export const runtime = 'nodejs';
@@ -10,6 +11,7 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: 'Not authorized.' }, { status: 401 });
   }
   const admin = createAdminClient();
+  const runId = await startLifecycleJobRun(admin, 'account_deletion');
   const { data: due, error } = await admin
     .from('account_deletion_requests')
     .select('id,user_id')
@@ -18,10 +20,18 @@ export async function POST(request: Request) {
     .order('scheduled_for')
     .limit(25);
   if (error) {
+    await finishLifecycleJobRun(admin, runId, {
+      status: 'failed',
+      processed: 0,
+      succeeded: 0,
+      failed: 0,
+      errorCode: 'queue_unavailable',
+    });
     return NextResponse.json({ error: 'Deletion queue unavailable.' }, { status: 503 });
   }
 
   let completed = 0;
+  let failed = 0;
   for (const requestRow of due ?? []) {
     const { data: claimed } = await admin
       .from('account_deletion_requests')
@@ -34,6 +44,7 @@ export async function POST(request: Request) {
 
     const deletion = await admin.auth.admin.deleteUser(claimed.user_id, false);
     if (deletion.error) {
+      failed += 1;
       await admin
         .from('account_deletion_requests')
         .update({
@@ -55,6 +66,14 @@ export async function POST(request: Request) {
       .eq('id', claimed.id);
     completed += 1;
   }
+
+  await finishLifecycleJobRun(admin, runId, {
+    status: failed > 0 ? 'failed' : 'succeeded',
+    processed: due?.length ?? 0,
+    succeeded: completed,
+    failed,
+    errorCode: failed > 0 ? 'item_failure' : undefined,
+  });
 
   return NextResponse.json(
     { processed: due?.length ?? 0, completed },

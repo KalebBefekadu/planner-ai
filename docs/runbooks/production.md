@@ -25,6 +25,10 @@ One person holds several roles during private beta. A second trained responder a
 
 Alert when core 5xx responses exceed 2% for five minutes, p95 exceeds 1.5 seconds for 15 minutes, authentication failures exceed the recent baseline by 3x, a scheduled worker misses two intervals, a backup is older than 26 hours, provider failures exceed 20% for 10 minutes, or estimated provider spend reaches 80% of the hard cap.
 
+## Scheduled Worker Evidence
+
+The protected notification-delivery, account-deletion, and attachment-retention routes record only content-free execution evidence in `lifecycle_job_runs`: job name, status, timestamps, counters, and stable failure code. On every production check, inspect the latest completed row per job and correlate any failed or missing run with Vercel Cron and platform logs. A run that is still `running` after twice the normal execution duration is also an incident signal. Do not place Workspace content, attachment names, request bodies, credentials, or provider responses in this table or related alerts.
+
 ## Release Gate
 
 1. Confirm the intended commit and a clean CI run for format, lint, types, unit, build, database, browser, dependency, and secret checks.

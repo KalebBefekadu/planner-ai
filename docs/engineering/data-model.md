@@ -200,6 +200,10 @@ Durable status for transcription, structured analysis, embeddings, and long-runn
 
 Durable export, purge, backup-verification, and account-deletion coordination state. Jobs use idempotency keys, explicit legal/retention holds where applicable, bounded retries, and content-free failure codes.
 
+### `lifecycle_job_runs`
+
+Content-free execution evidence for privileged scheduled work. Each run records only the job name, start/finish timestamps, bounded counters, final status, and a stable failure code. It is service-role-only: no browser or ordinary server request can read or alter it. This complements platform logs and gives Planner AI a durable, queryable checkpoint for notification delivery, account deletion, and attachment retention jobs.
+
 ## Integrations And Notifications
 
 - `beta_invites`: server-administered hashed invite token, intended email where applicable, expiry, use count, and revocation. Signup consumes an invite atomically.

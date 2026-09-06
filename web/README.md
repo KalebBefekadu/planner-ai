@@ -38,7 +38,7 @@ Open [http://localhost:3000](http://localhost:3000).
 
 Set `PLANNER_DATA_MODEL=canonical` only after every migration in `supabase/migrations` has been applied and verified. The service-role key is server-only and is limited to invitation lifecycle work, manual MCP gateway execution, and scheduled internal workers. `CRON_SECRET` authenticates only those worker routes and must be a long random server-only value. `NOTIFICATION_EMAIL_FROM` must be a verified Resend sender.
 
-Canonical mode adds durable daily focus, Action/Goal editing and movement, Weekly/Monthly/Quarterly Review, hierarchical Markdown Notes with validated import and preview, server-enforced AI consent, evidence-linked assistant responses, scoped MCP, expanded export, and cancellable account deletion. Private binary Note attachments remain disabled until malware quarantine and Storage recovery are configured.
+Canonical mode adds durable daily focus, Action/Goal editing and movement, Weekly/Monthly/Quarterly Review, hierarchical Markdown Notes with validated import and preview, server-enforced AI consent, evidence-linked assistant responses, scoped MCP, expanded export, cancellable account deletion, and recoverable private Note attachment intake. Attachments are quarantined and inaccessible by default; no attachment is approved or exposed until a real malware-scanning approval integration is configured.
 
 ## Verification
 
@@ -56,11 +56,9 @@ Database tests require Docker or another compatible local Supabase runtime. Remo
 
 Vercel production deployments register the daily Cron Jobs in `vercel.json`. Vercel invokes each configured `GET` with `Authorization: Bearer $CRON_SECRET`; the same routes also accept authenticated `POST` for an operator-triggered run. Hobby plans support daily schedules only. On a plan supporting more frequent jobs, review notification cadence before changing its schedule.
 
-Schedule an authenticated request to `${NEXT_PUBLIC_APP_URL}/api/internal/account-deletions` after configuring `CRON_SECRET`. The worker claims due requests in batches and permanently deletes the Supabase identity only after its seven-day cancellation window.
+The registered workers cover account deletion, notification delivery, and attachment retention. Account deletion permanently removes the Supabase identity only after its seven-day cancellation window. Notification delivery honors each Workspace timezone and quiet hours, sends at most one generic count-only reminder per local day, and retries transient failures with the same provider idempotency key. Attachment retention permanently removes private objects and metadata only after the 30-day recovery window; it does not approve or expose quarantined files.
 
-Schedule an authenticated `POST` to `${NEXT_PUBLIC_APP_URL}/api/internal/notifications` at least hourly after configuring `CRON_SECRET`, `RESEND_API_KEY`, and `NOTIFICATION_EMAIL_FROM`. The worker honors each Workspace timezone and quiet hours, sends at most one generic count-only reminder per local day, and retries transient failures with the same provider idempotency key.
-
-Schedule an authenticated daily `POST` to `${NEXT_PUBLIC_APP_URL}/api/internal/note-attachment-purge` after configuring `CRON_SECRET`. It permanently removes private attachment objects and metadata only after the 30-day recovery window; it does not approve or expose quarantined files.
+Each authorized run writes a content-free `lifecycle_job_runs` checkpoint with its status, timestamps, counters, and stable failure code. During production checks, verify the most recent completed row for each job is successful; investigate any failure immediately and alert when a job misses two expected intervals. Platform logs remain the source for request-level diagnosis.
 
 Monitor unauthenticated `GET ${NEXT_PUBLIC_APP_URL}/api/health`. It returns `200 {"status":"ok"}` only when the canonical application can reach Supabase; otherwise it returns `503 {"status":"not_ready"}` without revealing configuration or user data.
 

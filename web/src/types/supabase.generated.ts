@@ -1762,6 +1762,42 @@ export type Database = {
           },
         ];
       };
+      lifecycle_job_runs: {
+        Row: {
+          error_code: string | null;
+          failed_count: number;
+          finished_at: string | null;
+          id: string;
+          job_name: string;
+          processed_count: number;
+          started_at: string;
+          status: string;
+          succeeded_count: number;
+        };
+        Insert: {
+          error_code?: string | null;
+          failed_count?: number;
+          finished_at?: string | null;
+          id?: string;
+          job_name: string;
+          processed_count?: number;
+          started_at?: string;
+          status?: string;
+          succeeded_count?: number;
+        };
+        Update: {
+          error_code?: string | null;
+          failed_count?: number;
+          finished_at?: string | null;
+          id?: string;
+          job_name?: string;
+          processed_count?: number;
+          started_at?: string;
+          status?: string;
+          succeeded_count?: number;
+        };
+        Relationships: [];
+      };
       notification_email_deliveries: {
         Row: {
           attempt_count: number;

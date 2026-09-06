@@ -61,7 +61,7 @@ Legacy tables remain available for rollback while the deployed application is sw
 
 - Canonical schema cutover is complete; the Vercel build is deployed, but the application-mode switch and anonymous/authenticated smoke tests still require access to the current Vercel project settings.
 - Database backup integrity and local isolated restoration are proven; off-machine custody and a hosted recovery-project drill covering Auth, Storage, and managed configuration remain unverified.
-- Vercel production environment values, deployment protection, production domain ownership, custom SMTP/domain, monitoring, alerts, cron ownership, and authenticated production journeys are not fully re-verified.
+- The production database has a service-role-only lifecycle worker-run ledger, but Vercel production environment values, deployment protection, production domain ownership, custom SMTP/domain, external alert routing, cron ownership, and authenticated production journeys are not fully re-verified.
 
 ### AI and external agents
 

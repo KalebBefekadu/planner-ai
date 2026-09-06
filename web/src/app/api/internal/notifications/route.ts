@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { Resend } from 'resend';
 import { isAuthorizedCronRequest } from '@/lib/api/cron';
+import { finishLifecycleJobRun, startLifecycleJobRun } from '@/lib/api/lifecycle-job';
 import { buildNotificationEmail } from '@/lib/notifications/email';
 import { createAdminClient } from '@/lib/supabase/admin';
 
@@ -34,14 +35,29 @@ export async function POST(request: Request) {
   if (!isAuthorizedCronRequest(request)) {
     return NextResponse.json({ error: 'Not authorized.' }, { status: 401 });
   }
+  const admin = createAdminClient();
+  const runId = await startLifecycleJobRun(admin, 'notification_delivery');
   const delivery = configuredDelivery();
   if (!delivery) {
+    await finishLifecycleJobRun(admin, runId, {
+      status: 'failed',
+      processed: 0,
+      succeeded: 0,
+      failed: 0,
+      errorCode: 'configuration_missing',
+    });
     return NextResponse.json({ error: 'Reminder delivery is not configured.' }, { status: 503 });
   }
 
-  const admin = createAdminClient();
   const { data, error } = await admin.rpc('claim_notification_email_batch', { p_limit: 50 });
   if (error) {
+    await finishLifecycleJobRun(admin, runId, {
+      status: 'failed',
+      processed: 0,
+      succeeded: 0,
+      failed: 0,
+      errorCode: 'queue_unavailable',
+    });
     return NextResponse.json({ error: 'Reminder queue unavailable.' }, { status: 503 });
   }
 
@@ -86,6 +102,15 @@ export async function POST(request: Request) {
       .eq('status', 'sending');
     sent += 1;
   }
+
+  const failed = claims.length - sent;
+  await finishLifecycleJobRun(admin, runId, {
+    status: failed > 0 ? 'failed' : 'succeeded',
+    processed: claims.length,
+    succeeded: sent,
+    failed,
+    errorCode: failed > 0 ? 'item_failure' : undefined,
+  });
 
   return NextResponse.json(
     { processed: claims.length, sent },

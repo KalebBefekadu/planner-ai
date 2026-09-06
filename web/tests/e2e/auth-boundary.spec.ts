@@ -282,3 +282,11 @@ test('attachment purge requires the private scheduler secret', async ({ request 
     await expect(response.json()).resolves.toMatchObject({ error: 'Not authorized.' });
   }
 });
+
+test('account deletion worker requires the private scheduler secret', async ({ request }) => {
+  for (const method of ['get', 'post'] as const) {
+    const response = await request[method]('/api/internal/account-deletions');
+    expect(response.status()).toBe(401);
+    await expect(response.json()).resolves.toMatchObject({ error: 'Not authorized.' });
+  }
+});
