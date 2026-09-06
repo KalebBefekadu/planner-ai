@@ -25,7 +25,7 @@ Fresh checks on 2026-09-06:
 - Vitest passes: 41 files, 507 tests.
 - pgTAP passes: 46 files, 910 assertions.
 - The local Supabase reset/migration chain and database advisors passed in the preceding full verification.
-- The canonical authenticated Playwright corpus passes 119 desktop and mobile tests, including Capture, Planner, Calendar scheduling, Today, authenticated accessibility, mobile keyboard navigation, auth-boundary, and assistant-outage journeys.
+- The canonical authenticated Playwright corpus passes 121 desktop and mobile tests, including Capture, Planner, Calendar scheduling, Notes vault import, Today, authenticated accessibility, mobile keyboard navigation, auth-boundary, and assistant-outage journeys.
 - The authenticated assistant outage journey proves a failed request remains visible and can be retried without duplicating user input.
 - The dependency audit reports no known vulnerabilities at the configured high-severity threshold.
 
