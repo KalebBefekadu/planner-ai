@@ -8,6 +8,7 @@ export const dynamic = 'force-dynamic';
 
 const bucket = 'note-attachments';
 const maxBytes = 10 * 1024 * 1024;
+const maxMultipartBytes = maxBytes + 64 * 1024;
 const acceptedTypes = new Set([
   'application/pdf',
   'image/jpeg',
@@ -36,6 +37,14 @@ export async function POST(request: Request) {
     !(request.headers.get('content-type') ?? '').toLowerCase().startsWith('multipart/form-data')
   ) {
     return error('Choose a supported file.', 415);
+  }
+  const contentLength = Number(request.headers.get('content-length') ?? '0');
+  if (
+    !Number.isSafeInteger(contentLength) ||
+    contentLength < 0 ||
+    contentLength > maxMultipartBytes
+  ) {
+    return error('Attachment upload exceeds 10 MB.', 413);
   }
 
   try {
