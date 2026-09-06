@@ -41,6 +41,12 @@ export type NoteKnowledgeContext = {
   actionLinks: string[];
   goals: Array<{ id: string; title: string }>;
   actions: Array<{ id: string; title: string }>;
+  attachments: Array<{
+    id: string;
+    originalName: string;
+    byteSize: number;
+    scanState: 'quarantined' | 'approved' | 'rejected';
+  }>;
 };
 
 function ensureNotesEnabled() {
@@ -101,60 +107,76 @@ export async function getNotes(query?: string) {
 
 export async function getNoteKnowledgeContext(noteId: string): Promise<NoteKnowledgeContext> {
   const { supabase, workspaceId } = await notesClient();
-  const [noteTags, links, revisions, captures, goalLinks, actionLinks, goals, actions] =
-    await Promise.all([
-      supabase
-        .from('note_tags')
-        .select('tag_id')
-        .eq('workspace_id', workspaceId)
-        .eq('note_id', noteId),
-      supabase
-        .from('note_links')
-        .select('id,source_note_id,target_note_id,relation_type')
-        .eq('workspace_id', workspaceId)
-        .or(`source_note_id.eq.${noteId},target_note_id.eq.${noteId}`)
-        .order('created_at', { ascending: false }),
-      supabase
-        .from('note_revisions')
-        .select('id,title,body_markdown,source_version,created_at')
-        .eq('workspace_id', workspaceId)
-        .eq('note_id', noteId)
-        .order('created_at', { ascending: false })
-        .limit(20),
-      supabase
-        .from('captures')
-        .select('id,raw_text,source,created_at')
-        .eq('workspace_id', workspaceId)
-        .in('state', ['new', 'proposed'])
-        .is('archived_at', null)
-        .is('trashed_at', null)
-        .order('created_at', { ascending: false })
-        .limit(30),
-      supabase
-        .from('note_goal_links')
-        .select('goal_id')
-        .eq('workspace_id', workspaceId)
-        .eq('note_id', noteId),
-      supabase
-        .from('note_action_links')
-        .select('action_id')
-        .eq('workspace_id', workspaceId)
-        .eq('note_id', noteId),
-      supabase
-        .from('goals')
-        .select('id,title')
-        .eq('workspace_id', workspaceId)
-        .is('archived_at', null)
-        .is('trashed_at', null)
-        .order('title'),
-      supabase
-        .from('actions')
-        .select('id,title')
-        .eq('workspace_id', workspaceId)
-        .is('archived_at', null)
-        .is('trashed_at', null)
-        .order('title'),
-    ]);
+  const [
+    noteTags,
+    links,
+    revisions,
+    captures,
+    goalLinks,
+    actionLinks,
+    goals,
+    actions,
+    attachments,
+  ] = await Promise.all([
+    supabase
+      .from('note_tags')
+      .select('tag_id')
+      .eq('workspace_id', workspaceId)
+      .eq('note_id', noteId),
+    supabase
+      .from('note_links')
+      .select('id,source_note_id,target_note_id,relation_type')
+      .eq('workspace_id', workspaceId)
+      .or(`source_note_id.eq.${noteId},target_note_id.eq.${noteId}`)
+      .order('created_at', { ascending: false }),
+    supabase
+      .from('note_revisions')
+      .select('id,title,body_markdown,source_version,created_at')
+      .eq('workspace_id', workspaceId)
+      .eq('note_id', noteId)
+      .order('created_at', { ascending: false })
+      .limit(20),
+    supabase
+      .from('captures')
+      .select('id,raw_text,source,created_at')
+      .eq('workspace_id', workspaceId)
+      .in('state', ['new', 'proposed'])
+      .is('archived_at', null)
+      .is('trashed_at', null)
+      .order('created_at', { ascending: false })
+      .limit(30),
+    supabase
+      .from('note_goal_links')
+      .select('goal_id')
+      .eq('workspace_id', workspaceId)
+      .eq('note_id', noteId),
+    supabase
+      .from('note_action_links')
+      .select('action_id')
+      .eq('workspace_id', workspaceId)
+      .eq('note_id', noteId),
+    supabase
+      .from('goals')
+      .select('id,title')
+      .eq('workspace_id', workspaceId)
+      .is('archived_at', null)
+      .is('trashed_at', null)
+      .order('title'),
+    supabase
+      .from('actions')
+      .select('id,title')
+      .eq('workspace_id', workspaceId)
+      .is('archived_at', null)
+      .is('trashed_at', null)
+      .order('title'),
+    supabase
+      .from('note_attachments')
+      .select('id,original_name,byte_size,scan_state')
+      .eq('workspace_id', workspaceId)
+      .eq('note_id', noteId)
+      .is('removed_at', null)
+      .order('created_at', { ascending: false }),
+  ]);
   if (
     noteTags.error ||
     links.error ||
@@ -163,7 +185,8 @@ export async function getNoteKnowledgeContext(noteId: string): Promise<NoteKnowl
     goalLinks.error ||
     actionLinks.error ||
     goals.error ||
-    actions.error
+    actions.error ||
+    attachments.error
   ) {
     throw new Error('Unable to load Note connections.');
   }
@@ -209,6 +232,12 @@ export async function getNoteKnowledgeContext(noteId: string): Promise<NoteKnowl
     actions: (actions.data ?? []).map((action) => ({
       id: action.id as string,
       title: action.title as string,
+    })),
+    attachments: (attachments.data ?? []).map((attachment) => ({
+      id: attachment.id,
+      originalName: attachment.original_name,
+      byteSize: attachment.byte_size,
+      scanState: attachment.scan_state as NoteKnowledgeContext['attachments'][number]['scanState'],
     })),
   };
 }

@@ -1354,6 +1354,63 @@ export type Database = {
           },
         ];
       };
+      note_attachments: {
+        Row: {
+          byte_size: number;
+          checksum_sha256: string;
+          created_at: string;
+          id: string;
+          media_type: string;
+          note_id: string;
+          object_key: string;
+          original_name: string;
+          removed_at: string | null;
+          scan_state: string;
+          workspace_id: string;
+        };
+        Insert: {
+          byte_size: number;
+          checksum_sha256: string;
+          created_at?: string;
+          id?: string;
+          media_type: string;
+          note_id: string;
+          object_key: string;
+          original_name: string;
+          removed_at?: string | null;
+          scan_state?: string;
+          workspace_id: string;
+        };
+        Update: {
+          byte_size?: number;
+          checksum_sha256?: string;
+          created_at?: string;
+          id?: string;
+          media_type?: string;
+          note_id?: string;
+          object_key?: string;
+          original_name?: string;
+          removed_at?: string | null;
+          scan_state?: string;
+          workspace_id?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: 'note_attachments_note_id_workspace_id_fkey';
+            columns: ['note_id', 'workspace_id'];
+            isOneToOne: false;
+            referencedRelation: 'notes';
+            referencedColumns: ['id', 'workspace_id'];
+          },
+          {
+            foreignKeyName: 'note_attachments_workspace_id_fkey';
+            columns: ['workspace_id'];
+            isOneToOne: false;
+            referencedRelation: 'workspaces';
+            referencedColumns: ['id'];
+          },
+        ];
+      };
       note_import_items: {
         Row: {
           body_markdown: string;
