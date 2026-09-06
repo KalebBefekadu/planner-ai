@@ -144,6 +144,33 @@ test('a Note link becomes a navigable backlink from the related Note', async ({ 
   await expect(page.getByRole('textbox', { name: 'Note title' })).toHaveValue(sourceTitle);
 });
 
+test('a Markdown file is previewed before explicit vault import', async ({ workspace }) => {
+  const { page } = workspace;
+  const title = 'Imported planning brief';
+
+  await goTo(page, '/notes');
+  await page.getByRole('button', { name: 'Import Notes' }).click();
+  const dialog = page.getByRole('dialog', { name: 'Import Notes' });
+  await dialog.getByLabel('Source').selectOption('generic');
+  await dialog
+    .locator('input[type="file"]')
+    .first()
+    .setInputFiles({
+      name: `${title}.md`,
+      mimeType: 'text/markdown',
+      buffer: Buffer.from(`# ${title}\n\nA portable planning decision.`),
+    });
+
+  await expect(dialog.getByLabel('Import preview')).toContainText(title);
+  await dialog.getByRole('button', { name: 'Import 1' }).click();
+  await expect(dialog.getByText('1 Notes imported', { exact: true })).toBeVisible();
+  await dialog.getByRole('button', { name: 'Done' }).click();
+  await expect(page.getByRole('textbox', { name: 'Note title' })).toHaveValue(title);
+  await expect(page.getByRole('textbox', { name: 'Note body, Markdown' })).toHaveValue(
+    /A portable planning decision\./
+  );
+});
+
 test('a supported attachment is retained in quarantine instead of becoming an unsafe download', async ({
   workspace,
 }) => {
