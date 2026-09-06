@@ -12,6 +12,7 @@ import {
   Italic,
   Link2,
   List,
+  ListTree,
   ListTodo,
   Mic,
   Paperclip,
@@ -46,6 +47,7 @@ import {
 } from '@/app/notes/actions';
 import { NoteImportDialog } from '@/components/note-import-dialog';
 import { useVoiceTranscription } from '@/lib/use-voice-transcription';
+import { extractPlannerMarkdownHeadings } from '@/lib/markdown/contract';
 
 function flattenNotes(notes: NoteView[]) {
   const children = new Map<string | null, NoteView[]>();
@@ -136,7 +138,22 @@ export function NotesWorkspace({
   const saveInFlightRef = useRef(false);
   const queuedDraftRef = useRef<{ title: string; bodyMarkdown: string } | null>(null);
   const tree = useMemo(() => flattenNotes(notes), [notes]);
+  const outline = useMemo(() => extractPlannerMarkdownHeadings(body), [body]);
   const wordCount = body.trim() ? body.trim().split(/\s+/).length : 0;
+
+  function focusOutlineLine(line: number) {
+    setEditorMode('edit');
+    window.requestAnimationFrame(() => {
+      const editor = editorRef.current;
+      if (!editor) return;
+      const offset = body
+        .split('\n')
+        .slice(0, Math.max(0, line - 1))
+        .reduce((total, sourceLine) => total + sourceLine.length + 1, 0);
+      editor.focus();
+      editor.setSelectionRange(offset, offset);
+    });
+  }
   const insertTranscript = useCallback(
     (transcript: string) => {
       const editor = editorRef.current;
@@ -557,6 +574,28 @@ export function NotesWorkspace({
                 <NoteMarkdownPreview markdown={body} />
               )}
               <aside className="note-inspector" aria-label="Note connections and history">
+                <section className="note-inspector-section">
+                  <h2>
+                    <ListTree size={15} aria-hidden="true" />
+                    Outline
+                  </h2>
+                  {outline.length ? (
+                    <nav className="note-outline-list" aria-label="Note outline">
+                      {outline.map((heading) => (
+                        <button
+                          key={`${heading.line}-${heading.text}`}
+                          type="button"
+                          style={{ paddingLeft: `${Math.min(heading.depth - 1, 4) * 12}px` }}
+                          onClick={() => focusOutlineLine(heading.line)}
+                        >
+                          {heading.text}
+                        </button>
+                      ))}
+                    </nav>
+                  ) : (
+                    <p className="note-inspector-empty">Add headings to create an outline</p>
+                  )}
+                </section>
                 <section className="note-inspector-section">
                   <h2>
                     <Paperclip size={15} aria-hidden="true" />

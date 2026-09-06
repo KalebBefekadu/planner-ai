@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { markdownGoldenCorpus } from '../fixtures/markdown-golden';
 import {
+  extractPlannerMarkdownHeadings,
   inspectPlannerMarkdown,
   mdastIdentityEditorAdapter,
   normalizePlannerMarkdown,
@@ -49,5 +50,17 @@ describe('Planner Markdown semantic contract', () => {
     expect(
       plannerMarkdownIsSemanticallyEquivalent(markdown, normalizePlannerMarkdown(markdown))
     ).toBe(true);
+  });
+
+  it('derives a source-line-aware outline without retaining a second document model', () => {
+    expect(
+      extractPlannerMarkdownHeadings(
+        '# Direction\n\n## _A_ [linked](https://example.com) outcome\n\n### Next step'
+      )
+    ).toEqual([
+      { depth: 1, text: 'Direction', line: 1 },
+      { depth: 2, text: 'A linked outcome', line: 3 },
+      { depth: 3, text: 'Next step', line: 5 },
+    ]);
   });
 });

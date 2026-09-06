@@ -15,6 +15,12 @@ export type MarkdownDiagnostic = {
   message: string;
 };
 
+export type PlannerMarkdownHeading = {
+  depth: number;
+  text: string;
+  line: number;
+};
+
 export interface MarkdownEditorAdapter<TModel> {
   readonly id: string;
   fromAst(ast: PlannerMarkdownAst): TModel;
@@ -84,6 +90,43 @@ export function inspectPlannerMarkdown(ast: PlannerMarkdownAst): MarkdownDiagnos
   };
   visit(ast);
   return diagnostics;
+}
+
+function textFromMarkdownNode(value: unknown): string {
+  if (!value || typeof value !== 'object') return '';
+  const node = value as { value?: unknown; children?: unknown };
+  const ownText = typeof node.value === 'string' ? node.value : '';
+  const childText = Array.isArray(node.children)
+    ? node.children.map(textFromMarkdownNode).join('')
+    : '';
+  return ownText + childText;
+}
+
+/** A source-derived outline keeps navigation useful without creating a second document model. */
+export function extractPlannerMarkdownHeadings(markdown: string): PlannerMarkdownHeading[] {
+  const headings: PlannerMarkdownHeading[] = [];
+  const visit = (value: unknown) => {
+    if (!value || typeof value !== 'object') return;
+    const node = value as {
+      type?: unknown;
+      depth?: unknown;
+      children?: unknown;
+      position?: { start?: { line?: unknown } };
+    };
+    if (node.type === 'heading' && typeof node.depth === 'number') {
+      const text = textFromMarkdownNode(node).trim();
+      if (text) {
+        headings.push({
+          depth: node.depth,
+          text,
+          line: typeof node.position?.start?.line === 'number' ? node.position.start.line : 1,
+        });
+      }
+    }
+    if (Array.isArray(node.children)) node.children.forEach(visit);
+  };
+  visit(parsePlannerMarkdown(markdown));
+  return headings;
 }
 
 export function roundTripPlannerMarkdown<TModel>(
