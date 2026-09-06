@@ -24,6 +24,57 @@ function error(message: string, status: number) {
   );
 }
 
+function downloadName(name: string) {
+  return (
+    name
+      .replace(/[\\/\r\n"]/g, ' ')
+      .trim()
+      .slice(0, 180) || 'attachment'
+  ).replace(/^\.+$/, 'attachment');
+}
+
+export async function GET(request: Request) {
+  if (process.env.PLANNER_DATA_MODEL !== 'canonical') {
+    return error('Notes attachments are unavailable before data migration.', 503);
+  }
+  const attachmentId = new URL(request.url).searchParams.get('attachmentId');
+  if (!attachmentId) return error('Choose an attachment to download.', 400);
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) return error('Authentication required.', 401);
+  const { data: workspace } = await supabase
+    .from('workspaces')
+    .select('id')
+    .eq('owner_user_id', user.id)
+    .single();
+  if (!workspace) return error('Workspace is unavailable.', 503);
+  const { data: attachment } = await supabase
+    .from('note_attachments')
+    .select('object_key,original_name,media_type,scan_state')
+    .eq('id', attachmentId)
+    .eq('workspace_id', workspace.id)
+    .is('removed_at', null)
+    .maybeSingle();
+  if (!attachment) return error('Attachment not found.', 404);
+  if (attachment.scan_state !== 'approved') {
+    return error('This attachment is not available until security review is complete.', 409);
+  }
+  const { data, error: downloadError } = await createAdminClient()
+    .storage.from(bucket)
+    .download(attachment.object_key);
+  if (downloadError || !data) return error('Attachment download could not be completed.', 503);
+  return new NextResponse(data, {
+    headers: {
+      'Cache-Control': 'private, no-store',
+      'Content-Disposition': `attachment; filename="${downloadName(attachment.original_name)}"`,
+      'Content-Type': attachment.media_type,
+      'X-Content-Type-Options': 'nosniff',
+    },
+  });
+}
+
 export async function POST(request: Request) {
   if (process.env.PLANNER_DATA_MODEL !== 'canonical') {
     return error('Notes attachments are unavailable before data migration.', 503);
