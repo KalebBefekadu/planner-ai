@@ -13,6 +13,7 @@ import {
   Link2,
   List,
   ListTodo,
+  Mic,
   Plus,
   RotateCcw,
   Search,
@@ -42,6 +43,7 @@ import {
   type NoteView,
 } from '@/app/notes/actions';
 import { NoteImportDialog } from '@/components/note-import-dialog';
+import { useVoiceTranscription } from '@/lib/use-voice-transcription';
 
 function flattenNotes(notes: NoteView[]) {
   const children = new Map<string | null, NoteView[]>();
@@ -127,6 +129,23 @@ export function NotesWorkspace({
   const queuedDraftRef = useRef<{ title: string; bodyMarkdown: string } | null>(null);
   const tree = useMemo(() => flattenNotes(notes), [notes]);
   const wordCount = body.trim() ? body.trim().split(/\s+/).length : 0;
+  const insertTranscript = useCallback(
+    (transcript: string) => {
+      const editor = editorRef.current;
+      const start = editor?.selectionStart ?? body.length;
+      const end = editor?.selectionEnd ?? body.length;
+      const separator = body.slice(0, start).trim() && !/\s$/.test(body.slice(0, start)) ? ' ' : '';
+      const nextBody = `${body.slice(0, start)}${separator}${transcript}${body.slice(end)}`;
+      setBody(nextBody);
+      window.requestAnimationFrame(() => {
+        editor?.focus();
+        const cursor = start + separator.length + transcript.length;
+        editor?.setSelectionRange(cursor, cursor);
+      });
+    },
+    [body]
+  );
+  const voice = useVoiceTranscription({ onTranscript: insertTranscript });
 
   const queueAutosave = useCallback(
     async (draft: { title: string; bodyMarkdown: string }) => {
@@ -360,6 +379,11 @@ export function NotesWorkspace({
                 {error}
               </p>
             ) : null}
+            {voice.error ? (
+              <p className="status-message status-message-error" role="alert">
+                {voice.error}
+              </p>
+            ) : null}
             <div className="markdown-toolbar" role="toolbar" aria-label="Markdown formatting">
               <div className="markdown-tools">
                 <button
@@ -397,6 +421,16 @@ export function NotesWorkspace({
                   disabled={editorMode === 'preview'}
                 >
                   <List size={16} />
+                </button>
+                <button
+                  type="button"
+                  title={voice.isRecording ? 'Stop dictation' : 'Start dictation'}
+                  aria-label={voice.isRecording ? 'Stop dictation' : 'Start dictation'}
+                  aria-pressed={voice.isRecording}
+                  onClick={() => (voice.isRecording ? voice.stop() : void voice.start())}
+                  disabled={editorMode === 'preview' || voice.isTranscribing}
+                >
+                  <Mic size={16} />
                 </button>
               </div>
               <div className="editor-mode-control" aria-label="Editor mode">

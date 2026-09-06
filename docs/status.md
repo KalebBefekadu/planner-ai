@@ -52,10 +52,10 @@ Legacy tables remain available for rollback while the deployed application is sw
 ### Product convergence
 
 - `/preview` remains a design laboratory, but its rail, contextual sidebar, command palette, restrained visual system, and responsive navigation are now used by the authenticated shell.
-- Planner now adds real-data horizon filtering, progress summaries, and a stronger direction-to-action hierarchy; Notes adds clearer document metadata and serialized autosave for rapid edits.
+- Planner now adds real-data horizon filtering, progress summaries, and a stronger direction-to-action hierarchy; Notes adds clearer document metadata, serialized autosave, backlinks, caret-aware voice dictation, and portable Markdown vault export/restore.
 - Legacy/canonical mode branches remain until the deployed canonical release is verified and the rollback window closes.
 - Several north-star screens are illustrative rather than connected to real Operations.
-- Notes are a credible foundation but not yet the polished editor, backlinks, attachments, graph, canvas, or database system in the long-term vision.
+- Notes are a credible foundation but not yet the polished editor, attachment system, graph, canvas, or database system in the long-term vision.
 
 ### Production data and operations
 

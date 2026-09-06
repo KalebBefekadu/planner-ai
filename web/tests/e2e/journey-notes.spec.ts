@@ -12,6 +12,7 @@ async function createRootNote(page: import('@playwright/test').Page, title: stri
   await expect(titleEditor).toHaveValue('Untitled');
   await titleEditor.fill(title);
   await page.getByRole('textbox', { name: 'Note body, Markdown' }).fill(body);
+  await expect(page.getByRole('button', { name: 'Start dictation' })).toBeVisible();
   await page.waitForTimeout(1_000);
   await expect(page.getByRole('status')).toHaveText('Saved');
   // Router refresh after autosave updates the tree. This proves the next

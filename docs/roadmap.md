@@ -65,7 +65,7 @@ Exit gate: the complete delivery-rule loop passes authenticated browser tests wi
 
 Goal: a trustworthy personal Markdown vault, not a partial Notion clone.
 
-- Deliver a polished Markdown editor with autosave state, revisions, hierarchy, tags, links, backlinks, and AI Exclusion.
+- Deliver a polished Markdown editor with autosave state, revisions, hierarchy, tags, links, backlinks, AI Exclusion, and caret-aware voice dictation.
 - Add exact search with source links.
 - Complete dry-run Notion and Obsidian import with duplicate and unsupported-content reports.
 - Complete full Markdown export and restore.
