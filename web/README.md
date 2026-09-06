@@ -60,6 +60,8 @@ Schedule an authenticated `POST` to `${NEXT_PUBLIC_APP_URL}/api/internal/notific
 
 Schedule an authenticated daily `POST` to `${NEXT_PUBLIC_APP_URL}/api/internal/note-attachment-purge` after configuring `CRON_SECRET`. It permanently removes private attachment objects and metadata only after the 30-day recovery window; it does not approve or expose quarantined files.
 
+Monitor unauthenticated `GET ${NEXT_PUBLIC_APP_URL}/api/health`. It returns `200 {"status":"ok"}` only when the canonical application can reach Supabase; otherwise it returns `503 {"status":"not_ready"}` without revealing configuration or user data.
+
 ## MCP OAuth
 
 The MCP endpoint is `${NEXT_PUBLIC_APP_URL}/api/mcp`. It publishes RFC 9728 protected-resource metadata and uses Supabase Auth as the OAuth 2.1 authorization server. In the Supabase dashboard, enable OAuth Server, dynamic client registration, asymmetric JWT signing, and set the authorization path to `${NEXT_PUBLIC_APP_URL}/oauth/consent`. Planner AI requires AAL2 before consent and stores product capability grants separately from OAuth identity scopes.

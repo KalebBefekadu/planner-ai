@@ -11,6 +11,15 @@ test('anonymous users cannot see the workspace', async ({ page }) => {
   await expect(page.getByText('What is on your mind?')).toHaveCount(0);
 });
 
+test('readiness confirms the canonical application without exposing private data', async ({
+  request,
+}) => {
+  const response = await request.get('/api/health');
+  expect(response.status()).toBe(200);
+  expect(response.headers()['cache-control']).toBe('no-store');
+  await expect(response.json()).resolves.toEqual({ status: 'ok' });
+});
+
 test('the frontend preview is available without authentication', async ({ page }) => {
   await page.goto('/preview');
   await expect(page).toHaveURL(/\/preview$/);
