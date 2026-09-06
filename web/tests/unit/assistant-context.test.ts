@@ -1,9 +1,15 @@
 import { describe, expect, it } from 'vitest';
 import {
+  MAX_SELECTED_NOTE_CONTEXT_CHARACTERS,
   assistantContextScopes,
   assistantSelectionForRoute,
   boundedSelectedNoteContext,
 } from '@/lib/assistant/context';
+import {
+  MAX_ASSISTANT_HISTORY_CHARACTERS,
+  MAX_ASSISTANT_HISTORY_MESSAGES,
+  boundedAssistantHistory,
+} from '@/lib/assistant/history';
 
 const noteId = '10000000-0000-4000-8000-000000000001';
 
@@ -41,6 +47,42 @@ describe('assistant context routing', () => {
       title: 'Long Note',
       version: 3,
       bodyMarkdownExcerpt: 'xxxxxxxx',
+      bodyTruncated: true,
+    });
+  });
+});
+
+describe('assistant context budgets', () => {
+  it('keeps only the newest complete messages within the history budget', () => {
+    const history = Array.from({ length: MAX_ASSISTANT_HISTORY_MESSAGES + 2 }, (_, index) => ({
+      role: index % 2 === 0 ? ('user' as const) : ('assistant' as const),
+      content: `message-${index}`,
+    }));
+
+    const retained = boundedAssistantHistory(history);
+
+    expect(retained).toHaveLength(MAX_ASSISTANT_HISTORY_MESSAGES);
+    expect(retained[0]?.content).toBe('message-2');
+    expect(
+      boundedAssistantHistory([
+        { role: 'user', content: 'x'.repeat(MAX_ASSISTANT_HISTORY_CHARACTERS + 1) },
+      ])
+    ).toEqual([]);
+  });
+
+  it('bounds a selected note before it becomes assistant context', () => {
+    const context = boundedSelectedNoteContext({
+      id: 'note-1',
+      title: 'Planning notes',
+      version: 3,
+      body_markdown: 'x'.repeat(MAX_SELECTED_NOTE_CONTEXT_CHARACTERS + 10),
+    });
+
+    expect(context).toMatchObject({
+      id: 'note-1',
+      title: 'Planning notes',
+      version: 3,
+      bodyMarkdownExcerpt: 'x'.repeat(MAX_SELECTED_NOTE_CONTEXT_CHARACTERS),
       bodyTruncated: true,
     });
   });

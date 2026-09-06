@@ -1,5 +1,6 @@
-export const MAX_ASSISTANT_HISTORY_MESSAGES = 12;
-export const MAX_ASSISTANT_HISTORY_CHARACTERS = 12_000;
+// Enough continuity for a focused exchange without resending stale conversation detail.
+export const MAX_ASSISTANT_HISTORY_MESSAGES = 8;
+export const MAX_ASSISTANT_HISTORY_CHARACTERS = 8_000;
 
 export type AssistantHistoryMessage = {
   role: 'user' | 'assistant';

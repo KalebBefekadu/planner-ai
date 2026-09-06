@@ -15,6 +15,8 @@ export type AssistantContextScope =
   | 'todayFocus'
   | 'vision';
 
+export const MAX_SELECTED_NOTE_CONTEXT_CHARACTERS = 8_000;
+
 const routeScopes: Array<[prefix: string, scopes: AssistantContextScope[]]> = [
   ['/planner', ['vision', 'goals', 'actions', 'actionTemplates', 'memories']],
   ['/vision', ['vision', 'goals', 'memories']],
@@ -45,7 +47,10 @@ export function assistantSelectionForRoute(route: string, selection?: AssistantS
   return route.split(/[?#]/, 1)[0] === '/notes' ? selection : undefined;
 }
 
-export function boundedSelectedNoteContext(value: unknown, maximumCharacters = 12_000) {
+export function boundedSelectedNoteContext(
+  value: unknown,
+  maximumCharacters = MAX_SELECTED_NOTE_CONTEXT_CHARACTERS
+) {
   if (!value || typeof value !== 'object' || Array.isArray(value)) return null;
   const note = value as Record<string, unknown>;
   const body = typeof note.body_markdown === 'string' ? note.body_markdown : '';
