@@ -22,18 +22,18 @@ export function DataSettings({
   const [confirmation, setConfirmation] = useState('');
   const [error, setError] = useState<string | null>(null);
 
-  async function downloadExport() {
+  async function downloadExport(path: string, fallbackFilename: string) {
     setPending(true);
     setError(null);
     try {
-      const response = await fetch('/api/export', { cache: 'no-store' });
+      const response = await fetch(path, { cache: 'no-store' });
       if (!response.ok) {
         const data = (await response.json()) as { error?: string };
         throw new Error(data.error ?? 'Export failed.');
       }
       const blob = await response.blob();
       const disposition = response.headers.get('content-disposition') ?? '';
-      const filename = /filename="([^"]+)"/.exec(disposition)?.[1] ?? 'planner-ai-export.json';
+      const filename = /filename="([^"]+)"/.exec(disposition)?.[1] ?? fallbackFilename;
       const url = URL.createObjectURL(blob);
       const anchor = document.createElement('a');
       anchor.href = url;
@@ -98,7 +98,7 @@ export function DataSettings({
           className="btn-primary button-with-icon"
           type="button"
           disabled={pending || assuranceLevel !== 'aal2'}
-          onClick={() => void downloadExport()}
+          onClick={() => void downloadExport('/api/export', 'planner-ai-export.json')}
         >
           <Download size={15} />
           {pending ? 'Preparing...' : 'Download export'}
@@ -109,6 +109,25 @@ export function DataSettings({
           Verify this session on the Security tab before exporting private data.
         </p>
       ) : null}
+
+      <section className="settings-section export-section">
+        <div>
+          <Download size={19} aria-hidden="true" />
+          <div>
+            <h2>Markdown Notes vault</h2>
+            <p>Portable Markdown files plus a hierarchy manifest for your personal vault.</p>
+          </div>
+        </div>
+        <button
+          className="btn-secondary button-with-icon"
+          type="button"
+          disabled={pending || assuranceLevel !== 'aal2'}
+          onClick={() => void downloadExport('/api/notes/export', 'planner-ai-notes.zip')}
+        >
+          <Download size={15} />
+          {pending ? 'Preparing...' : 'Download Notes'}
+        </button>
+      </section>
 
       <section className="settings-section account-deletion-section">
         <div className="account-deletion-heading">

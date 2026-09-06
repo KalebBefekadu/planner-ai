@@ -236,6 +236,12 @@ test('anonymous users cannot export Workspace data', async ({ request }) => {
   await expect(response.json()).resolves.toMatchObject({ error: 'Authentication required.' });
 });
 
+test('anonymous users cannot export a Markdown Notes vault', async ({ request }) => {
+  const response = await request.get('/api/notes/export');
+  expect(response.status()).toBe(401);
+  await expect(response.json()).resolves.toMatchObject({ error: 'Authentication required.' });
+});
+
 test('anonymous users cannot inspect or stage Notes imports', async ({ request }) => {
   const preview = await request.get('/api/note-import');
   expect(preview.status()).toBe(401);
