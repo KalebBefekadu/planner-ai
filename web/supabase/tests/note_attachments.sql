@@ -1,11 +1,16 @@
 begin;
-select plan(9);
+select plan(10);
 
 select has_table('public', 'note_attachments', 'Note attachments metadata exists');
 select row_security_active('public.note_attachments'), 'Note attachments metadata has RLS';
 select table_privs_are(
   'public', 'note_attachments', 'authenticated', array['SELECT'],
   'authenticated users cannot mutate attachment metadata directly'
+);
+select table_privs_are(
+  'public', 'note_attachments', 'service_role',
+  array['DELETE', 'INSERT', 'REFERENCES', 'SELECT', 'TRIGGER', 'TRUNCATE', 'UPDATE'],
+  'the trusted server can manage quarantined attachment metadata'
 );
 select ok(exists (
   select 1 from pg_policies where schemaname = 'public' and tablename = 'note_attachments'
