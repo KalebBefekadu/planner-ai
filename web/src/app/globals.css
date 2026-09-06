@@ -3132,6 +3132,13 @@ button:disabled {
 .experience-mobile-assistant {
   display: none;
 }
+.experience-sidebar-collapsed > .experience-mobile-assistant {
+  position: fixed;
+  z-index: 13;
+  right: 18px;
+  bottom: 18px;
+  display: inline-flex;
+}
 .assistant-panel {
   position: fixed;
   z-index: 20;

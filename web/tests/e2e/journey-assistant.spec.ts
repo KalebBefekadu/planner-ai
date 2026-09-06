@@ -51,3 +51,17 @@ test('an AI outage preserves the request and allows a safe retry', async ({ work
   ).toHaveCount(1);
   expect(attempts).toBe(2);
 });
+
+test('the assistant remains available after collapsing the desktop sidebar', async ({
+  workspace,
+}, testInfo) => {
+  test.skip(
+    testInfo.project.name === 'mobile-chromium',
+    'The mobile launcher is covered by the outage journey.'
+  );
+  const { page } = workspace;
+
+  await goTo(page, '/');
+  await page.getByRole('button', { name: 'Collapse sidebar' }).click();
+  await expect(page.getByRole('button', { name: 'Ask Planner AI' })).toBeVisible();
+});
