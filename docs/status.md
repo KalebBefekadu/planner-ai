@@ -42,7 +42,7 @@ The daily-planning loop now has browser evidence that a typed Capture persists i
 - The two duplicate remote migration entries were reconciled to the reviewed local versions.
 - The hosted migration history and guarded cutover preflight are aligned through `20260906114500_recoverable_note_attachment_removal.sql` after a fresh encrypted backup.
 - Count-only production verification found 53 public tables, all 53 RLS-enabled, two Auth users mapped to two Workspaces, no unmigrated users, and 56 registered Operations.
-- Vercel built release commit `1d570e4` successfully. Its team-scoped production alias is currently protected by Vercel Authentication, so anonymous application smoke tests remain blocked at the platform edge.
+- Vercel built release commit `1d570e4` successfully, and a read-only inspection on 2026-09-06 found current `planner-ai` production deployments in Ready state. Their team-scoped production aliases redirect to Vercel SSO before reaching the application, so anonymous application smoke tests remain blocked at the platform edge.
 - `planner-ai.vercel.app` is not this application: it still serves the older Planner-AI Telegram-bot site and must not be published as the current product URL.
 - [Migration reconciliation](runbooks/migration-reconciliation.md) records the completed procedure and evidence.
 
