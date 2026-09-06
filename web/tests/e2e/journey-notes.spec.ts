@@ -1,3 +1,5 @@
+import { createHmac } from 'node:crypto';
+
 import { test, expect, goTo } from './support/workspace';
 
 // Journey 5 of the delivery rule: knowledge stays understandable after the
@@ -18,6 +20,39 @@ async function createRootNote(page: import('@playwright/test').Page, title: stri
   // Router refresh after autosave updates the tree. This proves the next
   // navigation leaves a persisted Note, not a client-only draft.
   await expect(page.getByRole('button', { name: title, exact: true })).toBeVisible();
+}
+
+function base32Decode(value: string) {
+  const alphabet = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ234567';
+  const normalized = value.replace(/[=\s-]/g, '').toUpperCase();
+  let bits = '';
+  for (const character of normalized) {
+    const index = alphabet.indexOf(character);
+    if (index === -1) throw new Error('The MFA enrollment returned an invalid TOTP secret.');
+    bits += index.toString(2).padStart(5, '0');
+  }
+  return Buffer.from(
+    Array.from({ length: Math.floor(bits.length / 8) }, (_, index) =>
+      Number.parseInt(bits.slice(index * 8, index * 8 + 8), 2)
+    )
+  );
+}
+
+// RFC 6238's default SHA-1 / 30-second / six-digit TOTP profile. Keeping it in
+// the browser-journey spec lets us prove the real MFA boundary without adding a
+// production dependency or a testing escape hatch.
+function currentTotp(secret: string, now = Date.now()) {
+  const counter = Math.floor(now / 30_000);
+  const counterBuffer = Buffer.alloc(8);
+  counterBuffer.writeBigUInt64BE(BigInt(counter));
+  const digest = createHmac('sha1', base32Decode(secret)).update(counterBuffer).digest();
+  const offset = digest[digest.length - 1] & 0x0f;
+  const value =
+    ((digest[offset] & 0x7f) << 24) |
+    (digest[offset + 1] << 16) |
+    (digest[offset + 2] << 8) |
+    digest[offset + 3];
+  return String(value % 1_000_000).padStart(6, '0');
 }
 
 test('a Markdown Note persists across navigation instead of living only in the editor', async ({
@@ -169,6 +204,28 @@ test('a Markdown file is previewed before explicit vault import', async ({ works
   await expect(page.getByRole('textbox', { name: 'Note body, Markdown' })).toHaveValue(
     /A portable planning decision\./
   );
+});
+
+test('a stepped-up session can download a portable Markdown Notes vault', async ({ workspace }) => {
+  const { page } = workspace;
+  const title = 'Exported planning decision';
+
+  await goTo(page, '/notes');
+  await createRootNote(page, title, 'This decision must remain portable.');
+
+  await goTo(page, '/settings/security');
+  await page.getByRole('button', { name: 'Add authenticator' }).click();
+  const secret = await page.locator('#totp-secret').inputValue();
+  await page.getByLabel('Verification code').fill(currentTotp(secret));
+  await page.getByRole('button', { name: 'Verify', exact: true }).click();
+  await expect(page.getByText('Primary authenticator', { exact: true })).toBeVisible();
+
+  await goTo(page, '/settings/data');
+  const download = page.waitForEvent('download');
+  await page.getByRole('button', { name: 'Download Notes' }).click();
+  const vault = await download;
+  expect(vault.suggestedFilename()).toMatch(/^planner-ai-notes-\d{4}-\d{2}-\d{2}\.zip$/);
+  expect(await vault.failure()).toBeNull();
 });
 
 test('a supported attachment is retained in quarantine instead of becoming an unsafe download', async ({

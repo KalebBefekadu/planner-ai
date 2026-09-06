@@ -8,6 +8,10 @@ import { createClient } from '@/lib/supabase/client';
 
 type Enrollment = { factorId: string; qrCode: string; secret: string };
 
+function qrCodeDataUrl(svg: string) {
+  return `data:image/svg+xml;utf8,${encodeURIComponent(svg)}`;
+}
+
 export function MfaSettings({
   factors,
   assuranceLevel,
@@ -159,7 +163,7 @@ export function MfaSettings({
         {enrollment ? (
           <div className="mfa-enrollment">
             <Image
-              src={enrollment.qrCode}
+              src={qrCodeDataUrl(enrollment.qrCode)}
               alt="Authenticator QR code"
               width={180}
               height={180}
