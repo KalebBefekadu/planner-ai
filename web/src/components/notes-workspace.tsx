@@ -1,6 +1,14 @@
 'use client';
 
-import { useCallback, useEffect, useMemo, useRef, useState, useTransition } from 'react';
+import {
+  type KeyboardEvent,
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  useTransition,
+} from 'react';
 import {
   Archive,
   Bold,
@@ -48,6 +56,7 @@ import {
 import { NoteImportDialog } from '@/components/note-import-dialog';
 import { useVoiceTranscription } from '@/lib/use-voice-transcription';
 import { extractPlannerMarkdownHeadings } from '@/lib/markdown/contract';
+import { continueMarkdownList, wrapMarkdownSelection } from '@/lib/markdown/editing';
 
 function flattenNotes(notes: NoteView[]) {
   const children = new Map<string | null, NoteView[]>();
@@ -245,10 +254,34 @@ export function NotesWorkspace({
     if (!editor) return;
     const start = editor.selectionStart;
     const end = editor.selectionEnd;
-    setBody(`${body.slice(0, start)}${prefix}${body.slice(start, end)}${suffix}${body.slice(end)}`);
+    const edit = wrapMarkdownSelection(body, start, end, prefix, suffix);
+    setBody(edit.markdown);
     window.requestAnimationFrame(() => {
       editor.focus();
-      editor.setSelectionRange(start + prefix.length, end + prefix.length);
+      editor.setSelectionRange(edit.selectionStart, edit.selectionEnd);
+    });
+  }
+
+  function onEditorKeyDown(event: KeyboardEvent<HTMLTextAreaElement>) {
+    if (event.metaKey || event.ctrlKey) {
+      if (event.key.toLowerCase() === 'b') {
+        event.preventDefault();
+        wrapSelection('**');
+      } else if (event.key.toLowerCase() === 'i') {
+        event.preventDefault();
+        wrapSelection('_');
+      }
+      return;
+    }
+    if (event.key !== 'Enter') return;
+    const editor = event.currentTarget;
+    const edit = continueMarkdownList(body, editor.selectionStart, editor.selectionEnd);
+    if (!edit) return;
+    event.preventDefault();
+    setBody(edit.markdown);
+    window.requestAnimationFrame(() => {
+      editor.focus();
+      editor.setSelectionRange(edit.selectionStart, edit.selectionEnd);
     });
   }
 
@@ -567,6 +600,7 @@ export function NotesWorkspace({
                   className="markdown-editor"
                   value={body}
                   onChange={(event) => setBody(event.target.value)}
+                  onKeyDown={onEditorKeyDown}
                   placeholder="Write in Markdown..."
                   spellCheck
                 />
