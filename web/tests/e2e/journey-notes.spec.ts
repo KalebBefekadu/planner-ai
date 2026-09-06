@@ -62,3 +62,20 @@ test('a Note link becomes a navigable backlink from the related Note', async ({ 
   await backlink.click();
   await expect(page.getByRole('textbox', { name: 'Note title' })).toHaveValue(sourceTitle);
 });
+
+test('a supported attachment is retained in quarantine instead of becoming an unsafe download', async ({
+  workspace,
+}) => {
+  const { page } = workspace;
+  await goTo(page, '/notes');
+  await createRootNote(page, 'Attachment evidence', 'Keep supporting material with the decision.');
+
+  await page.getByLabel('Attach a file').setInputFiles({
+    name: 'research.md',
+    mimeType: 'text/markdown',
+    buffer: Buffer.from('# Research\n\nSource material.'),
+  });
+
+  await expect(page.getByText('research.md', { exact: true })).toBeVisible();
+  await expect(page.getByText('Security review pending', { exact: true })).toBeVisible();
+});
