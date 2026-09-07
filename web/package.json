@@ -13,6 +13,7 @@
     "start": "next start",
     "lint": "eslint",
     "typecheck": "tsc --noEmit",
+    "agent:check": "npm run format:check && npm run lint && npm run typecheck",
     "format:check": "prettier --check src playwright.config.ts vitest.config.ts vitest.live.config.ts tests",
     "test": "vitest run",
     "test:ai:live": "node --env-file-if-exists=.env.local ./node_modules/vitest/vitest.mjs run --config vitest.live.config.ts",

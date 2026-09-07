@@ -1,4 +1,5 @@
 .tokensave
+.worktrees/
 .pnpm-store/
 .DS_Store
 .env
