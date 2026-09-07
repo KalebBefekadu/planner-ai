@@ -3,10 +3,17 @@ name: Planner AI CI
 on:
   push:
     branches: [main]
+    paths:
+      - 'web/**'
+      - '.github/workflows/ci.yml'
   pull_request:
+    paths:
+      - 'web/**'
+      - '.github/workflows/ci.yml'
 
 permissions:
   contents: read
+  pull-requests: read
 
 concurrency:
   group: planner-ai-ci-${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
