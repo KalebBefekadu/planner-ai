@@ -82,3 +82,33 @@ test.describe('reduced motion', () => {
     expect(repeating).toBe(0);
   });
 });
+
+// The policy authorises stylesheets and style elements by nonce, and a nonce
+// does not extend to a style attribute. Anything sized or positioned with one
+// is therefore parsed and discarded, and renders at nothing: an empty progress
+// bar, a flat chart, an unindented outline. Development allows inline styles,
+// so this is only ever visible in a real build.
+test.describe('no styling is silently discarded', () => {
+  for (const path of ['/', '/planner', '/notes', '/settings/ai', '/review'] as const) {
+    test(`${path} applies every style it renders`, async ({ page }) => {
+      const refusals: string[] = [];
+      page.on('console', (message) => {
+        if (message.type() === 'error' && message.text().includes('style-src')) {
+          refusals.push(message.text());
+        }
+      });
+      await goTo(page, path);
+
+      // An element carrying a style attribute whose declaration block is empty
+      // is one the browser refused, so the value never reached the page.
+      const discarded = await page.evaluate(() =>
+        Array.from(document.querySelectorAll<HTMLElement>('[style]'))
+          .filter((element) => element.style.length === 0 && element.getAttribute('style'))
+          .map((element) => `${element.tagName.toLowerCase()}: ${element.getAttribute('style')}`)
+      );
+
+      expect(discarded, `${path} rendered a style the policy refuses`).toEqual([]);
+      expect(refusals, `${path} was refused a style by the policy`).toEqual([]);
+    });
+  }
+});

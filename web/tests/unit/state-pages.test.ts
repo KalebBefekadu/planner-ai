@@ -86,8 +86,13 @@ describe('page skeleton', () => {
     expect(html.match(/class="skeleton-card"/g)).toHaveLength(3);
   });
 
+  // The widths are classes rather than style attributes: a skeleton is shown
+  // before hydration, and the Content Security Policy discards a style
+  // attribute, so a width applied either by an effect or inline would never
+  // reach the page it is meant to describe.
   it('varies row widths, so it reads as text rather than a progress bar', () => {
-    const widths = [...html.matchAll(/inline-size:([^"';]+)/g)].map((m) => m[1].trim());
+    const widths = [...html.matchAll(/skeleton-bar-(\d)/g)].map((match) => match[1]);
+    expect(widths.length).toBeGreaterThan(1);
     expect(new Set(widths).size).toBeGreaterThan(1);
   });
 

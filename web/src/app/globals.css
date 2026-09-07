@@ -6400,3 +6400,35 @@ button:disabled {
     scroll-behavior: auto !important;
   }
 }
+
+/* Widths and depths that used to be written as style attributes. A nonce does
+   not authorise a style attribute, so the policy discarded them and these
+   elements rendered flat. A bounded set belongs in the stylesheet anyway, and
+   the skeleton needs its widths before hydration, when nothing has run yet. */
+.skeleton-bar-0 {
+  inline-size: 92%;
+}
+.skeleton-bar-1 {
+  inline-size: 78%;
+}
+.skeleton-bar-2 {
+  inline-size: 85%;
+}
+.skeleton-bar-3 {
+  inline-size: 64%;
+}
+.note-outline-depth-0 {
+  padding-inline-start: 0;
+}
+.note-outline-depth-1 {
+  padding-inline-start: 12px;
+}
+.note-outline-depth-2 {
+  padding-inline-start: 24px;
+}
+.note-outline-depth-3 {
+  padding-inline-start: 36px;
+}
+.note-outline-depth-4 {
+  padding-inline-start: 48px;
+}

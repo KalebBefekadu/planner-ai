@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
 import {
@@ -110,6 +110,16 @@ export function ExperienceShell({
   ].filter((command) =>
     `${command.label} ${command.detail}`.toLowerCase().includes(commandQuery.trim().toLowerCase())
   );
+
+  const shellRef = useRef<HTMLDivElement>(null);
+
+  // The sidebar is dragged to any width, so this cannot be a class. Written as
+  // a style attribute the Content Security Policy discards it, because a nonce
+  // does not extend to style attributes; through the CSSOM it applies and the
+  // policy stays as strict as it was.
+  useEffect(() => {
+    shellRef.current?.style.setProperty('--experience-sidebar-w', `${sidebarWidth}px`);
+  }, [sidebarWidth]);
 
   useEffect(() => {
     function handleShortcut(event: KeyboardEvent) {
@@ -227,9 +237,9 @@ export function ExperienceShell({
 
   return (
     <div
+      ref={shellRef}
       className={`experience-shell${sidebarOpen ? '' : ' experience-sidebar-collapsed'}`}
       data-experience-area={navigation.area}
-      style={{ '--experience-sidebar-w': `${sidebarWidth}px` } as React.CSSProperties}
     >
       <a className="experience-skip-link" href="#experience-main">
         Skip to content

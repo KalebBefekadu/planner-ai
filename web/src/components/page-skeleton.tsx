@@ -7,8 +7,6 @@
    Rows are deliberately uneven — a skeleton of identical bars reads as a
    loading spinner wearing a costume, not as text. */
 
-const ROW_WIDTHS = ['92%', '78%', '85%', '64%'];
-
 export function PageSkeleton({
   rows = 3,
   layout = 'list',
@@ -35,7 +33,7 @@ export function PageSkeleton({
       <div className="skeleton-body" aria-hidden="true">
         {Array.from({ length: rows }, (_, index) => (
           <div className="skeleton-card" key={index}>
-            <span className="skeleton-bar" style={{ inlineSize: ROW_WIDTHS[index % 4] }} />
+            <span className={`skeleton-bar skeleton-bar-${index % 4}`} />
             <span className="skeleton-bar skeleton-bar-short" />
           </div>
         ))}

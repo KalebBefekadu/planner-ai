@@ -8,6 +8,7 @@ import { ReviewTabs } from '@/components/review-tabs';
 import { ReviewAiProposal } from '@/components/review-ai-proposal';
 import { periodReviewCoachingCue } from '@/lib/coaching';
 import { actionFailureMessage } from '@/lib/operations/failure-message';
+import { MeasuredFill } from '@/components/measured-fill';
 
 function formatPeriodDate(value: string) {
   return new Intl.DateTimeFormat('en-US', {
@@ -155,7 +156,7 @@ export function PeriodReview({ data }: { data: PeriodReviewData }) {
                       ) : (
                         <div className="period-goal-progress">
                           <div aria-hidden="true">
-                            <span style={{ width: `${progress}%` }} />
+                            <MeasuredFill declarations={{ width: `${progress}%` }} />
                           </div>
                           <span>
                             {goal.currentValue} / {goal.targetValue} {goal.unit}

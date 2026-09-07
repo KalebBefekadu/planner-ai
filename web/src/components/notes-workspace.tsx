@@ -870,7 +870,7 @@ export function NotesWorkspace({
                         <button
                           key={`${heading.line}-${heading.text}`}
                           type="button"
-                          style={{ paddingLeft: `${Math.min(heading.depth - 1, 4) * 12}px` }}
+                          className={`note-outline-depth-${Math.min(heading.depth - 1, 4)}`}
                           onClick={() => focusOutlineLine(heading.line)}
                         >
                           {heading.text}

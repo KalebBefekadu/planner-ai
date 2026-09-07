@@ -4,6 +4,7 @@ import { useState, useTransition } from 'react';
 import { Activity, CircleDollarSign, Gauge, TimerReset } from 'lucide-react';
 import { updateAiBudget } from '@/app/settings/ai/actions';
 import { actionFailureMessage } from '@/lib/operations/failure-message';
+import { MeasuredFill } from '@/components/measured-fill';
 
 export type AiUsageDashboardData = {
   softBudgetCents: number;
@@ -132,7 +133,7 @@ export function AiUsageDashboard({ initial }: { initial: AiUsageDashboardData })
           aria-valuenow={Math.round(budgetPercent)}
           aria-valuetext={`${budgetPercent.toFixed(1)}% of soft budget used`}
         >
-          <span style={{ width: `${budgetPercent}%` }} />
+          <MeasuredFill declarations={{ width: `${budgetPercent}%` }} />
         </div>
         {spentCents >= savedBudget ? (
           <p className="status-message" role="status">
@@ -175,8 +176,10 @@ export function AiUsageDashboard({ initial }: { initial: AiUsageDashboardData })
               key={day.date}
               title={`${day.requests} requests, ${dollars(day.estimatedCostMicros)}`}
             >
-              <span
-                style={{ height: `${Math.max(3, (day.requests / maxDailyRequests) * 100)}%` }}
+              <MeasuredFill
+                declarations={{
+                  height: `${Math.max(3, (day.requests / maxDailyRequests) * 100)}%`,
+                }}
               />
               <time dateTime={day.date}>{Number(day.date.slice(8))}</time>
             </div>

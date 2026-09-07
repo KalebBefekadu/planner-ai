@@ -36,6 +36,7 @@ import {
   type GoalsData,
 } from '@/app/actions';
 import { actionFailureMessage } from '@/lib/operations/failure-message';
+import { MeasuredFill } from '@/components/measured-fill';
 
 type ComposerTarget = { type: GoalType; parentId: string; label: string } | null;
 type GoalItem = GoalView;
@@ -335,8 +336,9 @@ export function PlannerWorkspace({
                 );
               })()}
               <div aria-hidden="true">
-                <i
-                  style={{
+                <MeasuredFill
+                  as="i"
+                  declarations={{
                     width: `${Math.min(100, ((item.current_value ?? 0) / item.target_value) * 100)}%`,
                   }}
                 />
