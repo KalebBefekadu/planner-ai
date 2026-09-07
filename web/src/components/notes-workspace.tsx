@@ -11,6 +11,8 @@ import {
 } from 'react';
 import {
   Archive,
+  ArrowDown,
+  ArrowUp,
   Bold,
   FileText,
   FileInput,
@@ -45,6 +47,7 @@ import {
   linkNoteAction,
   linkNoteGoal,
   linkNote,
+  moveNoteWithinParent,
   restoreNoteRevision,
   setNoteTags,
   setNoteAiExcluded,
@@ -156,6 +159,33 @@ export function NotesWorkspace({
   const richEditable = useMemo(() => plannerMarkdownSupportsRichEditing(body), [body]);
   const activeEditorMode = editorMode === 'rich' && !richEditable ? 'source' : editorMode;
   const wordCount = body.trim() ? body.trim().split(/\s+/).length : 0;
+  // A Note can only move within its own parent. Offering a direction it cannot
+  // travel would suggest the order is stuck rather than already at the edge.
+  const siblingMove = useMemo(() => {
+    if (!selected) return { up: false, down: false };
+    const siblings = notes
+      .filter((note) => note.parentNoteId === selected.parentNoteId)
+      .sort((first, second) => first.sortKey - second.sortKey);
+    const index = siblings.findIndex((note) => note.id === selected.id);
+    return { up: index > 0, down: index >= 0 && index < siblings.length - 1 };
+  }, [notes, selected]);
+
+  function moveSelected(direction: 'up' | 'down') {
+    if (!selected) return;
+    startTransition(async () => {
+      try {
+        const moved = await moveNoteWithinParent({
+          id: selected.id,
+          direction,
+          expectedVersion: versionRef.current,
+        });
+        if (moved) versionRef.current = moved.version;
+        router.refresh();
+      } catch (caught) {
+        setError(errorMessage(caught));
+      }
+    });
+  }
 
   function focusOutlineLine(line: number) {
     setEditorMode('source');
@@ -521,6 +551,30 @@ export function NotesWorkspace({
                   />
                   Exclude from AI
                 </label>
+                {siblingMove.up || siblingMove.down ? (
+                  <div className="note-move-controls" role="group" aria-label="Reorder note">
+                    <button
+                      className="icon-button"
+                      type="button"
+                      title="Move note up"
+                      aria-label="Move note up"
+                      disabled={!siblingMove.up || isPending}
+                      onClick={() => moveSelected('up')}
+                    >
+                      <ArrowUp size={16} />
+                    </button>
+                    <button
+                      className="icon-button"
+                      type="button"
+                      title="Move note down"
+                      aria-label="Move note down"
+                      disabled={!siblingMove.down || isPending}
+                      onClick={() => moveSelected('down')}
+                    >
+                      <ArrowDown size={16} />
+                    </button>
+                  </div>
+                ) : null}
                 <button
                   className="icon-button"
                   type="button"

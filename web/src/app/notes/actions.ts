@@ -2,6 +2,7 @@
 
 import { randomUUID } from 'node:crypto';
 import { revalidatePath } from 'next/cache';
+import { nextSiblingMove } from '@/lib/notes/sibling-order';
 import { executeOperation } from '@/lib/operations';
 import { createClient } from '@/lib/supabase/server';
 
@@ -295,6 +296,71 @@ export async function setNoteAiExcluded(id: string, aiExcluded: boolean, expecte
       id,
       aiExcluded,
       expectedVersion,
+    },
+    { idempotencyKey: randomUUID(), surface: 'ui' }
+  );
+  revalidatePath('/notes');
+  return mapNote(note);
+}
+
+// Sibling order is a deliberate decision a person makes, and until now it could
+// only be changed through the assistant or MCP. Moving a Note writes the
+// midpoint between its new neighbours rather than renumbering the whole level,
+// so one move touches one Note and stays reversible.
+export async function moveNoteWithinParent(input: {
+  id: string;
+  direction: 'up' | 'down';
+  expectedVersion: number;
+}) {
+  const { supabase, workspaceId } = await notesClient();
+  const { data: current, error: currentError } = await supabase
+    .from('notes')
+    .select('id,parent_note_id,sort_key')
+    .eq('workspace_id', workspaceId)
+    .eq('id', input.id)
+    .is('archived_at', null)
+    .is('trashed_at', null)
+    .single();
+  if (currentError || !current) throw new Error('This Note is no longer available.');
+
+  const parentId = current.parent_note_id as string | null;
+  let siblingRequest = supabase
+    .from('notes')
+    .select('id,sort_key')
+    .eq('workspace_id', workspaceId)
+    .is('archived_at', null)
+    .is('trashed_at', null)
+    .order('sort_key');
+  siblingRequest =
+    parentId === null
+      ? siblingRequest.is('parent_note_id', null)
+      : siblingRequest.eq('parent_note_id', parentId);
+  const { data: siblings, error: siblingsError } = await siblingRequest;
+  if (siblingsError || !siblings) throw new Error('Unable to read the surrounding Notes.');
+
+  const move = nextSiblingMove(
+    siblings.map((sibling) => ({
+      id: sibling.id as string,
+      sortKey: Number(sibling.sort_key),
+    })),
+    input.id,
+    input.direction
+  );
+  // A Note already at the edge of its level has nowhere to go. That is not an
+  // error; the control is simply unavailable.
+  if (move.outcome === 'edge') return null;
+  if (move.outcome === 'exhausted') {
+    throw new Error('There is no room left between these Notes. Move a neighbour first.');
+  }
+
+  const note = await executeOperation(
+    supabase,
+    'note.move.v1',
+    {
+      id: input.id,
+      parentNoteId: parentId,
+      sortKey: move.sortKey,
+      expectedVersion: input.expectedVersion,
     },
     { idempotencyKey: randomUUID(), surface: 'ui' }
   );

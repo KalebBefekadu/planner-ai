@@ -147,6 +147,41 @@ test('a Note link becomes a navigable backlink from the related Note', async ({ 
   await expect(page.getByRole('textbox', { name: 'Note title' })).toHaveValue(sourceTitle);
 });
 
+// Sibling order is a decision a person makes about their own material. Until
+// this control existed it could only be changed through the assistant or MCP,
+// which made the order of a knowledge base something only an agent could set.
+test('a Note can be reordered among its siblings and the new order survives reload', async ({
+  workspace,
+}) => {
+  const { page } = workspace;
+
+  await goTo(page, '/notes');
+  await createRootNote(page, 'First decision', 'Written first.');
+  await createRootNote(page, 'Second decision', 'Written second.');
+  await createRootNote(page, 'Third decision', 'Written third.');
+
+  const treeTitles = () =>
+    page.locator('.note-tree .note-tree-item span:first-child').allInnerTexts();
+  expect(await treeTitles()).toEqual(['First decision', 'Second decision', 'Third decision']);
+
+  // The last Note has nowhere further to fall, so that direction is offered as
+  // unavailable rather than as a control that quietly does nothing.
+  await page.getByRole('button', { name: 'Third decision', exact: true }).click();
+  await expect(page.getByRole('button', { name: 'Move note down' })).toBeDisabled();
+  await page.getByRole('button', { name: 'Move note up' }).click();
+  await expect.poll(treeTitles).toEqual(['First decision', 'Third decision', 'Second decision']);
+
+  // A move is a persisted Operation, not a client-side rearrangement.
+  await goTo(page, '/');
+  await goTo(page, '/notes');
+  expect(await treeTitles()).toEqual(['First decision', 'Third decision', 'Second decision']);
+
+  // The Note that reached the top can no longer rise, which is the same edge
+  // condition from the other direction.
+  await page.getByRole('button', { name: 'First decision', exact: true }).click();
+  await expect(page.getByRole('button', { name: 'Move note up' })).toBeDisabled();
+});
+
 test('a Markdown file is previewed before explicit vault import', async ({ workspace }) => {
   const { page } = workspace;
   const title = 'Imported planning brief';

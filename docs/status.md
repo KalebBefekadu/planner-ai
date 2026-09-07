@@ -22,12 +22,13 @@ Fresh checks on 2026-09-07:
 - TypeScript passes with no emitted output.
 - Prettier passes for source and tests.
 - Next.js production build passes and generates 38 routes, including canonical `/planner` and compatibility redirect `/goals`.
-- Vitest passes: 43 files, 516 tests.
+- Vitest passes: 44 files, 524 tests.
 - pgTAP passes: 49 files, 942 assertions.
 - The local Supabase reset/migration chain and database advisors passed in the preceding full verification.
-- The canonical authenticated Playwright corpus passes 148 desktop and mobile tests with 2 skipped, including Capture, Planner, Calendar scheduling, MFA-protected Notes vault export, round-trip re-import, and restore into a workspace that no longer holds the originals, Today, authenticated accessibility, mobile keyboard navigation, auth-boundary, and assistant-outage journeys.
+- The canonical authenticated Playwright corpus passes 152 desktop and mobile tests with 2 skipped, including Capture, Planner, Calendar scheduling, MFA-protected Notes vault export, round-trip re-import, and restore into a workspace that no longer holds the originals, Note reordering, Today, authenticated accessibility, mobile keyboard navigation, auth-boundary, and assistant-outage journeys.
 - The authenticated assistant outage journey proves a failed request remains visible and can be retried without duplicating user input.
 - The manual MCP lifecycle has browser evidence on desktop and mobile: an AAL2 session creates a read-scoped token, a standards-compliant client discovers only its granted tool, and revocation immediately returns `401`. This work found and corrected a Postgres ambiguity that had caused every otherwise-valid manual token to be rejected.
+- A Note can be reordered among its siblings from the interface, the new order survives a reload as a persisted Operation, and a Note at the edge of its level is offered the unavailable direction as disabled rather than as a control that quietly does nothing. Ordering was previously reachable only through the assistant or MCP, which made the arrangement of a person's own knowledge base something only an agent could set.
 - The Notes vault now round-trips and restores. A downloaded vault is re-imported in the authenticated Notes journey and every Note returns as an exact duplicate, with nothing unsupported and no export frontmatter left in the body. The same journey then archives the originals and imports the vault again, which is the case a person actually needs: both Notes are recreated and the child returns beneath its parent rather than flattened to the root. Restored Notes now also keep the sibling order the manifest recorded. Building that evidence found six defects, each of which silently degraded an exported vault rather than failing visibly:
   - the ZIP reader never read the vault manifest, so every archived vault fell back to generic folder import and lost the identity and hierarchy the manifest carried;
   - export frontmatter was never stripped back off, so restored bodies carried raw export metadata;
@@ -37,7 +38,7 @@ Fresh checks on 2026-09-07:
   - the import discarded the sibling order the manifest recorded, so every restored Note was renumbered by staging order and siblings came back in an order the owner never chose.
 - The dependency audit reports no known vulnerabilities at the configured high-severity threshold.
 
-Implemented local capability includes verified authentication boundaries, canonical relational migrations, owner-isolating RLS, versioned Operation dispatch, Activity and undo, Today, Vision/Goals/Actions, Planner calendar, Capture and voice transcription routes, atomic Proposals, Weekly/Monthly/Quarterly Review, Notes with source-authoritative Markdown and a guarded rich-editor adapter, exact search, onboarding, settings, notifications, Conversations, explicit Memory, AI Exclusion, Trash, export, cancellable account deletion, PWA Capture recovery, assistant evidence/safety controls, GenUI schema validation, and scoped MCP endpoints.
+Implemented local capability includes verified authentication boundaries, canonical relational migrations, owner-isolating RLS, versioned Operation dispatch, Activity and undo, Today, Vision/Goals/Actions, Planner calendar, Capture and voice transcription routes, atomic Proposals, Weekly/Monthly/Quarterly Review, Notes with source-authoritative Markdown, direct sibling reordering, and a guarded rich-editor adapter, exact search, onboarding, settings, notifications, Conversations, explicit Memory, AI Exclusion, Trash, export, cancellable account deletion, PWA Capture recovery, assistant evidence/safety controls, GenUI schema validation, and scoped MCP endpoints.
 
 The daily-planning loop now has browser evidence that a typed Capture persists into Today, Vision-to-yearly/quarterly/monthly/weekly planning creates the expected hierarchy, a completed Goal remains visible rather than being accidentally archived, daily focus survives reload, completed Actions leave the open list, and the five-item focus cap limits commitment rather than creation.
 
@@ -66,7 +67,7 @@ Legacy tables remain available for rollback while the deployed application is sw
 - Legacy/canonical mode branches remain until the deployed canonical release is verified and the rollback window closes.
 - Several north-star screens are illustrative rather than connected to real Operations.
 - Notes now offer a source-authoritative rich editor for a proven reversible Markdown subset, including GFM task lists and tables, but they are not yet the complete editor, graph, canvas, or database system in the long-term vision.
-- Vault export and import now round-trip the supported corpus without loss. AI Exclusion survives a restore so an excluded Note is not quietly returned to AI retrieval, and a restored Note keeps the exact sibling order the manifest recorded, including the fractional keys a reorder produces. Notes carry no reorder affordance in the interface yet, so ordering can currently only be changed through the assistant or MCP.
+- Vault export and import now round-trip the supported corpus without loss. AI Exclusion survives a restore so an excluded Note is not quietly returned to AI retrieval, and a restored Note keeps the exact sibling order the manifest recorded, including the fractional keys a reorder produces. Reordering is now a direct click-first control rather than an assistant-only capability; dragging a Note to a new parent is still unavailable, so changing a Note's place in the hierarchy remains an assistant or MCP Operation.
 
 ### Production data and operations
 

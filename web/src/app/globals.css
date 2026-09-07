@@ -2062,6 +2062,17 @@ button:disabled {
   align-items: center;
   gap: 10px;
 }
+/* The two directions are one decision, so they sit closer to each other than
+   to the unrelated controls beside them. */
+.note-move-controls {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+}
+.note-move-controls .icon-button:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
 .save-state {
   color: var(--muted);
   font-size: var(--fs-label);
