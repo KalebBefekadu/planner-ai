@@ -164,6 +164,13 @@ Use Playwright screenshots for regressions and inspect them rather than relying 
 
 The release shell should already be compatible with the long-term workspace, but future breadth must not weaken the daily planning loop.
 
+### One production UI source of truth
+
+- The authenticated Planner AI application is the only product UI source of truth. New user-facing flows, components, and interaction states must be built there against real data and Operations.
+- `/preview` is a temporary design reference containing fixture data. It may support short-lived visual experiments, but it must not gain product-only behavior, routes, or interaction logic that the authenticated application does not also receive.
+- Promote each preview pattern by extracting or recreating it in the real surface with the existing loading, empty, error, conflict, permission, and responsive states. Visual similarity alone is not a promotion.
+- Retire `/preview` when the authenticated shell, Planner, and Notes workspace provide the same intended navigation, layout language, and primary interactions. The route must not be used as a substitute for real product testing.
+
 ### Workspace and editor
 
 - Use one quiet desktop shell: navigable workspace tree on the left, focused work surface in the center, contextual inspector or assistant on the right.
