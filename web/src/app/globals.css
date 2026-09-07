@@ -3968,6 +3968,93 @@ button:disabled {
   display: flex;
   gap: 8px;
 }
+.onboarding-center {
+  display: grid;
+  gap: 24px;
+}
+.onboarding-center-heading {
+  display: grid;
+  gap: 8px;
+  max-width: 720px;
+}
+.onboarding-center-heading h1 {
+  font-size: var(--fs-display);
+}
+.onboarding-center-heading > p:last-child {
+  margin: 0;
+  color: var(--muted);
+  font-size: var(--fs-lede);
+  line-height: 1.55;
+}
+.onboarding-center-stages {
+  display: grid;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  border-top: 1px solid var(--line);
+}
+.onboarding-center-stages > li {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 18px;
+  min-height: 118px;
+  border-bottom: 1px solid var(--line);
+  padding: 20px 0;
+}
+.onboarding-center-stage-number {
+  display: grid;
+  width: 30px;
+  height: 30px;
+  place-items: center;
+  border: 1px solid var(--line-strong);
+  border-radius: 50%;
+  color: var(--muted);
+  font-size: var(--fs-label);
+  font-weight: 800;
+}
+.onboarding-center-stage-complete .onboarding-center-stage-number {
+  border-color: var(--brand);
+  background: var(--brand);
+  color: white;
+}
+.onboarding-center-stages h2 {
+  margin: 0;
+  font-size: var(--fs-h3);
+}
+.onboarding-center-stages p,
+.onboarding-center-safety p,
+.onboarding-center-next p {
+  margin: 5px 0 0;
+  color: var(--muted);
+  line-height: 1.5;
+}
+.onboarding-center-safety,
+.onboarding-center-next {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  border-left: 3px solid var(--brand);
+  padding: 14px 16px;
+  background: var(--brand-soft);
+}
+.onboarding-center-safety > svg,
+.onboarding-center-next > svg {
+  flex: 0 0 auto;
+  color: var(--brand-strong);
+}
+.onboarding-center-next {
+  align-items: center;
+  border-left-color: var(--line-strong);
+  background: var(--surface-muted);
+}
+.onboarding-center-next > div {
+  min-width: 0;
+  flex: 1;
+}
+.onboarding-center-next p {
+  font-size: var(--fs-label);
+}
 .preference-section {
   display: grid;
   gap: 18px;
@@ -5572,6 +5659,22 @@ button:disabled {
   .onboarding-progress li {
     align-items: flex-start;
     flex-direction: column;
+  }
+  .onboarding-center-stages > li {
+    grid-template-columns: auto minmax(0, 1fr);
+    align-items: start;
+  }
+  .onboarding-center-stages > li > .btn-primary,
+  .onboarding-center-stages > li > .btn-secondary {
+    grid-column: 2;
+    justify-self: start;
+  }
+  .onboarding-center-next {
+    align-items: flex-start;
+    flex-wrap: wrap;
+  }
+  .onboarding-center-next > a {
+    width: 100%;
   }
   .onboarding-actions {
     align-items: stretch;

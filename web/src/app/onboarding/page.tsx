@@ -1,11 +1,21 @@
-import { notFound, redirect } from 'next/navigation';
+import { notFound } from 'next/navigation';
 import { getWorkspacePreferences } from '@/app/onboarding/actions';
+import { getActiveVision } from '@/app/actions';
+import { OnboardingCenter } from '@/components/onboarding-center';
 import { OnboardingWizard } from '@/components/onboarding-wizard';
 
 export default async function OnboardingPage() {
   if (process.env.PLANNER_DATA_MODEL !== 'canonical') notFound();
   const preferences = await getWorkspacePreferences();
-  if (preferences.onboardingCompletedAt) redirect('/settings/preferences');
+  const vision = preferences.onboardingCompletedAt ? await getActiveVision() : null;
+
+  if (preferences.onboardingCompletedAt) {
+    return (
+      <div className="page onboarding-page">
+        <OnboardingCenter hasVision={Boolean(vision)} />
+      </div>
+    );
+  }
 
   return (
     <div className="page onboarding-page">
