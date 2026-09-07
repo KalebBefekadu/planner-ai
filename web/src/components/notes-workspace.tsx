@@ -14,6 +14,7 @@ import {
   ArrowDown,
   ArrowUp,
   Bold,
+  ChevronRight,
   FileText,
   FolderTree,
   FileInput,
@@ -28,6 +29,7 @@ import {
   ListTree,
   ListTodo,
   Mic,
+  NotebookPen,
   Paperclip,
   Plus,
   RotateCcw,
@@ -493,7 +495,7 @@ export function NotesWorkspace({
       <aside className="notes-sidebar">
         <div className="notes-sidebar-heading">
           <div>
-            <p className="eyebrow">Vault</p>
+            <p className="eyebrow">Workspace</p>
             <h1>
               Notes <small aria-hidden="true">{notes.length}</small>
             </h1>
@@ -531,7 +533,14 @@ export function NotesWorkspace({
           />
         </form>
         <nav className="note-tree" aria-label="Notes">
-          {renderNoteLevel(null)}
+          {notes.length ? (
+            renderNoteLevel(null)
+          ) : (
+            <div className="note-tree-empty">
+              <NotebookPen size={17} aria-hidden="true" />
+              <p>Your pages will appear here.</p>
+            </div>
+          )}
         </nav>
       </aside>
 
@@ -540,6 +549,17 @@ export function NotesWorkspace({
           <>
             <div className="note-editor-header">
               <div className="note-title-group">
+                <nav className="note-editor-breadcrumb" aria-label="Note location">
+                  <span>Workspace</span>
+                  <ChevronRight size={13} aria-hidden="true" />
+                  <span>Notes</span>
+                  {selected.parentNoteId ? (
+                    <>
+                      <ChevronRight size={13} aria-hidden="true" />
+                      <span>{noteName(selected.parentNoteId)}</span>
+                    </>
+                  ) : null}
+                </nav>
                 <input
                   className="note-title-input"
                   value={title}
@@ -1334,10 +1354,23 @@ export function NotesWorkspace({
           </>
         ) : (
           <div className="note-empty">
-            <h2>No Note selected</h2>
-            <button className="btn-primary" type="button" onClick={() => newNote(null)}>
-              Create a Note
-            </button>
+            <span className="note-empty-mark" aria-hidden="true">
+              <NotebookPen size={24} />
+            </span>
+            <p className="eyebrow">Your workspace</p>
+            <h2>Start with a page that is yours</h2>
+            <p>
+              Write something new or bring a small Notion folder first. Everything stays reviewable
+              before it becomes part of your workspace.
+            </p>
+            <div className="note-empty-actions">
+              <button className="btn-primary" type="button" onClick={() => newNote(null)}>
+                Create a Note
+              </button>
+              <button className="btn-secondary" type="button" onClick={onRequestImport}>
+                Import your Notes
+              </button>
+            </div>
           </div>
         )}
       </section>
