@@ -1,7 +1,10 @@
 import { describe, expect, it } from 'vitest';
 import {
+  descendantIds,
   nextParentMove,
   nextSiblingMove,
+  parentCandidateIds,
+  placeUnderParent,
   type SiblingPosition,
   type TreePosition,
 } from '@/lib/notes/sibling-order';
@@ -120,5 +123,58 @@ describe('Note parent changes', () => {
       { id: 'child', parentNoteId: 'parent', sortKey: 1000 },
     ];
     expect(nextParentMove(exhausted, 'child', 'outdent')).toEqual({ outcome: 'exhausted' });
+  });
+});
+
+const branch: TreePosition[] = [
+  { id: 'root-a', parentNoteId: null, sortKey: 1000 },
+  { id: 'root-b', parentNoteId: null, sortKey: 2000 },
+  { id: 'child', parentNoteId: 'root-a', sortKey: 1000 },
+  { id: 'grandchild', parentNoteId: 'child', sortKey: 1000 },
+];
+
+describe('filing a Note under any parent', () => {
+  it('finds everything beneath a Note, not just its immediate children', () => {
+    expect([...descendantIds(branch, 'root-a')].sort()).toEqual(['child', 'grandchild']);
+    expect([...descendantIds(branch, 'grandchild')]).toEqual([]);
+  });
+
+  // Filing a Note under its own descendant would tear that branch out of the
+  // tree, so those destinations are never offered in the first place.
+  it('offers every destination except the Note itself and what hangs beneath it', () => {
+    expect(parentCandidateIds(branch, 'root-a').sort()).toEqual(['root-b']);
+    expect(parentCandidateIds(branch, 'grandchild').sort()).toEqual(['child', 'root-a', 'root-b']);
+  });
+
+  it('files a Note last among its new siblings', () => {
+    expect(placeUnderParent(branch, 'grandchild', null)).toEqual({
+      outcome: 'moved',
+      parentNoteId: null,
+      sortKey: 3000,
+    });
+    expect(placeUnderParent(branch, 'root-b', 'child')).toEqual({
+      outcome: 'moved',
+      parentNoteId: 'child',
+      sortKey: 2000,
+    });
+  });
+
+  it('files a Note first when its new parent has no children yet', () => {
+    expect(placeUnderParent(branch, 'root-b', 'grandchild')).toEqual({
+      outcome: 'moved',
+      parentNoteId: 'grandchild',
+      sortKey: 1000,
+    });
+  });
+
+  it('refuses a destination that would detach a branch or change nothing', () => {
+    expect(placeUnderParent(branch, 'root-a', 'child')).toEqual({ outcome: 'edge' });
+    expect(placeUnderParent(branch, 'root-a', 'grandchild')).toEqual({ outcome: 'edge' });
+    expect(placeUnderParent(branch, 'root-a', 'root-a')).toEqual({ outcome: 'edge' });
+    // Already filed there.
+    expect(placeUnderParent(branch, 'child', 'root-a')).toEqual({ outcome: 'edge' });
+    expect(placeUnderParent(branch, 'root-a', null)).toEqual({ outcome: 'edge' });
+    expect(placeUnderParent(branch, 'missing', null)).toEqual({ outcome: 'edge' });
+    expect(placeUnderParent(branch, 'child', 'missing')).toEqual({ outcome: 'edge' });
   });
 });

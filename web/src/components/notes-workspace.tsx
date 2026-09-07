@@ -15,6 +15,7 @@ import {
   ArrowUp,
   Bold,
   FileText,
+  FolderTree,
   FileInput,
   Heading2,
   IndentDecrease,
@@ -49,6 +50,7 @@ import {
   linkNoteAction,
   linkNoteGoal,
   linkNote,
+  fileNoteUnder,
   moveNoteToNewParent,
   moveNoteWithinParent,
   restoreNoteRevision,
@@ -61,7 +63,7 @@ import {
   type NoteKnowledgeContext,
   type NoteView,
 } from '@/app/notes/actions';
-import { nextParentMove, nextSiblingMove } from '@/lib/notes/sibling-order';
+import { nextParentMove, nextSiblingMove, parentCandidateIds } from '@/lib/notes/sibling-order';
 import { RichMarkdownEditor } from '@/components/rich-markdown-editor';
 import { useVoiceTranscription } from '@/lib/use-voice-transcription';
 import { extractPlannerMarkdownHeadings } from '@/lib/markdown/contract';
@@ -119,6 +121,7 @@ export function NotesWorkspace({
   const [error, setError] = useState<string | null>(null);
   const [tagText, setTagText] = useState(knowledge?.tags.join(', ') ?? '');
   const [targetNoteId, setTargetNoteId] = useState('');
+  const [filingParentId, setFilingParentId] = useState('');
   const [targetGoalId, setTargetGoalId] = useState('');
   const [targetActionId, setTargetActionId] = useState('');
   const [relationType, setRelationType] =
@@ -469,6 +472,19 @@ export function NotesWorkspace({
   }
 
   const availableTargets = notes.filter((note) => note.id !== selected?.id);
+  // A Note cannot be filed under itself or under anything hanging beneath it,
+  // because that would take the whole branch out of the tree. Those places are
+  // never offered, and the server checks again against the live hierarchy.
+  const filingCandidates = useMemo(() => {
+    if (!selected) return [];
+    const tree = notes.map((note) => ({
+      id: note.id,
+      parentNoteId: note.parentNoteId,
+      sortKey: note.sortKey,
+    }));
+    const allowed = new Set(parentCandidateIds(tree, selected.id));
+    return notes.filter((note) => allowed.has(note.id) && note.id !== selected.parentNoteId);
+  }, [notes, selected]);
   const noteName = (id: string) => notes.find((note) => note.id === id)?.title ?? 'Missing Note';
 
   return (
@@ -863,6 +879,52 @@ export function NotesWorkspace({
                   ) : (
                     <p className="note-inspector-empty">Add headings to create an outline</p>
                   )}
+                </section>
+                <section className="note-inspector-section">
+                  <h2>
+                    <FolderTree size={15} aria-hidden="true" />
+                    Filing
+                  </h2>
+                  <p className="note-inspector-note">
+                    {selected.parentNoteId
+                      ? `Filed under ${noteName(selected.parentNoteId)}`
+                      : 'Filed at the top level'}
+                  </p>
+                  <div className="note-link-creator">
+                    <select
+                      value={filingParentId}
+                      onChange={(event) => setFilingParentId(event.target.value)}
+                      aria-label="File this Note under"
+                    >
+                      <option value="">Choose a place</option>
+                      {selected.parentNoteId === null ? null : (
+                        <option value="root">Top level</option>
+                      )}
+                      {filingCandidates.map((note) => (
+                        <option key={note.id} value={note.id}>
+                          {note.title}
+                        </option>
+                      ))}
+                    </select>
+                    <button
+                      type="button"
+                      disabled={!filingParentId || isPending}
+                      onClick={() => {
+                        const destination = filingParentId === 'root' ? null : filingParentId;
+                        applyMove(async () => {
+                          const moved = await fileNoteUnder({
+                            id: selected.id,
+                            parentNoteId: destination,
+                            expectedVersion: versionRef.current,
+                          });
+                          setFilingParentId('');
+                          return moved;
+                        });
+                      }}
+                    >
+                      Move
+                    </button>
+                  </div>
                 </section>
                 <section className="note-inspector-section">
                   <h2>

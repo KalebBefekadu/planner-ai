@@ -104,3 +104,53 @@ export function nextParentMove(
     sortKey: (parent.sortKey + after.sortKey) / 2,
   };
 }
+
+// Every Note that sits somewhere beneath this one. Moving a Note under its own
+// descendant would detach that whole branch from the tree, so these are the
+// destinations that must never be offered.
+export function descendantIds(notes: TreePosition[], id: string): Set<string> {
+  const found = new Set<string>();
+  const visit = (parentNoteId: string) => {
+    for (const note of notes) {
+      if (note.parentNoteId === parentNoteId && !found.has(note.id)) {
+        found.add(note.id);
+        visit(note.id);
+      }
+    }
+  };
+  visit(id);
+  return found;
+}
+
+// Where a Note may be filed. Indent and outdent reach the Note above and the
+// grandparent; this reaches anywhere else the hierarchy allows, including back
+// out to the top level, which is expressed as a null parent.
+export function parentCandidateIds(notes: TreePosition[], id: string): string[] {
+  const forbidden = descendantIds(notes, id);
+  return notes.filter((note) => note.id !== id && !forbidden.has(note.id)).map((note) => note.id);
+}
+
+export function placeUnderParent(
+  notes: TreePosition[],
+  id: string,
+  parentNoteId: string | null
+): ParentMove {
+  const note = notes.find((candidate) => candidate.id === id);
+  if (!note) return { outcome: 'edge' };
+  // Filing a Note where it already sits is not a move.
+  if (note.parentNoteId === parentNoteId) return { outcome: 'edge' };
+  if (parentNoteId !== null) {
+    if (parentNoteId === id) return { outcome: 'edge' };
+    if (!notes.some((candidate) => candidate.id === parentNoteId)) return { outcome: 'edge' };
+    if (descendantIds(notes, id).has(parentNoteId)) return { outcome: 'edge' };
+  }
+  // A Note arriving from elsewhere goes last, where a person will look for what
+  // they just moved rather than having it appear in the middle of a level.
+  const existing = childrenOf(notes, parentNoteId).filter((child) => child.id !== id);
+  const last = existing[existing.length - 1];
+  return {
+    outcome: 'moved',
+    parentNoteId,
+    sortKey: last ? last.sortKey + 1000 : 1000,
+  };
+}

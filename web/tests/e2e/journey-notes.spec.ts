@@ -19,6 +19,14 @@ function treeNote(page: import('@playwright/test').Page, title: string) {
   });
 }
 
+// Open a Note and wait until the editor is actually showing it. Clicking a tree
+// item starts a navigation, so an assertion made straight afterwards can still
+// be reading the Note that was open before.
+async function openNote(page: import('@playwright/test').Page, title: string) {
+  await treeNote(page, title).click();
+  await expect(page.getByRole('textbox', { name: 'Note title' })).toHaveValue(title);
+}
+
 async function createRootNote(page: import('@playwright/test').Page, title: string, body: string) {
   // Waiting for a URL that merely has a note in it proves nothing when a Note
   // is already open: that pattern already matches, so the assertion passes
@@ -52,8 +60,7 @@ test('a Markdown Note persists across navigation instead of living only in the e
   await goTo(page, '/');
   await goTo(page, '/notes');
 
-  await treeNote(page, title).click();
-  await expect(page.getByRole('textbox', { name: 'Note title' })).toHaveValue(title);
+  await openNote(page, title);
   await expect(page.getByRole('textbox', { name: 'Note body, Markdown' })).toHaveValue(body);
 });
 
@@ -182,7 +189,7 @@ test('a Note can be reordered among its siblings and the new order survives relo
 
   // The last Note has nowhere further to fall, so that direction is offered as
   // unavailable rather than as a control that quietly does nothing.
-  await treeNote(page, 'Third decision').click();
+  await openNote(page, 'Third decision');
   await expect(page.getByRole('button', { name: 'Move note down' })).toBeDisabled();
   await page.getByRole('button', { name: 'Move note up' }).click();
   await expect.poll(treeTitles).toEqual(['First decision', 'Third decision', 'Second decision']);
@@ -194,7 +201,7 @@ test('a Note can be reordered among its siblings and the new order survives relo
 
   // The Note that reached the top can no longer rise, which is the same edge
   // condition from the other direction.
-  await treeNote(page, 'First decision').click();
+  await openNote(page, 'First decision');
   await expect(page.getByRole('button', { name: 'Move note up' })).toBeDisabled();
 });
 
@@ -234,11 +241,11 @@ test('a Note can be moved under and back out of another Note from the interface'
 
   // The first Note at a level has nothing above it to go under, and a root Note
   // has no parent to leave. Both are offered as unavailable.
-  await treeNote(page, 'Parent decision').click();
+  await openNote(page, 'Parent decision');
   await expect(page.getByRole('button', { name: 'Make child of the note above' })).toBeDisabled();
   await expect(page.getByRole('button', { name: 'Move note out of its parent' })).toBeDisabled();
 
-  await treeNote(page, 'Moving decision').click();
+  await openNote(page, 'Moving decision');
   await page.getByRole('button', { name: 'Make child of the note above' }).click();
   await expect.poll(treeShape).toEqual([
     { title: 'Parent decision', depth: 0 },
@@ -257,12 +264,65 @@ test('a Note can be moved under and back out of another Note from the interface'
 
   // Leaving a parent must land the Note directly after it, beside the material
   // it came from, rather than at the end of the level.
-  await treeNote(page, 'Moving decision').click();
+  await openNote(page, 'Moving decision');
   await page.getByRole('button', { name: 'Move note out of its parent' }).click();
   await expect.poll(treeShape).toEqual([
     { title: 'Parent decision', depth: 0 },
     { title: 'Moving decision', depth: 0 },
     { title: 'Later decision', depth: 0 },
+  ]);
+});
+
+// Indent and outdent reach the Note above and the grandparent. Filing reaches
+// anywhere else the hierarchy allows, which is what moving a Note into a
+// different branch actually requires.
+test('a Note can be filed under a Note in another branch, and never under itself', async ({
+  workspace,
+}) => {
+  const { page } = workspace;
+
+  await goTo(page, '/notes');
+  await createRootNote(page, 'Research', 'Where findings are kept.');
+  await createRootNote(page, 'Loose finding', 'This belongs under Research.');
+
+  const treeShape = () =>
+    page.locator('.note-tree .note-tree-item').evaluateAll((items) =>
+      items.map((item) => {
+        let depth = -1;
+        for (let node = item.parentElement; node; node = node.parentElement) {
+          if (node.classList.contains('note-tree-level')) depth += 1;
+        }
+        return { title: item.querySelector('span')?.textContent ?? '', depth };
+      })
+    );
+
+  await openNote(page, 'Loose finding');
+  await expect(page.getByText('Filed at the top level')).toBeVisible();
+  await page.getByLabel('File this Note under').selectOption({ label: 'Research' });
+  await page.getByRole('button', { name: 'Move', exact: true }).click();
+
+  await expect.poll(treeShape).toEqual([
+    { title: 'Research', depth: 0 },
+    { title: 'Loose finding', depth: 1 },
+  ]);
+  await expect(page.getByText('Filed under Research')).toBeVisible();
+
+  // Filing a Note under its own descendant would take that branch out of the
+  // tree, so the destination is never offered in the first place.
+  await openNote(page, 'Research');
+  const destinations = page.getByLabel('File this Note under');
+  await expect(destinations).toBeVisible();
+  expect(await destinations.locator('option').allInnerTexts()).toEqual(['Choose a place']);
+
+  // The filing persists, and a Note can be sent back to the top level.
+  await goTo(page, '/');
+  await goTo(page, '/notes');
+  await openNote(page, 'Loose finding');
+  await page.getByLabel('File this Note under').selectOption({ label: 'Top level' });
+  await page.getByRole('button', { name: 'Move', exact: true }).click();
+  await expect.poll(treeShape).toEqual([
+    { title: 'Research', depth: 0 },
+    { title: 'Loose finding', depth: 0 },
   ]);
 });
 
@@ -388,8 +448,7 @@ test('a downloaded vault re-imports as an exact match and rebuilds Notes that ar
   // duplicate detection only considers Notes that are still live.
   page.on('dialog', (confirmation) => void confirmation.accept());
   for (const title of [childTitle, parentTitle]) {
-    await treeNote(page, title).click();
-    await expect(page.getByRole('textbox', { name: 'Note title' })).toHaveValue(title);
+    await openNote(page, title);
     await page.getByRole('button', { name: 'Archive note' }).click();
     await expect(treeNote(page, title)).toHaveCount(0);
   }

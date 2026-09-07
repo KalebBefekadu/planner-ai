@@ -2575,6 +2575,12 @@ button:disabled {
   color: var(--muted);
   font-size: var(--fs-label);
 }
+/* States where a Note currently sits, rather than an absence of content. */
+.note-inspector-note {
+  margin: 4px 0 8px;
+  color: var(--muted);
+  font-size: var(--fs-label);
+}
 
 .note-attachment-upload {
   align-items: center;

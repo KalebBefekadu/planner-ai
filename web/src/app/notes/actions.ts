@@ -2,7 +2,7 @@
 
 import { randomUUID } from 'node:crypto';
 import { revalidatePath } from 'next/cache';
-import { nextParentMove, nextSiblingMove } from '@/lib/notes/sibling-order';
+import { nextParentMove, nextSiblingMove, placeUnderParent } from '@/lib/notes/sibling-order';
 import { executeOperation } from '@/lib/operations';
 import { createClient } from '@/lib/supabase/server';
 
@@ -402,6 +402,57 @@ export async function moveNoteToNewParent(input: {
   // A Note with nothing above it cannot be indented, and a root Note has no
   // parent to leave. Neither is an error; the control is simply unavailable.
   if (move.outcome === 'edge') return null;
+  if (move.outcome === 'exhausted') {
+    throw new Error('There is no room left beside this Note. Move a neighbour first.');
+  }
+
+  const note = await executeOperation(
+    supabase,
+    'note.move.v1',
+    {
+      id: input.id,
+      parentNoteId: move.parentNoteId,
+      sortKey: move.sortKey,
+      expectedVersion: input.expectedVersion,
+    },
+    { idempotencyKey: randomUUID(), surface: 'ui' }
+  );
+  revalidatePath('/notes');
+  return mapNote(note);
+}
+
+// Filing a Note anywhere in the hierarchy, rather than only under the Note
+// above it or out to its grandparent. The destination is chosen explicitly, so
+// this is the move that reaches a Note in another branch entirely.
+export async function fileNoteUnder(input: {
+  id: string;
+  parentNoteId: string | null;
+  expectedVersion: number;
+}) {
+  const { supabase, workspaceId } = await notesClient();
+  const { data: tree, error: treeError } = await supabase
+    .from('notes')
+    .select('id,parent_note_id,sort_key')
+    .eq('workspace_id', workspaceId)
+    .is('archived_at', null)
+    .is('trashed_at', null)
+    .order('sort_key');
+  if (treeError || !tree) throw new Error('Unable to read the surrounding Notes.');
+
+  // The destination is re-checked here against the live tree rather than
+  // trusted from the page. A stale page could otherwise ask to file a Note
+  // under something that has since become its own descendant, which would take
+  // that whole branch out of the tree.
+  const move = placeUnderParent(
+    tree.map((note) => ({
+      id: note.id as string,
+      parentNoteId: note.parent_note_id as string | null,
+      sortKey: Number(note.sort_key),
+    })),
+    input.id,
+    input.parentNoteId
+  );
+  if (move.outcome === 'edge') throw new Error('This Note cannot be filed there.');
   if (move.outcome === 'exhausted') {
     throw new Error('There is no room left beside this Note. Move a neighbour first.');
   }
