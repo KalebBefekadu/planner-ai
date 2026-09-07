@@ -231,7 +231,7 @@ test('a stepped-up session can download a portable Markdown Notes vault', async 
   expect(await vault.failure()).toBeNull();
 });
 
-test('a downloaded vault re-imports as an exact match of its source Notes', async ({
+test('a downloaded vault re-imports as an exact match and rebuilds Notes that are gone', async ({
   workspace,
 }) => {
   const { page } = workspace;
