@@ -51,6 +51,8 @@ jobs:
         run: |
           npm run types:generate
           test -s src/types/supabase.generated.ts
+          npx prettier --write src/types/supabase.generated.ts
+          git diff --exit-code -- src/types/supabase.generated.ts
 
   browser:
     runs-on: ubuntu-latest
