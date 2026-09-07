@@ -22,18 +22,19 @@ Fresh checks on 2026-09-07:
 - TypeScript passes with no emitted output.
 - Prettier passes for source and tests.
 - Next.js production build passes and generates 38 routes, including canonical `/planner` and compatibility redirect `/goals`.
-- Vitest passes: 43 files, 514 tests.
-- pgTAP passes: 49 files, 937 assertions.
+- Vitest passes: 43 files, 516 tests.
+- pgTAP passes: 49 files, 942 assertions.
 - The local Supabase reset/migration chain and database advisors passed in the preceding full verification.
-- The canonical authenticated Playwright corpus passes 148 desktop and mobile tests with 2 skipped, including Capture, Planner, Calendar scheduling, MFA-protected Notes vault export and round-trip re-import, Today, authenticated accessibility, mobile keyboard navigation, auth-boundary, and assistant-outage journeys.
+- The canonical authenticated Playwright corpus passes 148 desktop and mobile tests with 2 skipped, including Capture, Planner, Calendar scheduling, MFA-protected Notes vault export, round-trip re-import, and restore into a workspace that no longer holds the originals, Today, authenticated accessibility, mobile keyboard navigation, auth-boundary, and assistant-outage journeys.
 - The authenticated assistant outage journey proves a failed request remains visible and can be retried without duplicating user input.
 - The manual MCP lifecycle has browser evidence on desktop and mobile: an AAL2 session creates a read-scoped token, a standards-compliant client discovers only its granted tool, and revocation immediately returns `401`. This work found and corrected a Postgres ambiguity that had caused every otherwise-valid manual token to be rejected.
-- The Notes vault now round-trips. A downloaded vault is re-imported in the authenticated Notes journey and every Note returns as an exact duplicate, with nothing unsupported and no export frontmatter left in the body. Building that evidence found five defects, each of which silently degraded an exported vault rather than failing visibly:
+- The Notes vault now round-trips and restores. A downloaded vault is re-imported in the authenticated Notes journey and every Note returns as an exact duplicate, with nothing unsupported and no export frontmatter left in the body. The same journey then archives the originals and imports the vault again, which is the case a person actually needs: both Notes are recreated and the child returns beneath its parent rather than flattened to the root. Restored Notes now also keep the sibling order the manifest recorded. Building that evidence found six defects, each of which silently degraded an exported vault rather than failing visibly:
   - the ZIP reader never read the vault manifest, so every archived vault fell back to generic folder import and lost the identity and hierarchy the manifest carried;
   - export frontmatter was never stripped back off, so restored bodies carried raw export metadata;
   - a Note whose title matched a de-duplicated filename overwrote another Note's body in the archive;
   - the import validated hierarchy as folder nesting, so a vault containing a nested Note was rejected outright, and its staging order could create a child before its parent and silently reparent it to the root;
-  - export appended a trailing newline the stored body did not have, so restoring a vault into its own workspace reported all of it as new instead of recognising what was already there.
+  - export appended a trailing newline the stored body did not have, so restoring a vault into its own workspace reported all of it as new instead of recognising what was already there;
+  - the import discarded the sibling order the manifest recorded, so every restored Note was renumbered by staging order and siblings came back in an order the owner never chose.
 - The dependency audit reports no known vulnerabilities at the configured high-severity threshold.
 
 Implemented local capability includes verified authentication boundaries, canonical relational migrations, owner-isolating RLS, versioned Operation dispatch, Activity and undo, Today, Vision/Goals/Actions, Planner calendar, Capture and voice transcription routes, atomic Proposals, Weekly/Monthly/Quarterly Review, Notes with source-authoritative Markdown and a guarded rich-editor adapter, exact search, onboarding, settings, notifications, Conversations, explicit Memory, AI Exclusion, Trash, export, cancellable account deletion, PWA Capture recovery, assistant evidence/safety controls, GenUI schema validation, and scoped MCP endpoints.
@@ -48,7 +49,7 @@ The daily-planning loop now has browser evidence that a typed Capture persists i
 - Read-only catalog inspection found two remote-only migration-history entries whose effects match reviewed local hardening migrations.
 - The two duplicate remote migration entries were reconciled to the reviewed local versions.
 - A fresh encrypted backup on 2026-09-07 was checksummed, decrypted, and restored into an isolated local Supabase Postgres instance: 55 public tables, all 55 RLS-enabled, and 128 public functions passed validation.
-- Hosted migration history remains aligned through `20260906114500_recoverable_note_attachment_removal.sql`. Read-only preflight correctly stops on three newer local migrations: the two Notes-vault migrations (`20260906181500` and `20260906190000`) and the MCP manual-token authentication repair (`20260907091945`); none has been applied to production.
+- Hosted migration history remains aligned through `20260906114500_recoverable_note_attachment_removal.sql`. Read-only preflight correctly stops on four newer local migrations: the three Notes-vault migrations (`20260906181500`, `20260906190000`, and `20260907093121`) and the MCP manual-token authentication repair (`20260907091945`); none has been applied to production.
 - Count-only production verification found 53 public tables, all 53 RLS-enabled, two Auth users mapped to two Workspaces, no unmigrated users, and 56 registered Operations.
 - Vercel built release commit `1d570e4` successfully, and a read-only inspection on 2026-09-06 found current `planner-ai` production deployments in Ready state. Their team-scoped production aliases redirect to Vercel SSO before reaching the application, so anonymous application smoke tests remain blocked at the platform edge.
 - `planner-ai.vercel.app` is not this application: it still serves the older Planner-AI Telegram-bot site and must not be published as the current product URL.
@@ -65,11 +66,11 @@ Legacy tables remain available for rollback while the deployed application is sw
 - Legacy/canonical mode branches remain until the deployed canonical release is verified and the rollback window closes.
 - Several north-star screens are illustrative rather than connected to real Operations.
 - Notes now offer a source-authoritative rich editor for a proven reversible Markdown subset, including GFM task lists and tables, but they are not yet the complete editor, graph, canvas, or database system in the long-term vision.
-- Vault export and import now round-trip the supported corpus without loss, and AI Exclusion survives a restore so an excluded Note is not quietly returned to AI retrieval. Re-import still discards per-Note sort order, which the manifest records and the import ignores, so a restored vault keeps its hierarchy but not its ordering within a parent.
+- Vault export and import now round-trip the supported corpus without loss. AI Exclusion survives a restore so an excluded Note is not quietly returned to AI retrieval, and a restored Note keeps the exact sibling order the manifest recorded, including the fractional keys a reorder produces. Notes carry no reorder affordance in the interface yet, so ordering can currently only be changed through the assistant or MCP.
 
 ### Production data and operations
 
-- Canonical schema cutover is complete through the prior release. The two newer Notes-vault migrations and the MCP manual-token authentication repair remain pending a recorded maintenance window, remote pgTAP plan, rollback owner, and post-cutover authenticated smoke plan; the Vercel application-mode switch and authenticated smoke tests also still require access to the current Vercel project settings.
+- Canonical schema cutover is complete through the prior release. The three newer Notes-vault migrations and the MCP manual-token authentication repair remain pending a recorded maintenance window, remote pgTAP plan, rollback owner, and post-cutover authenticated smoke plan; the Vercel application-mode switch and authenticated smoke tests also still require access to the current Vercel project settings.
 - Database backup integrity and local isolated restoration are proven; off-machine custody and a hosted recovery-project drill covering Auth, Storage, and managed configuration remain unverified.
 - The production database has a service-role-only lifecycle worker-run ledger, but Vercel production environment values, deployment protection, production domain ownership, custom SMTP/domain, external alert routing, cron ownership, and authenticated production journeys are not fully re-verified.
 

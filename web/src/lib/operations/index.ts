@@ -720,6 +720,11 @@ export const operationDefinitions = {
                 parentSourcePath: z.string().min(1).max(1000).nullable(),
                 unsupportedReason: z.string().max(500).nullable(),
                 aiExcluded: z.boolean(),
+                // Only an exported vault records sibling order. Any other
+                // source sends null and keeps the dependency-safe staging
+                // order. The bound is the integer headroom of
+                // notes.sort_key numeric(24, 12).
+                sourceSortKey: z.number().min(-999_999_999_999).max(999_999_999_999).nullable(),
               })
               .strict()
           )

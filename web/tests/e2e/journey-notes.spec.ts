@@ -256,6 +256,46 @@ test('a downloaded vault re-imports as an exact match of its source Notes', asyn
   await expect(dialog.getByLabel('Import preview')).toContainText(parentTitle);
   await expect(dialog.getByLabel('Import preview')).toContainText(childTitle);
   await expect(dialog.getByLabel('Import preview')).not.toContainText('planner_ai_export');
+  await dialog.getByRole('button', { name: 'Close import' }).click();
+
+  // Recognising duplicates proves the vault is readable, not that it can
+  // rebuild anything. A vault is a recovery format, so the case that matters
+  // is restoring into a workspace that no longer holds the originals.
+  // Archiving them is what makes the next import a real creation: exact
+  // duplicate detection only considers Notes that are still live.
+  page.on('dialog', (confirmation) => void confirmation.accept());
+  for (const title of [childTitle, parentTitle]) {
+    await page.getByRole('button', { name: title, exact: true }).click();
+    await expect(page.getByRole('textbox', { name: 'Note title' })).toHaveValue(title);
+    await page.getByRole('button', { name: 'Archive note' }).click();
+    await expect(page.getByRole('button', { name: title, exact: true })).toHaveCount(0);
+  }
+
+  await page.getByRole('button', { name: 'Import Notes' }).click();
+  await dialog.getByLabel('Source').selectOption('generic');
+  await dialog
+    .locator('input[type="file"]')
+    .first()
+    .setInputFiles({
+      name: vault.suggestedFilename(),
+      mimeType: 'application/zip',
+      buffer: readFileSync(vaultPath as string),
+    });
+
+  // Nothing may be rejected or skipped. A vault records each Note's order
+  // within its parent, and that recorded order has to validate and commit
+  // rather than turn a restorable vault into an unsupported one.
+  await expect(summary).toContainText('0Duplicates');
+  await expect(summary).toContainText('0Unsupported');
+  await dialog.getByRole('button', { name: 'Import 2' }).click();
+  await expect(dialog.getByText('2 Notes imported', { exact: true })).toBeVisible();
+  await dialog.getByRole('button', { name: 'Done' }).click();
+
+  // Both Notes come back, and the child comes back beneath its parent rather
+  // than flattened to the root.
+  await goTo(page, '/notes');
+  await expect(page.getByRole('button', { name: parentTitle, exact: true })).toBeVisible();
+  await expect(page.getByRole('button', { name: childTitle, exact: true })).toBeVisible();
 });
 
 test('a supported attachment is retained in quarantine instead of becoming an unsafe download', async ({

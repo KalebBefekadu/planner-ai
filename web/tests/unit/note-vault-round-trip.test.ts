@@ -42,8 +42,35 @@ describe('Notes vault export/import round trip', () => {
       expect(restored, `Note ${source.title} survived the round trip`).toBeDefined();
       expect(restored!.title).toBe(source.title);
       expect(restored!.bodyMarkdown).toBe(source.body_markdown);
+      expect(restored!.sourceSortKey).toBe(source.sort_key);
       expect(restored!.unsupportedReason).toBeNull();
     }
+  });
+
+  // Reordering a Note writes the midpoint between its new neighbours, so a
+  // real vault carries fractional sort keys. Rejecting or truncating them
+  // would either refuse the vault outright or collapse siblings into ties.
+  it('preserves a fractional sibling order through a full export and re-import', async () => {
+    const notes = [
+      note(1, { title: 'Moved Between', sort_key: 1500.5 }),
+      note(2, { title: 'Stayed Put', sort_key: 1000 }),
+    ];
+
+    const candidates = await roundTrip(notes);
+
+    expect(candidates.find((item) => item.title === 'Moved Between')!.sourceSortKey).toBe(1500.5);
+    expect(candidates.find((item) => item.title === 'Stayed Put')!.sourceSortKey).toBe(1000);
+  });
+
+  it('records no sibling order for an import that is not a vault', async () => {
+    const candidates = candidatesFromVaultOrFiles([
+      { path: 'Inbox/Loose Note.md', bytes: Buffer.from('# Loose Note\n\nBody.') },
+    ]);
+
+    // A folder import also synthesises the parent folder as a Note, and
+    // neither it nor the file carries an order the owner chose.
+    expect(candidates.length).toBeGreaterThan(0);
+    expect(candidates.map((item) => item.sourceSortKey)).toEqual(candidates.map(() => null));
   });
 
   it('preserves AI Exclusion so a restored Note is not returned to retrieval', async () => {

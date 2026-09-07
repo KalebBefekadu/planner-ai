@@ -1,5 +1,5 @@
 begin;
-select plan(9);
+select plan(14);
 
 insert into auth.users (
   id, instance_id, aud, role, email, encrypted_password, email_confirmed_at,
@@ -108,6 +108,54 @@ select lives_ok(
     'vault-exclusion-commit-0001'
   )$$,
   'the excluded Note commits'
+);
+
+
+-- A vault records each Note's order within its parent. Discarding it renumbers
+-- restored siblings by staging order, so a Note the owner deliberately placed
+-- last comes back first. Reordering writes the midpoint between neighbours, so
+-- the recorded key is routinely fractional and must survive as written.
+select lives_ok(
+  $$select public.execute_ui_operation(
+    'note.import-preview.v1',
+    '{
+      "sourceName":"ordering.zip",
+      "sourceType":"generic",
+      "items":[
+        {"sourcePath":"planner-ai-vault/dddddddd-1111-1111-1111-111111111111","title":"Ordered First","bodyMarkdown":"First body","parentSourcePath":null,"unsupportedReason":null,"aiExcluded":false,"sourceSortKey":1500.5},
+        {"sourcePath":"planner-ai-vault/dddddddd-2222-2222-2222-222222222222","title":"Ordered Second","bodyMarkdown":"Second body","parentSourcePath":null,"unsupportedReason":null,"aiExcluded":false,"sourceSortKey":1200}
+      ]
+    }',
+    'vault-ordering-0001'
+  )$$,
+  'a vault records sibling order per Note'
+);
+select is(
+  (select source_sort_key from public.note_import_items where title = 'Ordered First'),
+  1500.5::numeric(24, 12),
+  'a fractional recorded order is staged without truncation'
+);
+select lives_ok(
+  $$select public.execute_ui_operation(
+    'note.import-commit.v1',
+    (select json_build_object('jobId', id, 'batchSize', 50)::text
+     from public.note_import_jobs where source_name = 'ordering.zip')::jsonb,
+    'vault-ordering-commit-0001'
+  )$$,
+  'the ordered vault commits'
+);
+select is(
+  (select sort_key from public.notes where title = 'Ordered First'),
+  1500.5::numeric(24, 12),
+  'a restored Note keeps the exact order the vault recorded'
+);
+-- Staging order alone would have placed "Ordered First" before "Ordered
+-- Second"; the recorded keys reverse them, which is the owner's real order.
+select is(
+  (select string_agg(title, ',' order by sort_key)
+   from public.notes where title like 'Ordered %'),
+  'Ordered Second,Ordered First',
+  'restored siblings sort by the recorded order, not by staging order'
 );
 
 select * from finish();

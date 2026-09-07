@@ -25,7 +25,21 @@ export type NoteImportCandidate = {
   // Only an exported vault carries AI Exclusion. Files from any other source
   // are normalised to false by candidatesFromVaultOrFiles.
   aiExcluded?: boolean;
+  // Only an exported vault carries sibling order. Files from any other source
+  // are normalised to null by candidatesFromVaultOrFiles and fall back to the
+  // dependency-safe staging order.
+  sourceSortKey?: number | null;
 };
+
+// notes.sort_key is numeric(24, 12), so a manifest value has twelve integer
+// digits of headroom. Reordering a Note writes the midpoint between its new
+// neighbours, so a real vault carries fractional keys and only a non-finite or
+// out-of-range value is invalid.
+const MAX_SORT_KEY = 999_999_999_999;
+
+function isRestorableSortKey(value: unknown): value is number {
+  return typeof value === 'number' && Number.isFinite(value) && Math.abs(value) <= MAX_SORT_KEY;
+}
 
 const textExtensions = new Set(['.md', '.markdown', '.txt', '.csv']);
 
@@ -230,7 +244,8 @@ function vaultCandidates(files: ImportSourceFile[]) {
   return manifest.notes.map((note) => {
     if (
       !/^[0-9a-f-]{36}$/i.test(note.id) ||
-      (note.parentNoteId !== null && !ids.has(note.parentNoteId))
+      (note.parentNoteId !== null && !ids.has(note.parentNoteId)) ||
+      !isRestorableSortKey(note.sortKey)
     ) {
       throw new Error('The Planner AI vault manifest contains an invalid Note hierarchy.');
     }
@@ -251,13 +266,18 @@ function vaultCandidates(files: ImportSourceFile[]) {
       bodyMarkdown: frontmatter ? text.slice(frontmatter[0].length) : text,
       unsupportedReason: null,
       aiExcluded,
+      sourceSortKey: note.sortKey,
     } satisfies NoteImportCandidate;
   });
 }
 
 export function candidatesFromVaultOrFiles(files: ImportSourceFile[]) {
   const candidates = vaultCandidates(files) ?? candidatesFromFiles(files);
-  return candidates.map((candidate) => ({ aiExcluded: false, ...candidate }));
+  return candidates.map((candidate) => ({
+    aiExcluded: false,
+    sourceSortKey: null,
+    ...candidate,
+  }));
 }
 
 function openZip(buffer: Buffer) {

@@ -1467,6 +1467,7 @@ export type Database = {
           reason: string | null;
           sort_order: number;
           source_path: string;
+          source_sort_key: number | null;
           target_note_id: string | null;
           title: string;
           workspace_id: string;
@@ -1484,6 +1485,7 @@ export type Database = {
           reason?: string | null;
           sort_order: number;
           source_path: string;
+          source_sort_key?: number | null;
           target_note_id?: string | null;
           title: string;
           workspace_id: string;
@@ -1501,6 +1503,7 @@ export type Database = {
           reason?: string | null;
           sort_order?: number;
           source_path?: string;
+          source_sort_key?: number | null;
           target_note_id?: string | null;
           title?: string;
           workspace_id?: string;
