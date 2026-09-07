@@ -7,6 +7,17 @@ import { scanTest as test, expect, goTo } from './support/workspace';
 
 const surfaces = ['/', '/planner', '/notes', '/review', '/settings/preferences'] as const;
 
+// Both of these set the conditions they measure -- the viewport for reflow, the
+// media preference for motion -- so the device profile a project supplies makes
+// no difference to either. Running them in both projects would repeat identical
+// work against the same server rather than covering anything more.
+test.beforeEach(({}, testInfo) => {
+  test.skip(
+    testInfo.project.name !== 'chromium',
+    'These conditions are set by the test, not by the device profile.'
+  );
+});
+
 // WCAG 2.1 reflow: at 320 CSS pixels wide, which is a 1280 pixel window zoomed
 // to 400 percent, content must reflow into one column rather than forcing a
 // person to scroll sideways to read a line. Horizontal scrolling on the page

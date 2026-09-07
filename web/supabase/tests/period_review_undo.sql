@@ -124,7 +124,7 @@ select throws_ok(
     ),
     'period-undo-conflict-apply-0001'
   )$$,
-  '40001', 'undo_conflict',
+  'P0001', 'undo_conflict',
   'Undo refuses to remove a Review that changed later'
 );
 select is(

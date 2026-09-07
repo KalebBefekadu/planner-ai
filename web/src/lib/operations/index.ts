@@ -1063,13 +1063,32 @@ export type OperationOutput<TId extends OperationId> = z.output<
 >;
 
 export class OperationFailure extends Error {
+  // A production build strips the message off any error thrown out of a Server
+  // Action or Server Component, replacing it with a generic React error to
+  // avoid leaking server internals. Every message here is written for the
+  // person and carries nothing private, so the useful text is put on `digest`,
+  // which is the one field React does carry across that boundary.
+  readonly digest: string;
+
   constructor(
     readonly code: string,
     message: string
   ) {
     super(message);
     this.name = 'OperationFailure';
+    this.digest = `${code}: ${message}`;
   }
+}
+
+const digestPrefix = /^([a-z0-9_]+): /;
+
+// Reads the message back off whichever side of that boundary it survived on.
+export function operationFailureMessage(error: unknown): string | null {
+  if (error instanceof OperationFailure) return error.message;
+  const digest = (error as { digest?: unknown } | null)?.digest;
+  if (typeof digest !== 'string') return null;
+  const match = digestPrefix.exec(digest);
+  return match ? digest.slice(match[0].length) : null;
 }
 
 function stableFailure(message: string) {

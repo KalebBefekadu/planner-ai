@@ -95,7 +95,7 @@ select throws_ok(
     ),
     'trash-conflict-undo-0001'
   )$$,
-  '40001', 'undo_conflict',
+  'P0001', 'undo_conflict',
   'Undo refuses an already-restored Trash batch'
 );
 select ok((select trashed_at is null from public.notes where title = 'Trash Undo Note'),

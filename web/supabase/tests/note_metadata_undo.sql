@@ -281,7 +281,7 @@ select throws_ok(
     ),
     'metadata-tags-conflict-undo-0001'
   )$$,
-  '40001', 'undo_conflict',
+  'P0001', 'undo_conflict',
   'tag undo refuses to overwrite a newer set'
 );
 select is(

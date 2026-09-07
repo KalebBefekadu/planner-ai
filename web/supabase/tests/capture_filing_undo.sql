@@ -108,7 +108,7 @@ select throws_ok(
     ),
     'capture-conflict-undo-0001'
   )$$,
-  '40001', 'undo_conflict',
+  'P0001', 'undo_conflict',
   'filing undo refuses to erase or misstate later work'
 );
 select is((select count(*)::integer from public.capture_note_links), 2,

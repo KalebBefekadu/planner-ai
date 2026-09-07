@@ -163,7 +163,7 @@ select throws_ok(
       'dueOn', null
     )::text
   ),
-  '40001', 'version_conflict_or_not_found', 'stale Goal edits are rejected'
+  'P0001', 'version_conflict_or_not_found', 'stale Goal edits are rejected'
 );
 select is(
   (select count(*)::integer from public.operation_receipts

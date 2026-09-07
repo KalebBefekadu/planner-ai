@@ -270,7 +270,7 @@ select throws_ok(
       'expectedVersion', 1
     )::text
   ),
-  '40001', 'version_conflict_or_not_found',
+  'P0001', 'version_conflict_or_not_found',
   'one failed item rejects the whole batch'
 );
 select is(
@@ -306,7 +306,7 @@ select throws_ok(
       'expectedVersion', 1
     )::text
   ),
-  '40001', 'version_conflict_or_not_found',
+  'P0001', 'version_conflict_or_not_found',
   'a batch cannot change while its source Capture is in Trash'
 );
 

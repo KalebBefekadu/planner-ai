@@ -14,6 +14,7 @@ import {
 import { useRouter } from 'next/navigation';
 import { AsyncStatus } from '@/components/async-status';
 import { completeGuidedOnboarding, type WorkspacePreferences } from '@/app/onboarding/actions';
+import { actionFailureMessage } from '@/lib/operations/failure-message';
 
 const days = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
 const steps = ['Rhythm', 'Direction', 'First moves'];
@@ -35,7 +36,7 @@ function todayIn(timezone: string) {
 }
 
 function errorMessage(error: unknown) {
-  return error instanceof Error ? error.message : 'Workspace setup could not be completed.';
+  return actionFailureMessage(error, 'Workspace setup could not be completed.');
 }
 
 export function OnboardingWizard({ initial }: { initial: WorkspacePreferences }) {

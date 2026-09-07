@@ -172,7 +172,7 @@ select throws_ok(
     ),
     'archive-undo-conflict-apply-0001'
   )$$,
-  '40001', 'undo_conflict',
+  'P0001', 'undo_conflict',
   'Undo refuses to overwrite a later Action archive'
 );
 select is(

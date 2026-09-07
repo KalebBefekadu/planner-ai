@@ -4,11 +4,12 @@ import { useMemo, useState, useTransition } from 'react';
 import { ArrowRight, Save, ShieldCheck } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import { saveWorkspacePreferences, type WorkspacePreferences } from '@/app/onboarding/actions';
+import { actionFailureMessage } from '@/lib/operations/failure-message';
 
 const days = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
 
 function errorMessage(error: unknown) {
-  return error instanceof Error ? error.message : 'Workspace preferences could not be saved.';
+  return actionFailureMessage(error, 'Workspace preferences could not be saved.');
 }
 
 export function WorkspacePreferencesForm({

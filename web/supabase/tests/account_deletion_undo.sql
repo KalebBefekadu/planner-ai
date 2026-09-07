@@ -103,7 +103,7 @@ select throws_ok(
     ),
     'deletion-undo-conflict-apply-0001'
   )$$,
-  '40001', 'undo_conflict',
+  'P0001', 'undo_conflict',
   'Undo refuses an independently canceled deletion request'
 );
 select is(

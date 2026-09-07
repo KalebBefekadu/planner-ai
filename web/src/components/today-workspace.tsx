@@ -24,9 +24,10 @@ import {
 } from '@/app/today/actions';
 import { CoachingCue } from '@/components/coaching-cue';
 import { todayCoachingCue } from '@/lib/coaching';
+import { actionFailureMessage } from '@/lib/operations/failure-message';
 
 function errorMessage(error: unknown) {
-  return error instanceof Error ? error.message : 'Today could not be updated.';
+  return actionFailureMessage(error, 'Today could not be updated.');
 }
 
 function dateLabel(value: string | null, today: string) {

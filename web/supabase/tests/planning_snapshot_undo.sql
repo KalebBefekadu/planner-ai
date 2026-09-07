@@ -319,7 +319,7 @@ select throws_ok(
     ),
     'planning-memory-conflict-undo-0001'
   )$$,
-  '40001', 'undo_conflict',
+  'P0001', 'undo_conflict',
   'undo refuses to overwrite a newer Memory update'
 );
 select is((select statement from public.memories where statement = 'Newest memory'),

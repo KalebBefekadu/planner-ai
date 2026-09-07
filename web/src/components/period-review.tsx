@@ -7,6 +7,7 @@ import { CoachingCue } from '@/components/coaching-cue';
 import { ReviewTabs } from '@/components/review-tabs';
 import { ReviewAiProposal } from '@/components/review-ai-proposal';
 import { periodReviewCoachingCue } from '@/lib/coaching';
+import { actionFailureMessage } from '@/lib/operations/failure-message';
 
 function formatPeriodDate(value: string) {
   return new Intl.DateTimeFormat('en-US', {
@@ -17,7 +18,7 @@ function formatPeriodDate(value: string) {
 }
 
 function errorMessage(error: unknown) {
-  return error instanceof Error ? error.message : 'The review could not be completed.';
+  return actionFailureMessage(error, 'The review could not be completed.');
 }
 
 export function PeriodReview({ data }: { data: PeriodReviewData }) {

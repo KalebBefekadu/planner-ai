@@ -158,7 +158,7 @@ select throws_ok(
     ),
     'import-undo-conflict-apply-0001'
   )$$,
-  '40001', 'undo_conflict',
+  'P0001', 'undo_conflict',
   'Undo refuses to delete an imported Note edited later'
 );
 select is((select count(*)::integer from public.notes), 2,

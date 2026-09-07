@@ -110,7 +110,7 @@ select throws_ok(
     ),
     'vision-dependent-undo-0001'
   )$$,
-  '40001', 'undo_conflict',
+  'P0001', 'undo_conflict',
   'first-Vision undo refuses to orphan dependent Goals'
 );
 select is((select count(*)::integer from public.visions), 1,

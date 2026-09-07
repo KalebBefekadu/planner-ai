@@ -141,7 +141,7 @@ select throws_ok(
     ),
     'onboarding-undo-conflict-apply-0001'
   )$$,
-  '40001', 'undo_conflict',
+  'P0001', 'undo_conflict',
   'Undo refuses to overwrite later Workspace preferences'
 );
 select is((select timezone from public.workspaces), 'America/Chicago',

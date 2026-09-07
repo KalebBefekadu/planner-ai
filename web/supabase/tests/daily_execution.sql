@@ -115,7 +115,7 @@ select throws_ok(
       'scheduledOn', current_date
     )::text
   ),
-  '40001', 'version_conflict_or_not_found', 'stale Action edits are rejected'
+  'P0001', 'version_conflict_or_not_found', 'stale Action edits are rejected'
 );
 
 select lives_ok(

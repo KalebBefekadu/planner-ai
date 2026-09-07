@@ -11,6 +11,7 @@ import { CoachingCue } from '@/components/coaching-cue';
 import { ReviewTabs } from '@/components/review-tabs';
 import { ReviewAiProposal } from '@/components/review-ai-proposal';
 import { weeklyReviewCoachingCue } from '@/lib/coaching';
+import { actionFailureMessage } from '@/lib/operations/failure-message';
 
 type Resolution = WeeklyReviewDecision['resolution'];
 
@@ -23,7 +24,7 @@ const resolutionLabels: Record<Resolution, string> = {
 };
 
 function errorMessage(error: unknown) {
-  return error instanceof Error ? error.message : 'Weekly Review could not be completed.';
+  return actionFailureMessage(error, 'Weekly Review could not be completed.');
 }
 
 export function WeeklyReview({ data }: { data: WeeklyReviewData }) {

@@ -98,7 +98,7 @@ select throws_ok(
     ),
     'snapshot-conflict-undo-0001'
   )$$,
-  '40001', 'undo_conflict',
+  'P0001', 'undo_conflict',
   'undo refuses to overwrite a subsequent Note edit'
 );
 select is((select title from public.notes where title = 'Second later edit'), 'Second later edit',

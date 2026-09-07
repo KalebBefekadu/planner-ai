@@ -3,6 +3,7 @@
 import { useState, useTransition } from 'react';
 import { Activity, CircleDollarSign, Gauge, TimerReset } from 'lucide-react';
 import { updateAiBudget } from '@/app/settings/ai/actions';
+import { actionFailureMessage } from '@/lib/operations/failure-message';
 
 export type AiUsageDashboardData = {
   softBudgetCents: number;
@@ -43,7 +44,7 @@ function dollars(micros: number) {
 }
 
 function errorMessage(error: unknown) {
-  return error instanceof Error ? error.message : 'The AI budget could not be saved.';
+  return actionFailureMessage(error, 'The AI budget could not be saved.');
 }
 
 export function AiUsageDashboard({ initial }: { initial: AiUsageDashboardData }) {

@@ -144,7 +144,7 @@ select throws_ok(
     ),
     'focus-conflict-undo-0001'
   )$$,
-  '40001', 'undo_conflict',
+  'P0001', 'undo_conflict',
   'undo refuses to overwrite a newer focus set'
 );
 select is(

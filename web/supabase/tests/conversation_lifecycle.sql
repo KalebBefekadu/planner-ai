@@ -183,7 +183,7 @@ select throws_ok(
     '{"id":"e3100000-0000-0000-0000-000000000001","expectedVersion":1,"title":"Forged"}'::jsonb,
     'conversation-cross-workspace-0001'
   )$$,
-  '40001', 'version_conflict_or_not_found',
+  'P0001', 'version_conflict_or_not_found',
   'another workspace cannot rename a conversation'
 );
 

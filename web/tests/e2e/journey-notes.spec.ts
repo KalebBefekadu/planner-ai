@@ -1,6 +1,6 @@
 import { readFileSync } from 'node:fs';
 
-import { test, expect, goTo } from './support/workspace';
+import { test, expect, goTo, waitForHydration } from './support/workspace';
 import { currentTotp } from './support/totp';
 
 // Journey 5 of the delivery rule: knowledge stays understandable after the
@@ -324,6 +324,52 @@ test('a Note can be filed under a Note in another branch, and never under itself
     { title: 'Research', depth: 0 },
     { title: 'Loose finding', depth: 0 },
   ]);
+});
+
+// The delivery rule requires that failure preserves what a person typed. A
+// stale editor is the ordinary way that happens: the same Note open in two
+// places, or one left open while the other was used.
+test('a Note edited in two places reports the clash without losing what was typed', async ({
+  workspace,
+}) => {
+  const { page } = workspace;
+  await goTo(page, '/notes');
+  await createRootNote(page, 'Contested decision', 'The original wording.');
+  const noteUrl = page.url();
+
+  // A second view of the same Note, holding the version it loaded with.
+  const stale = await page.context().newPage();
+  await stale.goto(noteUrl);
+  await waitForHydration(stale);
+  await expect(stale.getByRole('textbox', { name: 'Note title' })).toHaveValue(
+    'Contested decision'
+  );
+
+  await page.getByRole('textbox', { name: 'Note body, Markdown' }).fill('The newer wording.');
+  await expect(page.getByRole('status')).toHaveText('Saved', { timeout: 15_000 });
+
+  const losing = 'Work done in the stale view that must not vanish.';
+  await stale.getByRole('textbox', { name: 'Note body, Markdown' }).fill(losing);
+
+  // The clash is reported plainly rather than being retried into silence.
+  await expect(stale.getByRole('status')).toHaveText('Not saved', { timeout: 15_000 });
+  // Scoped past the router's own live region, which is also an alert.
+  await expect(stale.getByRole('alert').filter({ hasText: 'changed elsewhere' })).toContainText(
+    'This item changed elsewhere. Refresh and try again.'
+  );
+
+  // The words are still in the editor, so the person can copy them somewhere
+  // safe. Losing them is what makes a conflict a data-loss bug rather than an
+  // inconvenience.
+  await expect(stale.getByRole('textbox', { name: 'Note body, Markdown' })).toHaveValue(losing);
+
+  // The Note that did save is unharmed, so the refused write changed nothing.
+  await stale.close();
+  await goTo(page, '/notes');
+  await openNote(page, 'Contested decision');
+  await expect(page.getByRole('textbox', { name: 'Note body, Markdown' })).toHaveValue(
+    'The newer wording.'
+  );
 });
 
 test('a Markdown file is previewed before explicit vault import', async ({ workspace }) => {

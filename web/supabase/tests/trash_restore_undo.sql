@@ -165,7 +165,7 @@ select throws_ok(
     ),
     'trash-restore-conflict-undo-0001'
   )$$,
-  '40001', 'undo_conflict',
+  'P0001', 'undo_conflict',
   'Undo refuses to re-trash an Action edited after restore'
 );
 select is(

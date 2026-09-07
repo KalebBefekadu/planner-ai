@@ -69,9 +69,10 @@ import { useVoiceTranscription } from '@/lib/use-voice-transcription';
 import { extractPlannerMarkdownHeadings } from '@/lib/markdown/contract';
 import { continueMarkdownList, wrapMarkdownSelection } from '@/lib/markdown/editing';
 import { plannerMarkdownSupportsRichEditing } from '@/lib/markdown/rich-editor';
+import { actionFailureMessage } from '@/lib/operations/failure-message';
 
 function errorMessage(error: unknown) {
-  return error instanceof Error ? error.message : 'Unable to save this Note.';
+  return actionFailureMessage(error, 'Unable to save this Note.');
 }
 
 export function NoteMarkdownPreview({ markdown }: { markdown: string }) {

@@ -104,7 +104,7 @@ select throws_ok(
     ),
     'settings-conflict-undo-0001'
   )$$,
-  '40001', 'undo_conflict',
+  'P0001', 'undo_conflict',
   'undo refuses to overwrite newer Workspace preferences'
 );
 select is((select timezone from public.workspaces), 'America/Chicago',

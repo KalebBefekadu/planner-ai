@@ -184,7 +184,7 @@ select throws_ok(
     ),
     'undo-conflict-attempt-0001'
   )$$,
-  '40001', 'undo_conflict',
+  'P0001', 'undo_conflict',
   'undo fails rather than erasing later dependent work'
 );
 select ok(
