@@ -22,8 +22,8 @@ Fresh checks on 2026-09-06:
 - TypeScript passes with no emitted output.
 - Prettier passes for source and tests.
 - Next.js production build passes and generates 38 routes, including canonical `/planner` and compatibility redirect `/goals`.
-- Vitest passes: 43 files, 513 tests.
-- pgTAP passes: 48 files, 928 assertions.
+- Vitest passes: 43 files, 514 tests.
+- pgTAP passes: 48 files, 930 assertions.
 - The local Supabase reset/migration chain and database advisors passed in the preceding full verification.
 - The canonical authenticated Playwright corpus passes 148 desktop and mobile tests with 2 skipped, including Capture, Planner, Calendar scheduling, MFA-protected Notes vault export and round-trip re-import, Today, authenticated accessibility, mobile keyboard navigation, auth-boundary, and assistant-outage journeys.
 - The authenticated assistant outage journey proves a failed request remains visible and can be retried without duplicating user input.
@@ -63,7 +63,7 @@ Legacy tables remain available for rollback while the deployed application is sw
 - Legacy/canonical mode branches remain until the deployed canonical release is verified and the rollback window closes.
 - Several north-star screens are illustrative rather than connected to real Operations.
 - Notes now offer a source-authoritative rich editor for a proven reversible Markdown subset, including GFM task lists and tables, but they are not yet the complete editor, graph, canvas, or database system in the long-term vision.
-- Vault export and import now round-trip the supported corpus without loss, but re-import still discards per-Note AI Exclusion and sort order, which the export records in frontmatter and the manifest and the import ignores.
+- Vault export and import now round-trip the supported corpus without loss, and AI Exclusion survives a restore so an excluded Note is not quietly returned to AI retrieval. Re-import still discards per-Note sort order, which the manifest records and the import ignores, so a restored vault keeps its hierarchy but not its ordering within a parent.
 
 ### Production data and operations
 

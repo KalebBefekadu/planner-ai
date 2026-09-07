@@ -46,6 +46,16 @@ describe('Notes vault export/import round trip', () => {
     }
   });
 
+  it('preserves AI Exclusion so a restored Note is not returned to retrieval', async () => {
+    const candidates = await roundTrip([
+      note(1, { title: 'Excluded', ai_excluded: true }),
+      note(2, { title: 'Included', ai_excluded: false }),
+    ]);
+
+    expect(candidates.find((item) => item.title === 'Excluded')!.aiExcluded).toBe(true);
+    expect(candidates.find((item) => item.title === 'Included')!.aiExcluded).toBe(false);
+  });
+
   it('preserves hierarchy when a child Note is exported before its parent', async () => {
     const parent = note(1, { title: 'Parent' });
     const child = note(2, { title: 'Child', parent_note_id: parent.id });

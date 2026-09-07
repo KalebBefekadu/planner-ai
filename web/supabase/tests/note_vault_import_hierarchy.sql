@@ -1,5 +1,5 @@
 begin;
-select plan(7);
+select plan(9);
 
 insert into auth.users (
   id, instance_id, aud, role, email, encrypted_password, email_confirmed_at,
@@ -81,6 +81,33 @@ select throws_ok(
   )$$,
   'P0001', 'invalid_import_items',
   'parentage that never reaches a root is rejected before staging'
+);
+
+-- AI Exclusion is a privacy decision, so restoring a vault must not quietly
+-- return an excluded Note to AI retrieval.
+select lives_ok(
+  $$select public.execute_ui_operation(
+    'note.import-preview.v1',
+    '{
+      "sourceName":"exclusion.zip",
+      "sourceType":"generic",
+      "items":[
+        {"sourcePath":"planner-ai-vault/cccccccc-1111-1111-1111-111111111111","title":"Excluded from AI","bodyMarkdown":"Private reasoning.","parentSourcePath":null,"unsupportedReason":null,"aiExcluded":true}
+      ]
+    }',
+    'vault-exclusion-0001'
+  )$$,
+  'a vault records AI Exclusion per Note'
+);
+select lives_ok(
+  $$select public.execute_ui_operation(
+    'note.import-commit.v1',
+    (select json_build_object('jobId', id, 'batchSize', 50)::text
+     from public.note_import_jobs
+     where source_name = 'exclusion.zip')::jsonb,
+    'vault-exclusion-commit-0001'
+  )$$,
+  'the excluded Note commits'
 );
 
 select * from finish();

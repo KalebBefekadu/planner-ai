@@ -95,6 +95,7 @@ describe('Notes import bundle', () => {
         title: 'Direction',
         bodyMarkdown: 'Direction body',
         unsupportedReason: null,
+        aiExcluded: false,
       },
       {
         sourcePath: `planner-ai-vault/${childId}`,
@@ -102,6 +103,7 @@ describe('Notes import bundle', () => {
         title: 'Evidence',
         bodyMarkdown: 'Evidence body',
         unsupportedReason: null,
+        aiExcluded: false,
       },
     ]);
   });

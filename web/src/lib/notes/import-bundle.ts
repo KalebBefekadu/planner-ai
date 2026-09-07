@@ -22,6 +22,9 @@ export type NoteImportCandidate = {
   bodyMarkdown: string;
   parentSourcePath: string | null;
   unsupportedReason: string | null;
+  // Only an exported vault carries AI Exclusion. Files from any other source
+  // are normalised to false by candidatesFromVaultOrFiles.
+  aiExcluded?: boolean;
 };
 
 const textExtensions = new Set(['.md', '.markdown', '.txt', '.csv']);
@@ -235,24 +238,26 @@ function vaultCandidates(files: ImportSourceFile[]) {
     if (!file || path.posix.extname(note.path).toLowerCase() !== '.md') {
       throw new Error('The Planner AI vault is missing a Markdown Note listed in its manifest.');
     }
-    // Strip only Planner AI's own export frontmatter, and tolerate archives
+    // Match only Planner AI's own export frontmatter, and tolerate archives
     // written with or without a blank line after the closing fence.
-    const body = decodeText(file.bytes).replace(
-      /^---\nplanner_ai_export: 1\n(?:[^\n]*\n)*?---\n\n?/,
-      ''
-    );
+    const text = decodeText(file.bytes);
+    const frontmatter = /^---\nplanner_ai_export: 1\n((?:[^\n]*\n)*?)---\n\n?/.exec(text);
+    // Restoring a vault must not quietly return an excluded Note to AI retrieval.
+    const aiExcluded = /^planner_ai_ai_excluded: true$/m.test(frontmatter?.[1] ?? '');
     return {
       sourcePath: `planner-ai-vault/${note.id}`,
       parentSourcePath: note.parentNoteId ? `planner-ai-vault/${note.parentNoteId}` : null,
       title: String(note.title || 'Imported Note').slice(0, 300),
-      bodyMarkdown: body,
+      bodyMarkdown: frontmatter ? text.slice(frontmatter[0].length) : text,
       unsupportedReason: null,
+      aiExcluded,
     } satisfies NoteImportCandidate;
   });
 }
 
 export function candidatesFromVaultOrFiles(files: ImportSourceFile[]) {
-  return vaultCandidates(files) ?? candidatesFromFiles(files);
+  const candidates = vaultCandidates(files) ?? candidatesFromFiles(files);
+  return candidates.map((candidate) => ({ aiExcluded: false, ...candidate }));
 }
 
 function openZip(buffer: Buffer) {

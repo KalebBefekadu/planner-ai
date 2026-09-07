@@ -1455,6 +1455,7 @@ export type Database = {
       };
       note_import_items: {
         Row: {
+          ai_excluded: boolean;
           body_markdown: string;
           committed_at: string | null;
           content_hash: string;
@@ -1471,6 +1472,7 @@ export type Database = {
           workspace_id: string;
         };
         Insert: {
+          ai_excluded?: boolean;
           body_markdown: string;
           committed_at?: string | null;
           content_hash: string;
@@ -1487,6 +1489,7 @@ export type Database = {
           workspace_id: string;
         };
         Update: {
+          ai_excluded?: boolean;
           body_markdown?: string;
           committed_at?: string | null;
           content_hash?: string;

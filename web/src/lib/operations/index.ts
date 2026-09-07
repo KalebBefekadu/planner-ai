@@ -719,6 +719,7 @@ export const operationDefinitions = {
                 bodyMarkdown: z.string().max(50_000),
                 parentSourcePath: z.string().min(1).max(1000).nullable(),
                 unsupportedReason: z.string().max(500).nullable(),
+                aiExcluded: z.boolean(),
               })
               .strict()
           )
