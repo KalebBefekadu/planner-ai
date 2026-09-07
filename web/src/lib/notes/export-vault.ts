@@ -55,7 +55,10 @@ function markdownNote(note: ExportNote) {
     '---',
     '',
   ].join('\n');
-  return `${frontmatter}${note.body_markdown}${note.body_markdown.endsWith('\n') ? '' : '\n'}`;
+  // The body is written verbatim. Appending a trailing newline would make a
+  // re-imported vault differ from its source by one character, so exact
+  // duplicate detection would report every restored Note as new.
+  return `${frontmatter}${note.body_markdown}`;
 }
 
 function safeAttachmentName(value: string) {

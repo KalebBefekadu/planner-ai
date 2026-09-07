@@ -41,7 +41,7 @@ describe('Notes vault export/import round trip', () => {
       const restored = candidates.find((item) => item.sourcePath.endsWith(source.id));
       expect(restored, `Note ${source.title} survived the round trip`).toBeDefined();
       expect(restored!.title).toBe(source.title);
-      expect(restored!.bodyMarkdown.trimEnd()).toBe(source.body_markdown.trimEnd());
+      expect(restored!.bodyMarkdown).toBe(source.body_markdown);
       expect(restored!.unsupportedReason).toBeNull();
     }
   });
@@ -68,7 +68,7 @@ describe('Notes vault export/import round trip', () => {
     const candidates = await roundTrip(notes);
 
     expect(candidates).toHaveLength(3);
-    expect(candidates.map((item) => item.bodyMarkdown.trimEnd()).sort()).toEqual([
+    expect(candidates.map((item) => item.bodyMarkdown).sort()).toEqual([
       'First body.',
       'Second body.',
       'Third body.',

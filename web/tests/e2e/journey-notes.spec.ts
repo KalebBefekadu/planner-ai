@@ -1,4 +1,5 @@
 import { createHmac } from 'node:crypto';
+import { readFileSync } from 'node:fs';
 
 import { test, expect, goTo } from './support/workspace';
 
@@ -226,6 +227,68 @@ test('a stepped-up session can download a portable Markdown Notes vault', async 
   const vault = await download;
   expect(vault.suggestedFilename()).toMatch(/^planner-ai-notes-\d{4}-\d{2}-\d{2}\.zip$/);
   expect(await vault.failure()).toBeNull();
+});
+
+test('a downloaded vault re-imports as an exact match of its source Notes', async ({
+  workspace,
+}) => {
+  const { page } = workspace;
+  const parentTitle = 'Portable parent decision';
+  const childTitle = 'Portable child decision';
+  const childBody = 'The child must not be flattened to the root.';
+
+  await goTo(page, '/notes');
+  await createRootNote(page, parentTitle, 'The parent must survive the round trip.');
+  await page.getByRole('button', { name: 'Child note' }).click();
+  await expect(page).toHaveURL(/\/notes\?note=/);
+  const childTitleEditor = page.getByRole('textbox', { name: 'Note title' });
+  await expect(childTitleEditor).toHaveValue('Untitled');
+  await childTitleEditor.fill(childTitle);
+  await page.getByRole('textbox', { name: 'Note body, Markdown' }).fill(childBody);
+  await page.waitForTimeout(1_000);
+  await expect(page.getByRole('status')).toHaveText('Saved');
+  await expect(page.getByRole('button', { name: childTitle, exact: true })).toBeVisible();
+
+  await goTo(page, '/settings/security');
+  await page.getByRole('button', { name: 'Add authenticator' }).click();
+  const secret = await page.locator('#totp-secret').inputValue();
+  await page.getByLabel('Verification code').fill(currentTotp(secret));
+  await page.getByRole('button', { name: 'Verify', exact: true }).click();
+  await expect(page.getByText('Primary authenticator', { exact: true })).toBeVisible();
+
+  await goTo(page, '/settings/data');
+  const download = page.waitForEvent('download');
+  await page.getByRole('button', { name: 'Download Notes' }).click();
+  const vault = await download;
+  const vaultPath = await vault.path();
+  expect(vaultPath).toBeTruthy();
+
+  // Re-importing the archive Planner AI just produced is the round trip that
+  // proves an exported vault is genuinely portable rather than merely readable.
+  await goTo(page, '/notes');
+  await page.getByRole('button', { name: 'Import Notes' }).click();
+  const dialog = page.getByRole('dialog', { name: 'Import Notes' });
+  await dialog.getByLabel('Source').selectOption('generic');
+  // The upload has to keep its .zip name: the route selects the archive reader
+  // by file extension, and a download path alone carries none.
+  await dialog
+    .locator('input[type="file"]')
+    .first()
+    .setInputFiles({
+      name: vault.suggestedFilename(),
+      mimeType: 'application/zip',
+      buffer: readFileSync(vaultPath as string),
+    });
+
+  // Duplicate detection compares title and body exactly, so both Notes being
+  // recognised is the assertion that the vault round-tripped without loss: the
+  // manifest was read, and export frontmatter was stripped back off the body.
+  const summary = dialog.getByLabel('Import summary');
+  await expect(summary).toContainText('2Duplicates');
+  await expect(summary).toContainText('0Unsupported');
+  await expect(dialog.getByLabel('Import preview')).toContainText(parentTitle);
+  await expect(dialog.getByLabel('Import preview')).toContainText(childTitle);
+  await expect(dialog.getByLabel('Import preview')).not.toContainText('planner_ai_export');
 });
 
 test('a supported attachment is retained in quarantine instead of becoming an unsafe download', async ({
