@@ -12,6 +12,7 @@ import {
 import { mcpOperationIds, workspaceSnapshotGrant } from '@/lib/mcp/catalog';
 import { mcpPublicUrls } from '@/lib/mcp/metadata';
 import { operationDefinitions } from '@/lib/operations';
+import { supabasePublicKey } from '@/lib/supabase/config';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -50,11 +51,16 @@ async function authenticate(request: Request): Promise<McpClaims | null> {
   const manualToken = parseMcpBearerToken(authorization);
   const credential = parseBearerCredential(authorization);
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
-  const anonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
-  if (!credential || !url || !anonKey) return null;
+  if (!credential || !url) return null;
+  let publicKey: string;
+  try {
+    publicKey = supabasePublicKey();
+  } catch {
+    return null;
+  }
 
   if (manualToken) {
-    const client = createSupabaseClient(url, anonKey, {
+    const client = createSupabaseClient(url, publicKey, {
       auth: { autoRefreshToken: false, persistSession: false },
     });
     const { data, error } = await client.rpc('authenticate_mcp_token', {
@@ -74,7 +80,7 @@ async function authenticate(request: Request): Promise<McpClaims | null> {
   }
 
   if (!isJwtCredential(credential)) return null;
-  const client = createSupabaseClient(url, anonKey, {
+  const client = createSupabaseClient(url, publicKey, {
     auth: { autoRefreshToken: false, persistSession: false },
     global: { headers: { Authorization: `Bearer ${credential}` } },
   });
