@@ -16,6 +16,8 @@ Read access is the default. Writes are individually allowlisted and remain subje
 
 Use a manual token only when the host cannot complete OAuth. After an AAL2 security check, choose a short expiry and minimum capabilities. Planner AI displays the plaintext token once and stores only its hash. Put the token in the host's secret/authorization field as a Bearer token; never paste it into chat, Notes, screenshots, source files, logs, or support messages.
 
+Local release evidence covers the complete manual-token boundary: AAL2 issuance, capability-scoped tool discovery, and immediate revocation. The database repair that enables this path remains a pending production migration, so do not enable or recommend manual tokens in production until the production cutover gate has passed.
+
 ## Revoke And Recover
 
 - Lost or exposed credential: revoke it immediately under **Settings > AI connections**, remove it from the host, and create a replacement with narrower capabilities.
