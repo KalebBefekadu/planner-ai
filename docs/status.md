@@ -23,11 +23,16 @@ Fresh checks on 2026-09-06:
 - Prettier passes for source and tests.
 - Next.js production build passes and generates 38 routes, including canonical `/planner` and compatibility redirect `/goals`.
 - Vitest passes: 43 files, 513 tests.
-- pgTAP passes: 46 files, 910 assertions.
+- pgTAP passes: 48 files, 928 assertions.
 - The local Supabase reset/migration chain and database advisors passed in the preceding full verification.
-- The canonical authenticated Playwright corpus passes 123 desktop and mobile tests, including Capture, Planner, Calendar scheduling, MFA-protected Notes vault import and export, Today, authenticated accessibility, mobile keyboard navigation, auth-boundary, and assistant-outage journeys.
+- The canonical authenticated Playwright corpus passes 148 desktop and mobile tests with 2 skipped, including Capture, Planner, Calendar scheduling, MFA-protected Notes vault export and round-trip re-import, Today, authenticated accessibility, mobile keyboard navigation, auth-boundary, and assistant-outage journeys.
 - The authenticated assistant outage journey proves a failed request remains visible and can be retried without duplicating user input.
-- The Notes vault now has export/import round-trip evidence. Writing that test found three defects that made an exported vault lossy on re-import: the ZIP reader never read the vault manifest, so archives silently degraded to generic folder import; export frontmatter was never stripped back off; and a Note whose title matched a de-duplicated filename overwrote another Note's body. All three are fixed and covered.
+- The Notes vault now round-trips. A downloaded vault is re-imported in the authenticated Notes journey and every Note returns as an exact duplicate, with nothing unsupported and no export frontmatter left in the body. Building that evidence found five defects, each of which silently degraded an exported vault rather than failing visibly:
+  - the ZIP reader never read the vault manifest, so every archived vault fell back to generic folder import and lost the identity and hierarchy the manifest carried;
+  - export frontmatter was never stripped back off, so restored bodies carried raw export metadata;
+  - a Note whose title matched a de-duplicated filename overwrote another Note's body in the archive;
+  - the import validated hierarchy as folder nesting, so a vault containing a nested Note was rejected outright, and its staging order could create a child before its parent and silently reparent it to the root;
+  - export appended a trailing newline the stored body did not have, so restoring a vault into its own workspace reported all of it as new instead of recognising what was already there.
 - The dependency audit reports no known vulnerabilities at the configured high-severity threshold.
 
 Implemented local capability includes verified authentication boundaries, canonical relational migrations, owner-isolating RLS, versioned Operation dispatch, Activity and undo, Today, Vision/Goals/Actions, Planner calendar, Capture and voice transcription routes, atomic Proposals, Weekly/Monthly/Quarterly Review, Notes with source-authoritative Markdown and a guarded rich-editor adapter, exact search, onboarding, settings, notifications, Conversations, explicit Memory, AI Exclusion, Trash, export, cancellable account deletion, PWA Capture recovery, assistant evidence/safety controls, GenUI schema validation, and scoped MCP endpoints.
@@ -58,7 +63,7 @@ Legacy tables remain available for rollback while the deployed application is sw
 - Legacy/canonical mode branches remain until the deployed canonical release is verified and the rollback window closes.
 - Several north-star screens are illustrative rather than connected to real Operations.
 - Notes now offer a source-authoritative rich editor for a proven reversible Markdown subset, including GFM task lists and tables, but they are not yet the complete editor, graph, canvas, or database system in the long-term vision.
-- Vault export and import now round-trip the supported corpus without loss, but re-import still discards per-Note AI Exclusion and sort order, which the export records in frontmatter and the import ignores.
+- Vault export and import now round-trip the supported corpus without loss, but re-import still discards per-Note AI Exclusion and sort order, which the export records in frontmatter and the manifest and the import ignores.
 
 ### Production data and operations
 
