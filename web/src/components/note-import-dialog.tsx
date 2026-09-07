@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { Archive, Check, FileStack, FolderOpen, Loader2, X } from 'lucide-react';
 import { commitNoteImport } from '@/app/notes/actions';
+import { actionFailureMessage } from '@/lib/operations/failure-message';
 
 type ImportItem = {
   id: string;
@@ -30,7 +31,7 @@ type ImportPreview = {
 };
 
 function messageFrom(error: unknown) {
-  return error instanceof Error ? error.message : 'Planner AI could not import these Notes.';
+  return actionFailureMessage(error, 'Planner AI could not import these Notes.');
 }
 
 export function NoteImportDialog({

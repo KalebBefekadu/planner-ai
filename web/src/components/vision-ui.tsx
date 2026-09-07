@@ -3,11 +3,12 @@
 import { useState } from 'react';
 import { RefreshCw } from 'lucide-react';
 import { saveVision, type VisionView } from '@/app/actions';
+import { actionFailureMessage } from '@/lib/operations/failure-message';
 
 type Vision = VisionView;
 
 function messageFor(error: unknown) {
-  return error instanceof Error ? error.message : 'Something went wrong. Your draft is still here.';
+  return actionFailureMessage(error, 'Something went wrong. Your draft is still here.');
 }
 
 export function VisionUI({ initialVision }: { initialVision: Vision | null }) {

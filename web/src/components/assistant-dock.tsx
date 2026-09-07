@@ -19,6 +19,7 @@ import type { OperationId } from '@/lib/operations';
 import type { AssistantEvidence, ResolvedAssistantClaim } from '@/lib/assistant/evidence';
 import { GenUiRenderer } from '@/components/genui-renderer';
 import { parseGenUiSpec, type GenUiParseResult } from '@/lib/genui/schema';
+import { actionFailureMessage } from '@/lib/operations/failure-message';
 
 type Message = {
   id?: string;
@@ -106,7 +107,7 @@ export function AssistantDock({ className }: { className?: string }) {
       setProposal(data.proposal ?? null);
       setUndoableReceiptId(null);
     } catch (caught) {
-      setError(caught instanceof Error ? caught.message : 'Conversation could not be loaded.');
+      setError(actionFailureMessage(caught, 'Conversation could not be loaded.'));
     } finally {
       setPending(false);
     }
@@ -187,7 +188,7 @@ export function AssistantDock({ className }: { className?: string }) {
       await loadConversationIndex();
       setFailedMessage(null);
     } catch (caught) {
-      setError(caught instanceof Error ? caught.message : 'Planner AI could not respond.');
+      setError(actionFailureMessage(caught, 'Planner AI could not respond.'));
       if (options.message) setFailedMessage(options.message);
     } finally {
       setPending(false);

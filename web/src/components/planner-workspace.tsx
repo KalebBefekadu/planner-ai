@@ -35,6 +35,7 @@ import {
   type GoalView,
   type GoalsData,
 } from '@/app/actions';
+import { actionFailureMessage } from '@/lib/operations/failure-message';
 
 type ComposerTarget = { type: GoalType; parentId: string; label: string } | null;
 type GoalItem = GoalView;
@@ -54,7 +55,7 @@ const childTypes: Partial<Record<GoalType, GoalType>> = {
 };
 
 function messageFor(error: unknown) {
-  return error instanceof Error ? error.message : 'Something went wrong. Please try again.';
+  return actionFailureMessage(error, 'Something went wrong. Please try again.');
 }
 
 export function PlannerWorkspace({

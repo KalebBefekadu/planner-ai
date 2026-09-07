@@ -22,9 +22,10 @@ import {
   type TodayData,
 } from '@/app/today/actions';
 import { addCalendarDays, isDateInPlannerWeek, plannerWeek } from '@/lib/planner-calendar';
+import { actionFailureMessage } from '@/lib/operations/failure-message';
 
 function messageFor(error: unknown) {
-  return error instanceof Error ? error.message : 'The calendar could not be updated.';
+  return actionFailureMessage(error, 'The calendar could not be updated.');
 }
 
 function formatDay(value: string, options: Intl.DateTimeFormatOptions) {

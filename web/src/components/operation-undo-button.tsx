@@ -4,6 +4,7 @@ import { useState, useTransition } from 'react';
 import { RotateCcw } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import { undoOperation } from '@/app/activity/actions';
+import { actionFailureMessage } from '@/lib/operations/failure-message';
 
 export function OperationUndoButton({ receiptId }: { receiptId: string }) {
   const router = useRouter();
@@ -23,7 +24,7 @@ export function OperationUndoButton({ receiptId }: { receiptId: string }) {
               await undoOperation(receiptId);
               router.refresh();
             } catch (caught) {
-              setError(caught instanceof Error ? caught.message : 'Undo could not be completed.');
+              setError(actionFailureMessage(caught, 'Undo could not be completed.'));
             }
           })
         }

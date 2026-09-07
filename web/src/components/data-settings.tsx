@@ -8,6 +8,7 @@ import {
   scheduleAccountDeletion,
   type AccountDeletionRequest,
 } from '@/app/settings/data/actions';
+import { actionFailureMessage } from '@/lib/operations/failure-message';
 
 export function DataSettings({
   assuranceLevel,
@@ -41,7 +42,7 @@ export function DataSettings({
       anchor.click();
       URL.revokeObjectURL(url);
     } catch (caught) {
-      setError(caught instanceof Error ? caught.message : 'Export failed.');
+      setError(actionFailureMessage(caught, 'Export failed.'));
     } finally {
       setPending(false);
     }
@@ -55,9 +56,7 @@ export function DataSettings({
         setConfirmation('');
         router.refresh();
       } catch (caught) {
-        setError(
-          caught instanceof Error ? caught.message : 'Account deletion could not be scheduled.'
-        );
+        setError(actionFailureMessage(caught, 'Account deletion could not be scheduled.'));
       }
     });
   }
@@ -70,9 +69,7 @@ export function DataSettings({
         await cancelAccountDeletion(deletionRequest.id);
         router.refresh();
       } catch (caught) {
-        setError(
-          caught instanceof Error ? caught.message : 'Account deletion could not be canceled.'
-        );
+        setError(actionFailureMessage(caught, 'Account deletion could not be canceled.'));
       }
     });
   }
