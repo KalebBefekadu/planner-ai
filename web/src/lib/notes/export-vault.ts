@@ -85,12 +85,17 @@ export async function zipNotes(
   });
   archive.pipe(output);
 
-  const seen = new Map<string, number>();
+  // Reserve each generated filename. Counting title stems alone is not enough:
+  // a Note genuinely titled "Report 2" collides with the name generated for a
+  // second Note titled "Report", which would drop one body from the archive.
+  const takenPaths = new Set<string>();
   const manifest = notes.map((note) => {
     const stem = safeFileStem(note.title);
-    const duplicate = seen.get(stem) ?? 0;
-    seen.set(stem, duplicate + 1);
-    const path = `Notes/${stem}${duplicate ? ` ${duplicate + 1}` : ''}.md`;
+    let path = `Notes/${stem}.md`;
+    for (let suffix = 2; takenPaths.has(path); suffix += 1) {
+      path = `Notes/${stem} ${suffix}.md`;
+    }
+    takenPaths.add(path);
     archive.append(markdownNote(note), { name: path });
     return {
       id: note.id,

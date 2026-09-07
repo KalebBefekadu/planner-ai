@@ -26,6 +26,10 @@ export type NoteImportCandidate = {
 
 const textExtensions = new Set(['.md', '.markdown', '.txt', '.csv']);
 
+// The vault manifest is not a Note, but it must still be readable from a ZIP so
+// that an exported vault re-imports with its own identity and hierarchy.
+const VAULT_MANIFEST_PATH = 'planner-ai-vault.json';
+
 function safePath(value: string) {
   const normalized = value.normalize('NFC');
   if (
@@ -202,7 +206,7 @@ type VaultManifestItem = {
 };
 
 function vaultCandidates(files: ImportSourceFile[]) {
-  const manifestFile = files.find((file) => file.path === 'planner-ai-vault.json');
+  const manifestFile = files.find((file) => file.path === VAULT_MANIFEST_PATH);
   if (!manifestFile) return null;
   let manifest: { format?: string; schemaVersion?: number; notes?: VaultManifestItem[] };
   try {
@@ -231,7 +235,12 @@ function vaultCandidates(files: ImportSourceFile[]) {
     if (!file || path.posix.extname(note.path).toLowerCase() !== '.md') {
       throw new Error('The Planner AI vault is missing a Markdown Note listed in its manifest.');
     }
-    const body = decodeText(file.bytes).replace(/^---\n(?:[^\n]*\n)*?---\n\n/, '');
+    // Strip only Planner AI's own export frontmatter, and tolerate archives
+    // written with or without a blank line after the closing fence.
+    const body = decodeText(file.bytes).replace(
+      /^---\nplanner_ai_export: 1\n(?:[^\n]*\n)*?---\n\n?/,
+      ''
+    );
     return {
       sourcePath: `planner-ai-vault/${note.id}`,
       parentSourcePath: note.parentNoteId ? `planner-ai-vault/${note.parentNoteId}` : null,
@@ -298,7 +307,8 @@ export async function filesFromZip(buffer: Buffer) {
           throw new Error('ZIP contains too many files.');
         }
         const extension = path.posix.extname(entryPath).toLowerCase();
-        if (!textExtensions.has(extension) || entry.uncompressedSize > IMPORT_LIMITS.fileBytes) {
+        const readable = textExtensions.has(extension) || entryPath === VAULT_MANIFEST_PATH;
+        if (!readable || entry.uncompressedSize > IMPORT_LIMITS.fileBytes) {
           files.push({
             path: entryPath,
             bytes: Buffer.alloc(0),
