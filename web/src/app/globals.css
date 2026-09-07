@@ -6381,3 +6381,22 @@ button:disabled {
   background: var(--surface-muted);
   color: var(--muted);
 }
+
+/* Motion is decoration here: colour fades, a sliding toggle knob, a spinning
+   busy indicator. None of it carries meaning that is lost when it stops, and
+   for a person who gets motion sickness or is distracted by movement it is a
+   barrier rather than polish. Honour the preference the operating system
+   already collected rather than asking again in Settings.
+
+   Durations are collapsed rather than removed so that transitionend and
+   animationend still fire and nothing waiting on them stalls. */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}
