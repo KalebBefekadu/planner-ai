@@ -974,6 +974,7 @@ export type Database = {
       };
       goals: {
         Row: {
+          achieved_at: string | null;
           archived_at: string | null;
           created_at: string;
           current_value: number | null;
@@ -994,6 +995,7 @@ export type Database = {
           workspace_id: string;
         };
         Insert: {
+          achieved_at?: string | null;
           archived_at?: string | null;
           created_at?: string;
           current_value?: number | null;
@@ -1014,6 +1016,7 @@ export type Database = {
           workspace_id: string;
         };
         Update: {
+          achieved_at?: string | null;
           archived_at?: string | null;
           created_at?: string;
           current_value?: number | null;
@@ -1063,6 +1066,42 @@ export type Database = {
             referencedColumns: ['id'];
           },
         ];
+      };
+      lifecycle_job_runs: {
+        Row: {
+          error_code: string | null;
+          failed_count: number;
+          finished_at: string | null;
+          id: string;
+          job_name: string;
+          processed_count: number;
+          started_at: string;
+          status: string;
+          succeeded_count: number;
+        };
+        Insert: {
+          error_code?: string | null;
+          failed_count?: number;
+          finished_at?: string | null;
+          id?: string;
+          job_name: string;
+          processed_count?: number;
+          started_at?: string;
+          status?: string;
+          succeeded_count?: number;
+        };
+        Update: {
+          error_code?: string | null;
+          failed_count?: number;
+          finished_at?: string | null;
+          id?: string;
+          job_name?: string;
+          processed_count?: number;
+          started_at?: string;
+          status?: string;
+          succeeded_count?: number;
+        };
+        Relationships: [];
       };
       mcp_access_tokens: {
         Row: {
@@ -1311,6 +1350,66 @@ export type Database = {
           },
         ];
       };
+      note_attachments: {
+        Row: {
+          byte_size: number;
+          checksum_sha256: string;
+          created_at: string;
+          id: string;
+          media_type: string;
+          note_id: string;
+          object_key: string;
+          original_name: string;
+          purge_after: string | null;
+          removed_at: string | null;
+          scan_state: string;
+          workspace_id: string;
+        };
+        Insert: {
+          byte_size: number;
+          checksum_sha256: string;
+          created_at?: string;
+          id?: string;
+          media_type: string;
+          note_id: string;
+          object_key: string;
+          original_name: string;
+          purge_after?: string | null;
+          removed_at?: string | null;
+          scan_state?: string;
+          workspace_id: string;
+        };
+        Update: {
+          byte_size?: number;
+          checksum_sha256?: string;
+          created_at?: string;
+          id?: string;
+          media_type?: string;
+          note_id?: string;
+          object_key?: string;
+          original_name?: string;
+          purge_after?: string | null;
+          removed_at?: string | null;
+          scan_state?: string;
+          workspace_id?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: 'note_attachments_note_id_workspace_id_fkey';
+            columns: ['note_id', 'workspace_id'];
+            isOneToOne: false;
+            referencedRelation: 'notes';
+            referencedColumns: ['id', 'workspace_id'];
+          },
+          {
+            foreignKeyName: 'note_attachments_workspace_id_fkey';
+            columns: ['workspace_id'];
+            isOneToOne: false;
+            referencedRelation: 'workspaces';
+            referencedColumns: ['id'];
+          },
+        ];
+      };
       note_goal_links: {
         Row: {
           created_at: string;
@@ -1347,66 +1446,6 @@ export type Database = {
           },
           {
             foreignKeyName: 'note_goal_links_workspace_id_fkey';
-            columns: ['workspace_id'];
-            isOneToOne: false;
-            referencedRelation: 'workspaces';
-            referencedColumns: ['id'];
-          },
-        ];
-      };
-      note_attachments: {
-        Row: {
-          byte_size: number;
-          checksum_sha256: string;
-          created_at: string;
-          id: string;
-          media_type: string;
-          note_id: string;
-          object_key: string;
-          original_name: string;
-          removed_at: string | null;
-          purge_after: string | null;
-          scan_state: string;
-          workspace_id: string;
-        };
-        Insert: {
-          byte_size: number;
-          checksum_sha256: string;
-          created_at?: string;
-          id?: string;
-          media_type: string;
-          note_id: string;
-          object_key: string;
-          original_name: string;
-          removed_at?: string | null;
-          purge_after?: string | null;
-          scan_state?: string;
-          workspace_id: string;
-        };
-        Update: {
-          byte_size?: number;
-          checksum_sha256?: string;
-          created_at?: string;
-          id?: string;
-          media_type?: string;
-          note_id?: string;
-          object_key?: string;
-          original_name?: string;
-          removed_at?: string | null;
-          purge_after?: string | null;
-          scan_state?: string;
-          workspace_id?: string;
-        };
-        Relationships: [
-          {
-            foreignKeyName: 'note_attachments_note_id_workspace_id_fkey';
-            columns: ['note_id', 'workspace_id'];
-            isOneToOne: false;
-            referencedRelation: 'notes';
-            referencedColumns: ['id', 'workspace_id'];
-          },
-          {
-            foreignKeyName: 'note_attachments_workspace_id_fkey';
             columns: ['workspace_id'];
             isOneToOne: false;
             referencedRelation: 'workspaces';
@@ -1761,42 +1800,6 @@ export type Database = {
             referencedColumns: ['id'];
           },
         ];
-      };
-      lifecycle_job_runs: {
-        Row: {
-          error_code: string | null;
-          failed_count: number;
-          finished_at: string | null;
-          id: string;
-          job_name: string;
-          processed_count: number;
-          started_at: string;
-          status: string;
-          succeeded_count: number;
-        };
-        Insert: {
-          error_code?: string | null;
-          failed_count?: number;
-          finished_at?: string | null;
-          id?: string;
-          job_name: string;
-          processed_count?: number;
-          started_at?: string;
-          status?: string;
-          succeeded_count?: number;
-        };
-        Update: {
-          error_code?: string | null;
-          failed_count?: number;
-          finished_at?: string | null;
-          id?: string;
-          job_name?: string;
-          processed_count?: number;
-          started_at?: string;
-          status?: string;
-          succeeded_count?: number;
-        };
-        Relationships: [];
       };
       notification_email_deliveries: {
         Row: {
