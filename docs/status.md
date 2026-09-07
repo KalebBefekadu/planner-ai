@@ -8,9 +8,9 @@ Planner AI has a substantial, well-tested application foundation, but it is not 
 
 Estimated completion:
 
-- **Private dogfood product:** about 70 percent.
-- **Safe invite beta:** about 50 percent.
-- **Full long-term Notion/Obsidian/AI-native vision:** about 25 percent.
+- **Private dogfood product:** about 75 percent.
+- **Safe invite beta:** about 54 percent.
+- **Full long-term Notion/Obsidian/AI-native vision:** about 27 percent.
 
 These percentages describe validated capability, not code volume.
 
@@ -25,7 +25,7 @@ Fresh checks on 2026-09-07:
 - Vitest passes: 45 files, 537 tests.
 - pgTAP passes: 50 files, 946 assertions.
 - The local Supabase reset/migration chain and database advisors passed in the preceding full verification.
-- The canonical authenticated Playwright corpus passes 169 desktop and mobile tests with 14 skipped, including Capture, Planner, Calendar scheduling, MFA-protected Notes vault export, round-trip re-import, and restore into a workspace that no longer holds the originals, Note reordering and reparenting, Today, authenticated accessibility, mobile keyboard navigation, auth-boundary, and assistant-outage journeys.
+- The canonical authenticated Playwright corpus passes 170 desktop and mobile tests with 14 skipped, run against a production build rather than a development server, including Capture, Planner, Calendar scheduling, MFA-protected Notes vault export, round-trip re-import, and restore into a workspace that no longer holds the originals, Note reordering and reparenting, Today, authenticated accessibility, mobile keyboard navigation, auth-boundary, and assistant-outage journeys.
 - The authenticated assistant outage journey proves a failed request remains visible and can be retried without duplicating user input.
 - The manual MCP lifecycle has browser evidence on desktop and mobile: an AAL2 session creates a read-scoped token, a standards-compliant client discovers only its granted tool, and revocation immediately returns `401`. This work found and corrected a Postgres ambiguity that had caused every otherwise-valid manual token to be rejected.
 - Every progress bar, chart bar, indentation, and sidebar width now actually renders at its size. The Content Security Policy authorises stylesheets and style elements by nonce, and a nonce does not extend to a style attribute, so everything sized with one was parsed and discarded: the AI budget bar sat empty however much had been spent, the usage chart was flat whatever the traffic, Goal progress showed nothing, and the Note outline was unindented. Development allows inline styles, so this was only ever visible in a real build. The policy was not widened to fix it, because `style-src-attr` is not supported everywhere and `'unsafe-inline'` is ignored on `style-src` once a nonce is present; bounded sets became classes and genuinely dynamic values are written through the CSSOM, which the policy does not restrict.
@@ -104,6 +104,8 @@ Legacy tables remain available for rollback while the deployed application is sw
 - Supabase free-tier pausing and test-sender email are not appropriate for an external beta.
 
 ## Current Decision
+
+Running the browser corpus against a production build rather than a development server was the single highest-yield change in this pass. A development server allows inline styles and shows the message on any error thrown out of a Server Action; a real build does neither. Four defects were hiding in exactly that gap, each of which looked correct throughout development and reached nobody in production: every failure message, every progress bar and chart, the conflict path, and the reduced-motion preference. Any further work that claims a user-visible result should be verified the same way.
 
 The correct path is convergence, not feature expansion. Keep the long-term database, graph, canvas, collaboration, plugin, and true local-first ideas in the roadmap, but do not build them before the canonical daily loop and production shell are dependable.
 
