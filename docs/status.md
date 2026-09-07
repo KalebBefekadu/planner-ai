@@ -46,7 +46,8 @@ The daily-planning loop now has browser evidence that a typed Capture persists i
 - The same archive restored successfully into a disposable local Supabase Postgres 17 instance; 8 public tables, all 8 RLS-enabled, and 5 public functions were verified before the instance and plaintext archive were destroyed.
 - Read-only catalog inspection found two remote-only migration-history entries whose effects match reviewed local hardening migrations.
 - The two duplicate remote migration entries were reconciled to the reviewed local versions.
-- The hosted migration history and guarded cutover preflight are aligned through `20260906114500_recoverable_note_attachment_removal.sql` after a fresh encrypted backup.
+- A fresh encrypted backup on 2026-09-07 was checksummed, decrypted, and restored into an isolated local Supabase Postgres instance: 55 public tables, all 55 RLS-enabled, and 128 public functions passed validation.
+- Hosted migration history remains aligned through `20260906114500_recoverable_note_attachment_removal.sql`. Read-only preflight correctly stops on the two newer local Notes-vault migrations (`20260906181500` and `20260906190000`); neither has been applied to production.
 - Count-only production verification found 53 public tables, all 53 RLS-enabled, two Auth users mapped to two Workspaces, no unmigrated users, and 56 registered Operations.
 - Vercel built release commit `1d570e4` successfully, and a read-only inspection on 2026-09-06 found current `planner-ai` production deployments in Ready state. Their team-scoped production aliases redirect to Vercel SSO before reaching the application, so anonymous application smoke tests remain blocked at the platform edge.
 - `planner-ai.vercel.app` is not this application: it still serves the older Planner-AI Telegram-bot site and must not be published as the current product URL.
@@ -67,7 +68,7 @@ Legacy tables remain available for rollback while the deployed application is sw
 
 ### Production data and operations
 
-- Canonical schema cutover is complete; the Vercel build is deployed, but the application-mode switch and anonymous/authenticated smoke tests still require access to the current Vercel project settings.
+- Canonical schema cutover is complete through the prior release. The two newer Notes-vault migrations remain pending a recorded maintenance window, remote pgTAP plan, rollback owner, and post-cutover authenticated smoke plan; the Vercel application-mode switch and authenticated smoke tests also still require access to the current Vercel project settings.
 - Database backup integrity and local isolated restoration are proven; off-machine custody and a hosted recovery-project drill covering Auth, Storage, and managed configuration remain unverified.
 - The production database has a service-role-only lifecycle worker-run ledger, but Vercel production environment values, deployment protection, production domain ownership, custom SMTP/domain, external alert routing, cron ownership, and authenticated production journeys are not fully re-verified.
 
