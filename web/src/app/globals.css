@@ -1992,10 +1992,22 @@ button:disabled {
   overflow-y: auto;
   padding: 2px 7px 16px;
 }
+/* Nesting is carried by the list structure, so the indentation a person sees
+   and the hierarchy a screen reader hears can never disagree. */
+.note-tree-level {
+  display: grid;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.note-tree-level .note-tree-level {
+  padding-inline-start: 14px;
+}
 .note-tree-item {
   display: flex;
   width: 100%;
   min-width: 0;
+  padding-inline: 10px;
   min-height: 34px;
   align-items: center;
   justify-content: space-between;
@@ -5625,7 +5637,7 @@ button:disabled {
   .note-tree-item {
     width: auto;
     flex: 0 0 auto;
-    padding: 7px 10px !important;
+    padding-block: 7px;
   }
   .note-editor-header {
     align-items: flex-start;

@@ -39,11 +39,68 @@ export function nextSiblingMove(
   return { outcome: 'moved', sortKey: (neighbour.sortKey + beyond.sortKey) / 2 };
 }
 
-export function nextSiblingSortKey(
-  siblings: SiblingPosition[],
+export type TreePosition = { id: string; parentNoteId: string | null; sortKey: number };
+
+// Changing a Note's parent, as distinct from its order among its siblings.
+//
+// The hierarchy is changed by indent and outdent rather than by dragging. A
+// drag needs a pointer, a drop target, and a steady hand; indent and outdent
+// are two controls that a keyboard and a screen reader can both reach, and
+// they say exactly where the Note lands.
+export type ParentMove =
+  | { outcome: 'moved'; parentNoteId: string | null; sortKey: number }
+  | { outcome: 'edge' }
+  | { outcome: 'exhausted' };
+
+function childrenOf(notes: TreePosition[], parentNoteId: string | null) {
+  return notes
+    .filter((note) => note.parentNoteId === parentNoteId)
+    .sort((first, second) => first.sortKey - second.sortKey);
+}
+
+export function nextParentMove(
+  notes: TreePosition[],
   id: string,
-  direction: 'up' | 'down'
-): number | null {
-  const move = nextSiblingMove(siblings, id, direction);
-  return move.outcome === 'moved' ? move.sortKey : null;
+  direction: 'indent' | 'outdent'
+): ParentMove {
+  const note = notes.find((candidate) => candidate.id === id);
+  if (!note) return { outcome: 'edge' };
+  const siblings = childrenOf(notes, note.parentNoteId);
+  const index = siblings.findIndex((sibling) => sibling.id === id);
+
+  if (direction === 'indent') {
+    // A Note becomes a child of the Note above it, which is the only move that
+    // needs no target picker. The first Note at a level has nothing to go
+    // under. This can never form a cycle: an earlier sibling is never a
+    // descendant of the Note being moved.
+    const newParent = siblings[index - 1];
+    if (!newParent) return { outcome: 'edge' };
+    const existing = childrenOf(notes, newParent.id);
+    const last = existing[existing.length - 1];
+    return {
+      outcome: 'moved',
+      parentNoteId: newParent.id,
+      sortKey: last ? last.sortKey + 1000 : 1000,
+    };
+  }
+
+  // Outdent lifts a Note to sit directly after the parent it is leaving, so it
+  // stays next to the material it came from instead of falling to the end.
+  if (note.parentNoteId === null) return { outcome: 'edge' };
+  const parent = notes.find((candidate) => candidate.id === note.parentNoteId);
+  if (!parent) return { outcome: 'edge' };
+  const parentSiblings = childrenOf(notes, parent.parentNoteId);
+  const parentIndex = parentSiblings.findIndex((sibling) => sibling.id === parent.id);
+  const after = parentSiblings[parentIndex + 1];
+  if (!after) {
+    return { outcome: 'moved', parentNoteId: parent.parentNoteId, sortKey: parent.sortKey + 1000 };
+  }
+  if (Math.abs(after.sortKey - parent.sortKey) < MIN_SORT_KEY_GAP) {
+    return { outcome: 'exhausted' };
+  }
+  return {
+    outcome: 'moved',
+    parentNoteId: parent.parentNoteId,
+    sortKey: (parent.sortKey + after.sortKey) / 2,
+  };
 }

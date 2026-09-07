@@ -2,7 +2,7 @@
 
 import { randomUUID } from 'node:crypto';
 import { revalidatePath } from 'next/cache';
-import { nextSiblingMove } from '@/lib/notes/sibling-order';
+import { nextParentMove, nextSiblingMove } from '@/lib/notes/sibling-order';
 import { executeOperation } from '@/lib/operations';
 import { createClient } from '@/lib/supabase/server';
 
@@ -359,6 +359,59 @@ export async function moveNoteWithinParent(input: {
     {
       id: input.id,
       parentNoteId: parentId,
+      sortKey: move.sortKey,
+      expectedVersion: input.expectedVersion,
+    },
+    { idempotencyKey: randomUUID(), surface: 'ui' }
+  );
+  revalidatePath('/notes');
+  return mapNote(note);
+}
+
+// Where a Note sits in the hierarchy, as distinct from its order among its
+// siblings. Like ordering, this could previously only be changed through the
+// assistant or MCP, so the shape of a person's own knowledge base was an
+// agent-only decision.
+export async function moveNoteToNewParent(input: {
+  id: string;
+  direction: 'indent' | 'outdent';
+  expectedVersion: number;
+}) {
+  const { supabase, workspaceId } = await notesClient();
+  // Indent and outdent both depend on Notes outside the current level: the Note
+  // above and its existing children, or the parent and what follows it. The
+  // whole live tree is the smallest correct input.
+  const { data: tree, error: treeError } = await supabase
+    .from('notes')
+    .select('id,parent_note_id,sort_key')
+    .eq('workspace_id', workspaceId)
+    .is('archived_at', null)
+    .is('trashed_at', null)
+    .order('sort_key');
+  if (treeError || !tree) throw new Error('Unable to read the surrounding Notes.');
+
+  const move = nextParentMove(
+    tree.map((note) => ({
+      id: note.id as string,
+      parentNoteId: note.parent_note_id as string | null,
+      sortKey: Number(note.sort_key),
+    })),
+    input.id,
+    input.direction
+  );
+  // A Note with nothing above it cannot be indented, and a root Note has no
+  // parent to leave. Neither is an error; the control is simply unavailable.
+  if (move.outcome === 'edge') return null;
+  if (move.outcome === 'exhausted') {
+    throw new Error('There is no room left beside this Note. Move a neighbour first.');
+  }
+
+  const note = await executeOperation(
+    supabase,
+    'note.move.v1',
+    {
+      id: input.id,
+      parentNoteId: move.parentNoteId,
       sortKey: move.sortKey,
       expectedVersion: input.expectedVersion,
     },

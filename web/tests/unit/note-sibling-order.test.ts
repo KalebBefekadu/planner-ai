@@ -1,8 +1,9 @@
 import { describe, expect, it } from 'vitest';
 import {
+  nextParentMove,
   nextSiblingMove,
-  nextSiblingSortKey,
   type SiblingPosition,
+  type TreePosition,
 } from '@/lib/notes/sibling-order';
 
 const level: SiblingPosition[] = [
@@ -11,49 +12,32 @@ const level: SiblingPosition[] = [
   { id: 'c', sortKey: 3000 },
 ];
 
+const moved = (sortKey: number) => ({ outcome: 'moved', sortKey });
+
 describe('Note sibling ordering', () => {
   it('moves a Note between the two Notes it lands among', () => {
     // 'c' rising past 'b' must land between 'a' and 'b'.
-    expect(nextSiblingSortKey(level, 'c', 'up')).toBe(1500);
+    expect(nextSiblingMove(level, 'c', 'up')).toEqual(moved(1500));
     // 'a' falling past 'b' must land between 'b' and 'c'.
-    expect(nextSiblingSortKey(level, 'a', 'down')).toBe(2500);
+    expect(nextSiblingMove(level, 'a', 'down')).toEqual(moved(2500));
   });
 
   it('moves a Note clear of the edge when it becomes first or last', () => {
-    expect(nextSiblingSortKey(level, 'b', 'up')).toBe(0);
-    expect(nextSiblingSortKey(level, 'b', 'down')).toBe(4000);
-  });
-
-  it('reports no move for a Note already at the edge of its level', () => {
-    expect(nextSiblingSortKey(level, 'a', 'up')).toBeNull();
-    expect(nextSiblingSortKey(level, 'c', 'down')).toBeNull();
-  });
-
-  it('reports no move for a Note that is not in the level', () => {
-    expect(nextSiblingSortKey(level, 'missing', 'up')).toBeNull();
+    expect(nextSiblingMove(level, 'b', 'up')).toEqual(moved(0));
+    expect(nextSiblingMove(level, 'b', 'down')).toEqual(moved(4000));
   });
 
   it('orders by sort key rather than by the order rows arrive in', () => {
     const shuffled = [level[2], level[0], level[1]];
-    expect(nextSiblingSortKey(shuffled, 'c', 'up')).toBe(1500);
-  });
-
-  // sort_key is numeric(24, 12), so halving a gap forever would eventually
-  // round two Notes onto the same key and make their order arbitrary.
-  it('refuses a move into a gap too small to divide', () => {
-    const exhausted: SiblingPosition[] = [
-      { id: 'a', sortKey: 1000 },
-      { id: 'b', sortKey: 1000.0000000001 },
-      { id: 'c', sortKey: 3000 },
-    ];
-    expect(nextSiblingSortKey(exhausted, 'c', 'up')).toBeNull();
+    expect(nextSiblingMove(shuffled, 'c', 'up')).toEqual(moved(1500));
   });
 
   // A direction that is unavailable and a gap that has run out are different
   // situations: one is an ordinary edge, the other has to be told to the person.
   it('distinguishes an unavailable direction from a gap that has run out', () => {
     expect(nextSiblingMove(level, 'a', 'up')).toEqual({ outcome: 'edge' });
-    expect(nextSiblingMove(level, 'c', 'up')).toEqual({ outcome: 'moved', sortKey: 1500 });
+    expect(nextSiblingMove(level, 'c', 'down')).toEqual({ outcome: 'edge' });
+    expect(nextSiblingMove(level, 'missing', 'up')).toEqual({ outcome: 'edge' });
     expect(
       nextSiblingMove(
         [
@@ -68,7 +52,73 @@ describe('Note sibling ordering', () => {
   });
 
   it('keeps a single Note and an empty level from claiming a move', () => {
-    expect(nextSiblingSortKey([{ id: 'only', sortKey: 1000 }], 'only', 'up')).toBeNull();
-    expect(nextSiblingSortKey([], 'a', 'down')).toBeNull();
+    expect(nextSiblingMove([{ id: 'only', sortKey: 1000 }], 'only', 'up')).toEqual({
+      outcome: 'edge',
+    });
+    expect(nextSiblingMove([], 'a', 'down')).toEqual({ outcome: 'edge' });
+  });
+});
+
+const tree: TreePosition[] = [
+  { id: 'first', parentNoteId: null, sortKey: 1000 },
+  { id: 'second', parentNoteId: null, sortKey: 2000 },
+  { id: 'third', parentNoteId: null, sortKey: 3000 },
+  { id: 'first-child', parentNoteId: 'first', sortKey: 1000 },
+];
+
+describe('Note parent changes', () => {
+  it('indents a Note under the Note above it, after that Note’s own children', () => {
+    expect(nextParentMove(tree, 'second', 'indent')).toEqual({
+      outcome: 'moved',
+      parentNoteId: 'first',
+      sortKey: 2000,
+    });
+  });
+
+  it('indents under an empty parent at the start of that level', () => {
+    expect(nextParentMove(tree, 'third', 'indent')).toEqual({
+      outcome: 'moved',
+      parentNoteId: 'second',
+      sortKey: 1000,
+    });
+  });
+
+  // Outdenting must leave the Note beside the material it came from, not at the
+  // end of a level where its context is lost.
+  it('outdents a Note to sit directly after the parent it leaves', () => {
+    expect(nextParentMove(tree, 'first-child', 'outdent')).toEqual({
+      outcome: 'moved',
+      parentNoteId: null,
+      sortKey: 1500,
+    });
+  });
+
+  it('outdents past a last parent without needing a gap', () => {
+    const lastParent: TreePosition[] = [
+      { id: 'only-root', parentNoteId: null, sortKey: 1000 },
+      { id: 'child', parentNoteId: 'only-root', sortKey: 1000 },
+    ];
+    expect(nextParentMove(lastParent, 'child', 'outdent')).toEqual({
+      outcome: 'moved',
+      parentNoteId: null,
+      sortKey: 2000,
+    });
+  });
+
+  it('reports the directions a Note cannot travel', () => {
+    // The first Note at a level has nothing above it to go under.
+    expect(nextParentMove(tree, 'first', 'indent')).toEqual({ outcome: 'edge' });
+    // A root Note has no parent to leave.
+    expect(nextParentMove(tree, 'first', 'outdent')).toEqual({ outcome: 'edge' });
+    expect(nextParentMove(tree, 'missing', 'indent')).toEqual({ outcome: 'edge' });
+  });
+
+  it('refuses an outdent into a gap too small to divide', () => {
+    const exhausted: TreePosition[] = [
+      { id: 'parent', parentNoteId: null, sortKey: 1000 },
+      { id: 'next', parentNoteId: null, sortKey: 1000.0000000001 },
+      { id: 'child', parentNoteId: 'parent', sortKey: 1000 },
+    ];
+    expect(nextParentMove(exhausted, 'child', 'outdent')).toEqual({ outcome: 'exhausted' });
   });
 });

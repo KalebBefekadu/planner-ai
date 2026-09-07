@@ -198,6 +198,74 @@ test('a Note can be reordered among its siblings and the new order survives relo
   await expect(page.getByRole('button', { name: 'Move note up' })).toBeDisabled();
 });
 
+// Where a Note sits in the hierarchy was, like its order, an agent-only
+// decision: note.move.v1 could reparent a Note through the assistant or MCP,
+// but nothing in the interface could. Indent and outdent are used rather than
+// dragging, so the hierarchy stays reachable from a keyboard.
+test('a Note can be moved under and back out of another Note from the interface', async ({
+  workspace,
+}) => {
+  const { page } = workspace;
+
+  await goTo(page, '/notes');
+  await createRootNote(page, 'Parent decision', 'The material this belongs under.');
+  await createRootNote(page, 'Moving decision', 'This one changes level.');
+  await createRootNote(page, 'Later decision', 'This one stays put.');
+
+  // Depth is read from the nesting itself rather than from indentation. A
+  // padding measurement would only describe how the tree looks on one screen
+  // width, and the hierarchy is meant to be real structure.
+  const treeShape = () =>
+    page.locator('.note-tree .note-tree-item').evaluateAll((items) =>
+      items.map((item) => {
+        let depth = -1;
+        for (let node = item.parentElement; node; node = node.parentElement) {
+          if (node.classList.contains('note-tree-level')) depth += 1;
+        }
+        return { title: item.querySelector('span')?.textContent ?? '', depth };
+      })
+    );
+
+  expect(await treeShape()).toEqual([
+    { title: 'Parent decision', depth: 0 },
+    { title: 'Moving decision', depth: 0 },
+    { title: 'Later decision', depth: 0 },
+  ]);
+
+  // The first Note at a level has nothing above it to go under, and a root Note
+  // has no parent to leave. Both are offered as unavailable.
+  await treeNote(page, 'Parent decision').click();
+  await expect(page.getByRole('button', { name: 'Make child of the note above' })).toBeDisabled();
+  await expect(page.getByRole('button', { name: 'Move note out of its parent' })).toBeDisabled();
+
+  await treeNote(page, 'Moving decision').click();
+  await page.getByRole('button', { name: 'Make child of the note above' }).click();
+  await expect.poll(treeShape).toEqual([
+    { title: 'Parent decision', depth: 0 },
+    { title: 'Moving decision', depth: 1 },
+    { title: 'Later decision', depth: 0 },
+  ]);
+
+  // Reparenting is a persisted Operation, not a client-side rearrangement.
+  await goTo(page, '/');
+  await goTo(page, '/notes');
+  expect(await treeShape()).toEqual([
+    { title: 'Parent decision', depth: 0 },
+    { title: 'Moving decision', depth: 1 },
+    { title: 'Later decision', depth: 0 },
+  ]);
+
+  // Leaving a parent must land the Note directly after it, beside the material
+  // it came from, rather than at the end of the level.
+  await treeNote(page, 'Moving decision').click();
+  await page.getByRole('button', { name: 'Move note out of its parent' }).click();
+  await expect.poll(treeShape).toEqual([
+    { title: 'Parent decision', depth: 0 },
+    { title: 'Moving decision', depth: 0 },
+    { title: 'Later decision', depth: 0 },
+  ]);
+});
+
 test('a Markdown file is previewed before explicit vault import', async ({ workspace }) => {
   const { page } = workspace;
   const title = 'Imported planning brief';

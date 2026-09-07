@@ -17,6 +17,8 @@ import {
   FileText,
   FileInput,
   Heading2,
+  IndentDecrease,
+  IndentIncrease,
   History,
   Eye,
   Italic,
@@ -47,6 +49,7 @@ import {
   linkNoteAction,
   linkNoteGoal,
   linkNote,
+  moveNoteToNewParent,
   moveNoteWithinParent,
   restoreNoteRevision,
   setNoteTags,
@@ -58,29 +61,12 @@ import {
   type NoteKnowledgeContext,
   type NoteView,
 } from '@/app/notes/actions';
+import { nextParentMove, nextSiblingMove } from '@/lib/notes/sibling-order';
 import { RichMarkdownEditor } from '@/components/rich-markdown-editor';
 import { useVoiceTranscription } from '@/lib/use-voice-transcription';
 import { extractPlannerMarkdownHeadings } from '@/lib/markdown/contract';
 import { continueMarkdownList, wrapMarkdownSelection } from '@/lib/markdown/editing';
 import { plannerMarkdownSupportsRichEditing } from '@/lib/markdown/rich-editor';
-
-function flattenNotes(notes: NoteView[]) {
-  const children = new Map<string | null, NoteView[]>();
-  for (const note of notes) {
-    const group = children.get(note.parentNoteId) ?? [];
-    group.push(note);
-    children.set(note.parentNoteId, group);
-  }
-  const output: Array<NoteView & { depth: number }> = [];
-  const visit = (parentId: string | null, depth: number) => {
-    for (const note of children.get(parentId) ?? []) {
-      output.push({ ...note, depth });
-      visit(note.id, depth + 1);
-    }
-  };
-  visit(null, 0);
-  return output;
-}
 
 function errorMessage(error: unknown) {
   return error instanceof Error ? error.message : 'Unable to save this Note.';
@@ -152,37 +138,87 @@ export function NotesWorkspace({
   });
   const saveInFlightRef = useRef(false);
   const queuedDraftRef = useRef<{ title: string; bodyMarkdown: string } | null>(null);
-  const tree = useMemo(() => flattenNotes(notes), [notes]);
   const outline = useMemo(() => extractPlannerMarkdownHeadings(body), [body]);
   const richEditable = useMemo(() => plannerMarkdownSupportsRichEditing(body), [body]);
   const activeEditorMode = editorMode === 'rich' && !richEditable ? 'source' : editorMode;
   const wordCount = body.trim() ? body.trim().split(/\s+/).length : 0;
-  // A Note can only move within its own parent. Offering a direction it cannot
-  // travel would suggest the order is stuck rather than already at the edge.
-  const siblingMove = useMemo(() => {
-    if (!selected) return { up: false, down: false };
+  // Which moves are open to this Note, decided by the same functions the server
+  // uses to perform them. Working it out separately here would let the controls
+  // offer a move the server then refuses, or hide one it would have allowed.
+  const availableMoves = useMemo(() => {
+    const none = { up: false, down: false, indent: false, outdent: false };
+    if (!selected) return none;
     const siblings = notes
       .filter((note) => note.parentNoteId === selected.parentNoteId)
-      .sort((first, second) => first.sortKey - second.sortKey);
-    const index = siblings.findIndex((note) => note.id === selected.id);
-    return { up: index > 0, down: index >= 0 && index < siblings.length - 1 };
+      .map((note) => ({ id: note.id, sortKey: note.sortKey }));
+    const tree = notes.map((note) => ({
+      id: note.id,
+      parentNoteId: note.parentNoteId,
+      sortKey: note.sortKey,
+    }));
+    return {
+      up: nextSiblingMove(siblings, selected.id, 'up').outcome !== 'edge',
+      down: nextSiblingMove(siblings, selected.id, 'down').outcome !== 'edge',
+      indent: nextParentMove(tree, selected.id, 'indent').outcome !== 'edge',
+      outdent: nextParentMove(tree, selected.id, 'outdent').outcome !== 'edge',
+    };
   }, [notes, selected]);
 
-  function moveSelected(direction: 'up' | 'down') {
-    if (!selected) return;
+  function applyMove(move: () => Promise<NoteView | null>) {
     startTransition(async () => {
       try {
-        const moved = await moveNoteWithinParent({
-          id: selected.id,
-          direction,
-          expectedVersion: versionRef.current,
-        });
+        const moved = await move();
         if (moved) versionRef.current = moved.version;
         router.refresh();
       } catch (caught) {
         setError(errorMessage(caught));
       }
     });
+  }
+
+  function moveSelected(direction: 'up' | 'down') {
+    if (!selected) return;
+    applyMove(() =>
+      moveNoteWithinParent({ id: selected.id, direction, expectedVersion: versionRef.current })
+    );
+  }
+
+  function reparentSelected(direction: 'indent' | 'outdent') {
+    if (!selected) return;
+    applyMove(() =>
+      moveNoteToNewParent({ id: selected.id, direction, expectedVersion: versionRef.current })
+    );
+  }
+
+  // The tree is nested lists rather than one flat run of buttons.
+  //
+  // Indentation alone said nothing to a screen reader, which read every Note as
+  // a peer however deeply it was filed, and the mobile layout overrode that
+  // indentation outright so the hierarchy vanished on a phone. Real nesting
+  // carries the structure to assistive technology and to a narrow screen, and
+  // it cannot fall out of step with where a Note actually sits.
+  function renderNoteLevel(parentNoteId: string | null) {
+    const level = notes
+      .filter((note) => note.parentNoteId === parentNoteId)
+      .sort((first, second) => first.sortKey - second.sortKey);
+    if (!level.length) return null;
+    return (
+      <ul className="note-tree-level">
+        {level.map((note) => (
+          <li key={note.id}>
+            <button
+              className={`note-tree-item${note.id === selected?.id ? ' note-tree-item-active' : ''}`}
+              type="button"
+              onClick={() => router.push(`/notes?note=${note.id}`)}
+            >
+              <span>{note.title}</span>
+              {note.aiExcluded ? <ShieldOff size={13} aria-label="Excluded from AI" /> : null}
+            </button>
+            {renderNoteLevel(note.id)}
+          </li>
+        ))}
+      </ul>
+    );
   }
 
   function focusOutlineLine(line: number) {
@@ -478,18 +514,7 @@ export function NotesWorkspace({
           />
         </form>
         <nav className="note-tree" aria-label="Notes">
-          {tree.map((note) => (
-            <button
-              key={note.id}
-              className={`note-tree-item${note.id === selected?.id ? ' note-tree-item-active' : ''}`}
-              style={{ paddingLeft: `${10 + Math.min(note.depth, 6) * 14}px` }}
-              type="button"
-              onClick={() => router.push(`/notes?note=${note.id}`)}
-            >
-              <span>{note.title}</span>
-              {note.aiExcluded ? <ShieldOff size={13} aria-label="Excluded from AI" /> : null}
-            </button>
-          ))}
+          {renderNoteLevel(null)}
         </nav>
       </aside>
 
@@ -549,14 +574,17 @@ export function NotesWorkspace({
                   />
                   Exclude from AI
                 </label>
-                {siblingMove.up || siblingMove.down ? (
-                  <div className="note-move-controls" role="group" aria-label="Reorder note">
+                {availableMoves.up ||
+                availableMoves.down ||
+                availableMoves.indent ||
+                availableMoves.outdent ? (
+                  <div className="note-move-controls" role="group" aria-label="Move note">
                     <button
                       className="icon-button"
                       type="button"
                       title="Move note up"
                       aria-label="Move note up"
-                      disabled={!siblingMove.up || isPending}
+                      disabled={!availableMoves.up || isPending}
                       onClick={() => moveSelected('up')}
                     >
                       <ArrowUp size={16} />
@@ -566,10 +594,30 @@ export function NotesWorkspace({
                       type="button"
                       title="Move note down"
                       aria-label="Move note down"
-                      disabled={!siblingMove.down || isPending}
+                      disabled={!availableMoves.down || isPending}
                       onClick={() => moveSelected('down')}
                     >
                       <ArrowDown size={16} />
+                    </button>
+                    <button
+                      className="icon-button"
+                      type="button"
+                      title="Make child of the note above"
+                      aria-label="Make child of the note above"
+                      disabled={!availableMoves.indent || isPending}
+                      onClick={() => reparentSelected('indent')}
+                    >
+                      <IndentIncrease size={16} />
+                    </button>
+                    <button
+                      className="icon-button"
+                      type="button"
+                      title="Move note out of its parent"
+                      aria-label="Move note out of its parent"
+                      disabled={!availableMoves.outdent || isPending}
+                      onClick={() => reparentSelected('outdent')}
+                    >
+                      <IndentDecrease size={16} />
                     </button>
                   </div>
                 ) : null}
