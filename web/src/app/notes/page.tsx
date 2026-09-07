@@ -1,6 +1,6 @@
 import { notFound } from 'next/navigation';
 import { getNoteKnowledgeContext, getNotes } from '@/app/notes/actions';
-import { NotesWorkspace } from '@/components/notes-workspace';
+import { NotesShell } from '@/components/notes-shell';
 
 export default async function NotesPage({
   searchParams,
@@ -13,8 +13,8 @@ export default async function NotesPage({
   const activeId = selectedId ?? notes[0]?.id ?? null;
   const knowledge = activeId ? await getNoteKnowledgeContext(activeId) : null;
   return (
-    <NotesWorkspace
-      key={activeId}
+    <NotesShell
+      activeKey={activeId ?? 'none'}
       notes={notes}
       selectedId={activeId}
       query={q ?? ''}

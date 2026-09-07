@@ -8,9 +8,25 @@ import { currentTotp } from './support/totp';
 // Markdown, expose deliberate connections, and let a person travel either
 // direction through those connections.
 
+// A Note in the tree, addressed within the tree itself. A Note titled after one
+// of the editor's own controls -- "Task list", say -- otherwise matches that
+// control as well, and the test fails on the ambiguity rather than on anything
+// about the Note.
+function treeNote(page: import('@playwright/test').Page, title: string) {
+  return page.getByRole('navigation', { name: 'Notes' }).getByRole('button', {
+    name: title,
+    exact: true,
+  });
+}
+
 async function createRootNote(page: import('@playwright/test').Page, title: string, body: string) {
+  // Waiting for a URL that merely has a note in it proves nothing when a Note
+  // is already open: that pattern already matches, so the assertion passes
+  // before the new Note exists and the editor is still showing the previous
+  // one. Wait for the address to actually change.
+  const before = page.url();
   await page.getByRole('button', { name: 'New root note' }).click();
-  await expect(page).toHaveURL(/\/notes\?note=/);
+  await expect(page).toHaveURL((url) => url.href !== before && /\/notes\?note=/.test(url.href));
   const titleEditor = page.getByRole('textbox', { name: 'Note title' });
   await expect(titleEditor).toHaveValue('Untitled');
   await titleEditor.fill(title);
@@ -20,7 +36,7 @@ async function createRootNote(page: import('@playwright/test').Page, title: stri
   await expect(page.getByRole('status')).toHaveText('Saved');
   // Router refresh after autosave updates the tree. This proves the next
   // navigation leaves a persisted Note, not a client-only draft.
-  await expect(page.getByRole('button', { name: title, exact: true })).toBeVisible();
+  await expect(treeNote(page, title)).toBeVisible();
 }
 
 test('a Markdown Note persists across navigation instead of living only in the editor', async ({
@@ -36,7 +52,7 @@ test('a Markdown Note persists across navigation instead of living only in the e
   await goTo(page, '/');
   await goTo(page, '/notes');
 
-  await page.getByRole('button', { name: title, exact: true }).click();
+  await treeNote(page, title).click();
   await expect(page.getByRole('textbox', { name: 'Note title' })).toHaveValue(title);
   await expect(page.getByRole('textbox', { name: 'Note body, Markdown' })).toHaveValue(body);
 });
@@ -166,7 +182,7 @@ test('a Note can be reordered among its siblings and the new order survives relo
 
   // The last Note has nowhere further to fall, so that direction is offered as
   // unavailable rather than as a control that quietly does nothing.
-  await page.getByRole('button', { name: 'Third decision', exact: true }).click();
+  await treeNote(page, 'Third decision').click();
   await expect(page.getByRole('button', { name: 'Move note down' })).toBeDisabled();
   await page.getByRole('button', { name: 'Move note up' }).click();
   await expect.poll(treeTitles).toEqual(['First decision', 'Third decision', 'Second decision']);
@@ -178,7 +194,7 @@ test('a Note can be reordered among its siblings and the new order survives relo
 
   // The Note that reached the top can no longer rise, which is the same edge
   // condition from the other direction.
-  await page.getByRole('button', { name: 'First decision', exact: true }).click();
+  await treeNote(page, 'First decision').click();
   await expect(page.getByRole('button', { name: 'Move note up' })).toBeDisabled();
 });
 
@@ -201,6 +217,10 @@ test('a Markdown file is previewed before explicit vault import', async ({ works
 
   await expect(dialog.getByLabel('Import preview')).toContainText(title);
   await dialog.getByRole('button', { name: 'Import 1' }).click();
+  // Completing an import refreshes the page, and in an empty workspace that
+  // refresh changes which Note is active and remounts the workspace. The
+  // report of what was just imported has to survive that, or a person importing
+  // a vault never learns how much of it arrived.
   await expect(dialog.getByText('1 Notes imported', { exact: true })).toBeVisible();
   await dialog.getByRole('button', { name: 'Done' }).click();
   await expect(page.getByRole('textbox', { name: 'Note title' })).toHaveValue(title);
@@ -249,7 +269,7 @@ test('a downloaded vault re-imports as an exact match and rebuilds Notes that ar
   await page.getByRole('textbox', { name: 'Note body, Markdown' }).fill(childBody);
   await page.waitForTimeout(1_000);
   await expect(page.getByRole('status')).toHaveText('Saved');
-  await expect(page.getByRole('button', { name: childTitle, exact: true })).toBeVisible();
+  await expect(treeNote(page, childTitle)).toBeVisible();
 
   await goTo(page, '/settings/security');
   await page.getByRole('button', { name: 'Add authenticator' }).click();
@@ -300,10 +320,10 @@ test('a downloaded vault re-imports as an exact match and rebuilds Notes that ar
   // duplicate detection only considers Notes that are still live.
   page.on('dialog', (confirmation) => void confirmation.accept());
   for (const title of [childTitle, parentTitle]) {
-    await page.getByRole('button', { name: title, exact: true }).click();
+    await treeNote(page, title).click();
     await expect(page.getByRole('textbox', { name: 'Note title' })).toHaveValue(title);
     await page.getByRole('button', { name: 'Archive note' }).click();
-    await expect(page.getByRole('button', { name: title, exact: true })).toHaveCount(0);
+    await expect(treeNote(page, title)).toHaveCount(0);
   }
 
   await page.getByRole('button', { name: 'Import Notes' }).click();
@@ -329,8 +349,8 @@ test('a downloaded vault re-imports as an exact match and rebuilds Notes that ar
   // Both Notes come back, and the child comes back beneath its parent rather
   // than flattened to the root.
   await goTo(page, '/notes');
-  await expect(page.getByRole('button', { name: parentTitle, exact: true })).toBeVisible();
-  await expect(page.getByRole('button', { name: childTitle, exact: true })).toBeVisible();
+  await expect(treeNote(page, parentTitle)).toBeVisible();
+  await expect(treeNote(page, childTitle)).toBeVisible();
 });
 
 test('a supported attachment is retained in quarantine instead of becoming an unsafe download', async ({

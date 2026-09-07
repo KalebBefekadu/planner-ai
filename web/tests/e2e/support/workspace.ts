@@ -90,6 +90,28 @@ async function createLocalUser(admin: SupabaseClient, email: string) {
 export async function goTo(page: Page, target: string) {
   await page.goto(target);
   await expect(page).toHaveURL(new RegExp(`${target.replace(/\//g, '\\/')}(?:\\?|$)`));
+  await waitForHydration(page);
+}
+
+/**
+ * Wait until React has taken over the server-rendered markup.
+ *
+ * Every control in the workspace acts through a click handler, and a click that
+ * lands between first paint and hydration is dropped with no trace: the button
+ * is visible, enabled, and does nothing. Waiting on the result of that click
+ * cannot recover it, so a test that clicks too early fails on timing rather
+ * than on the behaviour it was written to check. Retrying the click is not a
+ * safe substitute here either, because most of these controls create something.
+ *
+ * React sets this property on the container when it hydrates the root, which is
+ * the moment the handlers become real.
+ */
+export async function waitForHydration(page: Page) {
+  await page.waitForFunction(
+    () => Object.keys(document).some((key) => key.startsWith('__reactContainer$')),
+    undefined,
+    { timeout: 30_000 }
+  );
 }
 
 /**

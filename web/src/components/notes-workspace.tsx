@@ -58,7 +58,6 @@ import {
   type NoteKnowledgeContext,
   type NoteView,
 } from '@/app/notes/actions';
-import { NoteImportDialog } from '@/components/note-import-dialog';
 import { RichMarkdownEditor } from '@/components/rich-markdown-editor';
 import { useVoiceTranscription } from '@/lib/use-voice-transcription';
 import { extractPlannerMarkdownHeadings } from '@/lib/markdown/contract';
@@ -115,13 +114,13 @@ export function NotesWorkspace({
   selectedId,
   query,
   knowledge,
-  initialImportOpen = false,
+  onRequestImport,
 }: {
   notes: NoteView[];
   selectedId: string | null;
   query: string;
   knowledge: NoteKnowledgeContext | null;
-  initialImportOpen?: boolean;
+  onRequestImport: () => void;
 }) {
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
@@ -140,7 +139,6 @@ export function NotesWorkspace({
     useState<NoteKnowledgeContext['links'][number]['relationType']>('related');
   const [editorMode, setEditorMode] = useState<'source' | 'rich' | 'preview'>('source');
   const [richEditor, setRichEditor] = useState<Editor | null>(null);
-  const [importOpen, setImportOpen] = useState(initialImportOpen);
   const [isUploadingAttachment, setIsUploadingAttachment] = useState(false);
   const [recentlyRemovedAttachment, setRecentlyRemovedAttachment] = useState<{
     id: string;
@@ -453,7 +451,7 @@ export function NotesWorkspace({
               type="button"
               title="Import Notes"
               aria-label="Import Notes"
-              onClick={() => setImportOpen(true)}
+              onClick={onRequestImport}
               disabled={isPending}
             >
               <FileInput size={16} />
@@ -1232,11 +1230,6 @@ export function NotesWorkspace({
           </div>
         )}
       </section>
-      <NoteImportDialog
-        open={importOpen}
-        onClose={() => setImportOpen(false)}
-        onCompleted={() => router.refresh()}
-      />
     </div>
   );
 }

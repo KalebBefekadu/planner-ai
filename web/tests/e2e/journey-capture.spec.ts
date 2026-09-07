@@ -47,10 +47,15 @@ test('a Capture survives a reload, because it is stored rather than held in the 
   await goTo(page, '/inbox');
   await page.getByRole('textbox', { name: 'Unstructured capture' }).fill(raw);
   await page.getByRole('button', { name: 'Save capture' }).click();
-  await expect(page.getByText(raw, { exact: true })).toBeVisible();
+  // Assert against the stored history, not the page as a whole: the editor
+  // still holds the same words until it is cleared, so an unscoped match can
+  // resolve to the draft a person just typed instead of the Capture that was
+  // saved -- which is the opposite of what this test is for.
+  const history = page.getByLabel('Inbox history');
+  await expect(history.getByText(raw, { exact: true })).toBeVisible();
 
   await page.reload();
-  await expect(page.getByText(raw, { exact: true })).toBeVisible();
+  await expect(history.getByText(raw, { exact: true })).toBeVisible();
 });
 
 test('Captures reach Today, so nothing is captured into a place nobody looks', async ({
@@ -62,7 +67,7 @@ test('Captures reach Today, so nothing is captured into a place nobody looks', a
   await goTo(page, '/inbox');
   await page.getByRole('textbox', { name: 'Unstructured capture' }).fill(raw);
   await page.getByRole('button', { name: 'Save capture' }).click();
-  await expect(page.getByText(raw, { exact: true })).toBeVisible();
+  await expect(page.getByLabel('Inbox history').getByText(raw, { exact: true })).toBeVisible();
 
   await goTo(page, '/');
   const recent = page.getByRole('region', { name: 'Recent captures' });

@@ -29,7 +29,34 @@ const surfaces = [
   ['/settings/mcp', 'MCP settings'],
 ] as const;
 
+// Colour tokens are animated, so a scan taken while a transition is still
+// running measures a blend of two themes rather than either one. That reports
+// contrast failures against colours the page never actually rests on, and hides
+// nothing real. Settle the page before measuring it.
+async function settle(page: Page) {
+  await page.evaluate(async () => {
+    await new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve)));
+    // Injecting a stylesheet to switch transitions off is not available here:
+    // the application sends a strict Content Security Policy and blocks it,
+    // which is the behaviour a separate test already relies on. Wait the
+    // running transitions out instead. Looping animations never finish, so
+    // they are excluded rather than waited on.
+    const settling = document
+      .getAnimations()
+      .filter((animation) => {
+        const timing = animation.effect?.getComputedTiming();
+        return timing !== undefined && timing.iterations !== Infinity;
+      })
+      .map((animation) => animation.finished.catch(() => undefined));
+    await Promise.race([
+      Promise.all(settling),
+      new Promise((resolve) => setTimeout(resolve, 2_000)),
+    ]);
+  });
+}
+
 async function scan(page: Page) {
+  await settle(page);
   return new AxeBuilder({ page }).withTags(['wcag2a', 'wcag2aa', 'wcag21aa', 'wcag22aa']).analyze();
 }
 

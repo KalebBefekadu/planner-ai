@@ -78,7 +78,12 @@ test('the daily cap limits what is highlighted, not what can exist', async ({ wo
     await page.getByRole('button', { name: 'Add Weekly' }).click();
     await page.getByRole('textbox', { name: 'Weekly action' }).fill(`Capacity action ${index}`);
     await page.getByRole('button', { name: 'Save weekly action', exact: true }).click();
-    await expect(page.getByText(`Capacity action ${index}`)).toBeVisible();
+    // Confirm against the hierarchy, not the page: the form still holds the
+    // same words until it is cleared, so an unscoped match can be satisfied by
+    // the text just typed and the loop moves on having saved nothing.
+    await expect(
+      page.getByRole('region', { name: 'Goal hierarchy' }).getByText(`Capacity action ${index}`)
+    ).toBeVisible();
   }
 
   await goTo(page, '/');
@@ -92,6 +97,11 @@ test('the daily cap limits what is highlighted, not what can exist', async ({ wo
     'Capacity action 4',
   ]) {
     await page.getByRole('button', { name: `Focus ${title}` }).click();
+    // Committing an Action moves it out of the open list and into this region,
+    // so the next control only settles once that move has happened. Clicking
+    // straight through the re-render drops a commitment and the cap then looks
+    // like it refused something it never received.
+    await expect(committed).toContainText(title);
   }
 
   await expect(committed).toContainText('5 / 5');
