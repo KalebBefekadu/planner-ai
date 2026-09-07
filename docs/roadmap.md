@@ -1,132 +1,110 @@
-# Planner AI Roadmap
+# Planner AI Product Rebuild Plan
 
-Status: **Execution authority.** This roadmap sequences the approved first release and the gated north star. [Status](status.md) records what is actually complete.
+Status: **Execution authority for the personal-dogfood release.** This replaces the older feature-list roadmap. [Status](status.md) is the factual record of what is complete.
 
-## Delivery Rule
+## The Product We Are Building
 
-Build one reliable loop before expanding the platform:
+Planner AI is a private personal operating system: a calm workspace for knowledge, a dependable planner for action, and an AI assistant that can use the same safe capabilities as the interface.
 
-`Capture -> Proposal -> Goal/Action or Note -> Today -> Review -> Activity/Undo`
+The target experience has two connected modes under one brand and one authenticated application:
 
-Every durable capability is complete only when the UI and every approved AI surface call the same versioned Operation, authorization and Workspace isolation are tested, failure preserves user input, and the result is observable and reversible where practical.
+- **Workspace** is document-first: pages, notes, imports, search, links, projects, and eventually graph and canvas views.
+- **Planner** is action-first: Today, week, calendar, horizons, review, and vision.
+- **AI** is an assistant inside both modes. It proposes and carries out approved Operations; it never becomes a separate product or a second source of truth.
 
-## M0 - Re-baseline And Contain
+The supplied Workspace and Planner reference screens are the visual and interaction target. `/preview` remains intact as a reference only; no new product behavior is built there. It is retired only after the real app covers the same flows with real data.
 
-Goal: one source of truth and a repeatable quality baseline.
+## Non-Negotiable Decisions
 
-- Consolidate product, experience, architecture, roadmap, status, ADR, evidence, and runbook documents.
-- Keep `web/` as the only product application and remove obsolete duplicate application/schema references.
-- Preserve the `/preview` route only as a gated design laboratory until its accepted patterns are ported.
-- Keep legacy and canonical data modes explicit until production migration is proven.
-- Require lint, format, typecheck, unit, database, build, browser, accessibility, and dependency checks.
+1. One authenticated Planner AI application, one canonical data model, one versioned Operations layer.
+2. Every visible control must work on real user data or be absent. We will not ship decorative Graph, Canvas, database, or AI controls.
+3. Every page is designed and tested as a complete vertical slice: loading, empty, populated, edit, error, offline/degraded, and mobile states.
+4. Workspace and Planner share a global rail, workspace switcher, command/search entry point, typography, color tokens, icon language, and responsive rules; their contextual sidebars differ by mode.
+5. AI enhances the normal workflow. Capture, editing, planning, import, export, and recovery remain usable when no provider is available.
+6. The initial success criterion is personal daily use and a safe Notion migration, not feature-count parity with Notion or Obsidian.
 
-Exit gate: documentation has one authority per concern; local baseline is green; production gaps are recorded without claiming completion.
+## Delivery Gates
 
-## M1 - Canonical Production Foundation
+### Gate 1: Brand And Application Frame
 
-Goal: make the tested canonical model the production reality.
+**Outcome:** the real app has a recognisable Planner AI identity and the durable layout needed by every screen.
 
-- Copy the encrypted backup off-machine and complete a hosted recovery-project drill; the local isolated database restore passed on 2026-09-05.
-- Reconcile the two equivalent remote migration-history entries using the reviewed metadata-only procedure.
-- Verify migration history and require a no-surprise `db push --dry-run`.
-- Apply the canonical cutover in a maintenance window with rollback ownership and count/integrity checks.
-- Deploy with `PLANNER_DATA_MODEL=canonical`; run authentication, cross-user isolation, CRUD, export, and rollback smoke tests.
-- Configure custom SMTP/domain, Google OAuth, MFA step-up, monitoring, budgets, alerts, and scheduled lifecycle jobs.
+- `BR-01` Establish the brand system: Planner AI wordmark and mark usage, product voice, icon rules, and a restrained palette. The visual character is clear, grounded, warm, and serious rather than generic productivity software.
+- `BR-02` Establish type, spacing, elevation, border, focus, motion, and semantic status tokens. Use an editorial display face for page and planner titles and an efficient sans-serif for the interface.
+- `BR-03` Build shared primitives: global rail, workspace switcher, command/search trigger, contextual sidebar, breadcrumb/top bar, buttons, menus, tabs, fields, empty states, feedback, and mobile navigation.
+- `BR-04` Build the cover and page-identity system: optional cover visual, icon or emoji, title, metadata, favorite state, and properties. Presentation metadata stays separate from Markdown content and is backed by an owned, permissioned model.
 
-Exit gate: canonical production journeys pass, restore and rollback are proven, and legacy tables are read-only.
+**Exit test:** the real authenticated app, at desktop and mobile widths, visibly uses this system on Notes, Planner, onboarding, settings, and import. No page uses the old shell.
 
-## M2 - Experience Convergence
+### Gate 2: Workspace That Replaces Daily Notes
 
-Goal: turn the refined design direction into the real authenticated product.
+**Outcome:** a real document experience good enough to start moving personal knowledge out of Notion.
 
-- Extract stable tokens and shell patterns from `/preview` into production components.
-- Unify navigation around Today, Planner, Notes, Review, Search, Activity, and Settings.
-- Keep the assistant collapsible and contextual; preserve full-width work surfaces when closed.
-- Replace preview-only data and controls with Operation-backed states.
-- Complete mobile, tablet, desktop, wide-assistant, 200-percent zoom, keyboard, touch, reduced-motion, loading, empty, conflict, offline, error, and success verification.
+- `WS-01` Replace the current Notes route with the Workspace shell: favorites, workspace tree, search, contextual navigation, and document header.
+- `WS-02` Make the document view real: Markdown editing, autosave and save state, hierarchy, title/icon/cover/properties, favorite, links, backlinks, and clear recovery feedback.
+- `WS-03` Finish reliable capture and import entry points inside Workspace. A user can create a page, capture a thought, import a small Notion export, see exactly what succeeded or failed, and reopen the result.
+- `WS-04` Add project/collection views only for existing typed data. Build Graph and Canvas only after links and typed relationships have an interaction model, persistence, and tests.
+- `WS-05` Validate the Workspace on a representative real Notion sample before any full migration.
 
-Exit gate: the five release journeys work in the production shell without chat and pass visual/accessibility regression tests.
+**Exit test:** a user can create, edit, find, import, export, and recover their own notes in the real app without AI or `/preview`.
 
-## M3 - Daily Planning Loop
+### Gate 3: Planner That Connects Direction To Today
 
-Goal: make Planner AI useful every day without relying on AI availability.
+**Outcome:** the planner has the same visual quality as the target screen and works against canonical goals, actions, and captures.
 
-- Capture exact typed or transcribed input and recover unsent mobile drafts.
-- Review atomic AI Proposals without rewriting source Captures.
-- Connect Vision to yearly/quarterly Goals and monthly/weekly Actions.
-- Limit highlighted daily and weekly commitments without limiting creation.
-- Require explicit rollover decisions in Weekly Review.
-- Record Activity, idempotency, optimistic concurrency, and undo for every write.
-- Prove UI/assistant parity for core reads and reversible writes.
+- `PL-01` Replace the current Planner shell with its contextual navigation: Today, This Week, Calendar, Action Inbox, Weekly Review, Goals and Horizons, and Vision. Calendar must use planner navigation only, never Workspace navigation.
+- `PL-02` Build the real Today screen: date, outcome limit, capacity/energy summary, actionable task list, realistic schedule, capture entry point, and the visible direction link.
+- `PL-03` Build the hierarchy views: Week, Month, Quarter, Year, and Vision. Each view must show real relationships and allow navigation, creation, editing, and completion.
+- `PL-04` Build Calendar and Weekly Review as real planning flows, including explicit rollover and undo/recovery behavior.
+- `PL-05` Connect Workspace objects to planning objects when the user chooses, without forcing every note into the plan.
 
-Exit gate: the complete delivery-rule loop passes authenticated browser tests with AI available and unavailable.
+**Exit test:** a user can capture a task, connect it to a goal, select it for today, complete or defer it, and review the result at week end. The route has desktop, mobile, keyboard, empty, failure, and data-backed browser coverage.
 
-## M4 - Notes And Knowledge Foundation
+### Gate 4: Migration-Ready Personal Dogfood
 
-Goal: a trustworthy personal Markdown vault, not a partial Notion clone.
+**Outcome:** Planner AI can become the user's daily system without risking their existing information.
 
-- Deliver a polished Markdown editor with autosave state, revisions, hierarchy, tags, links, backlinks, AI Exclusion, and caret-aware voice dictation.
-- Add exact search with source links.
-- Complete dry-run Notion and Obsidian import with duplicate and unsupported-content reports.
-- Complete full Markdown export and restore.
-- Complete quarantined private attachments: owner-scoped Storage policies, intake, download gating, recoverable removal, and protected purge are in place; add scanner approval and production recovery evidence.
+- `MG-01` Build Notion export preflight: accepted formats, content inventory, duplicates, unsupported blocks, attachment limits, and a dry-run report before any write.
+- `MG-02` Build resumable import and reconciliation: clear item-level results, stable source references, retryable failures, duplicate policy, and an import summary.
+- `MG-03` Prove Markdown export, encrypted backup, restore to an isolated project, and account-scoped access before importing anything irreplaceable.
+- `MG-04` Run a staged personal migration: a small pilot workspace, daily use for notes and planning, issue logging, correction, then wider migration.
+- `MG-05` Deploy a private Vercel environment only after the real Workspace and Planner core pass production-like browser smoke tests.
 
-Exit gate: the supported Markdown corpus round-trips without loss and Notes remain usable during AI failure.
+**Exit test:** a representative Notion workspace has a successful preflight, a recoverable import, an export, and an independently verified restore. Planner AI is used daily for two weeks without returning to Notion for core notes or planning.
 
-## M5 - Governed Intelligence
+### Gate 5: Governed Intelligence And MCP
 
-Goal: AI that is useful because it is constrained, observable, and interchangeable.
+**Outcome:** AI and external clients are genuinely useful because they have the same boundaries as the product.
 
-- Finish provider-independent adapters for agent, structured analysis, transcription, and retrieval roles.
-- Pass live-provider evaluation suites for correctness, evidence, injection resistance, latency, fallback, and cost.
-- Make route, selection, timezone, and explicit attachments visible and editable assistant context.
-- Use schema-validated GenUI only for registered components and signed Operation intents; always provide a deterministic fallback.
-- Complete durable Conversations, explicit Memory, approvals, provenance, AI Exclusion, usage controls, and graceful degradation.
+- `AI-01` Complete provider-independent roles for chat, structured analysis, transcription, and retrieval with cost, timeout, failure, and fallback controls.
+- `AI-02` Expose contextual assistant actions on Workspace and Planner that create explicit, reviewable Operation proposals. The UI always has the equivalent manual action.
+- `AI-03` Add durable conversations, provenance, editable context, memory controls, and AI-exclusion rules.
+- `MCP-01` Ship a narrow authenticated read-only MCP catalog backed by the same Operations layer.
+- `MCP-02` Add reversible writes only after OAuth, user consent, approval, rate limit, audit, revocation, and cross-client contract tests are complete.
 
-Exit gate: provider outage never blocks core work and every AI effect is authorized, validated, attributable, and recoverable.
+**Exit test:** an AI outage does not block daily work; every AI or MCP effect is authorized, attributable, observable, and recoverable.
 
-## M6 - MCP And Automations
+## First Ten Build Tickets
 
-Goal: let approved external agents use the same product capabilities safely.
+The next work is deliberately ordered. We do not jump from a sidebar tweak to Graph, Canvas, or MCP.
 
-- Complete per-user OAuth, dynamic client registration policy, audience binding, rotating refresh tokens, revocation, and AAL2 for sensitive grants.
-- Expose a small read-only Operation catalog first.
-- Add reversible writes only after parity, approval, rate-limit, and compatibility tests pass.
-- Keep automations visible, cancellable, narrowly scoped, and less authoritative than interactive chat.
-- Keep raw SQL, service credentials, shell, repository, deployment, arbitrary network, and secret management unavailable.
+1. Audit the current authenticated shell, routes, and duplicate visual systems; record the exact components to replace and freeze `/preview` feature work.
+2. Implement the Planner AI brand tokens and typography in the real application, with visual regression baselines.
+3. Replace the existing authenticated frame with the global rail, workspace switcher, top bar, and responsive navigation.
+4. Build contextual Workspace navigation and move real Notes into that frame.
+5. Add the permissioned page-presentation metadata model and Operations required for cover, icon, favorite, and properties.
+6. Complete the real Workspace document page: edit, save state, hierarchy, capture/import entry, and recovery states.
+7. Build the contextual Planner navigation and move real Today into the same frame.
+8. Deliver the real Today screen and its action, schedule, and direction interactions.
+9. Deliver Week, Calendar, Horizons, Vision, and Review as connected, data-backed planner flows.
+10. Build the Notion migration preflight and run the first small, recoverable import pilot.
 
-Exit gate: independent security review and cross-client contract tests pass.
+## Quality Bar And Working Method
 
-## M7 - Invite Beta
+Each ticket is complete only when it has a real route, canonical data and Operations, authorization, empty/loading/error states, desktop and mobile visual review, keyboard access, focused automated tests, and no lost user input on failure. Changes are delivered as complete vertical slices, not as prototype-only fragments.
 
-Goal: prove reliability and repeated usefulness with 10 to 20 invited users.
+We will take one finished screen family at a time: shared frame, Workspace, then Planner. After each gate, we compare the real product at desktop and mobile widths against the target experience, test the daily workflow, fix the gaps, and then proceed. This is how the product converges instead of becoming a collection of attractive but disconnected pages.
 
-- Finish privacy, retention, account deletion, support access, incident response, and operational ownership.
-- Meet 99.5 percent core availability, ordinary Operation p95 below 750 ms, 24-hour RPO, and four-hour RTO.
-- Resolve all critical/high security findings and known severity-one defects.
-- Measure completion of Capture, Today, Notes, and Weekly Review loops, corrections to AI Proposals, support load, latency, and cost.
+## Deferred Until The Foundation Is Proven
 
-Exit gate: four consecutive reliable weeks plus successful restore, rollback, AI-outage, accessibility, and security reviews.
-
-## Post-Beta Expansion
-
-Sequence these only after M7 evidence supports them:
-
-1. read-only Google Calendar context, then exact-preview Calendar writes;
-2. structured databases and table/board/calendar/timeline/gallery views;
-3. graph and canvas over the same typed relationships;
-4. stronger offline editing, then a true local-first synchronization protocol;
-5. sharing, permissions, collaboration, forms, portals, and dashboards;
-6. a signed, sandboxed extension model and reviewed outbound MCP.
-
-These capabilities must reuse canonical objects and Operations. They do not introduce a second source of truth or grant AI powers before equivalent user-facing controls exist.
-
-## Immediate Queue
-
-M0 and the canonical schema portion of M1 passed on 2026-09-05. The active queue is:
-
-1. Deploy with `PLANNER_DATA_MODEL=canonical` and prove authenticated production journeys.
-2. Retain the rollback window and copy the verified backup off-machine.
-3. Deepen the authenticated Notes and Planner journeys on the converged shell.
-4. Prove the complete daily planning loop through UI and assistant parity tests.
-5. Complete provider, MCP, monitoring, accessibility, and hosted recovery evidence.
+Team collaboration, granular sharing, client portals, public forms, full relational databases, graph, canvas, local-first synchronization, community plugins, broad automations, and write-capable external MCP are valuable later capabilities. They are not part of the personal-dogfood release because they would dilute the work needed to replace daily Notes and planning first.
