@@ -1,10 +1,13 @@
 'use client';
 
 import { useState, useTransition } from 'react';
+import Link from 'next/link';
 import {
   Archive,
+  CalendarDays,
   CalendarPlus,
   CircleCheckBig,
+  Compass,
   Layers3,
   ListTodo,
   Pause,
@@ -429,6 +432,40 @@ export function PlannerWorkspace({
         ))}
       </nav>
 
+      <nav className="planner-flow" aria-label="Planning flow">
+        <Link href="/vision">
+          <Compass size={16} aria-hidden="true" />
+          <span>
+            <strong>Vision</strong>
+            <small>The direction</small>
+          </span>
+        </Link>
+        <span className="planner-flow-connector" aria-hidden="true" />
+        <a href="#plan-horizons">
+          <Target size={16} aria-hidden="true" />
+          <span>
+            <strong>Horizons</strong>
+            <small>{yearly.length + quarterly.length} active goals</small>
+          </span>
+        </a>
+        <span className="planner-flow-connector" aria-hidden="true" />
+        <Link href="/planner/calendar">
+          <CalendarDays size={16} aria-hidden="true" />
+          <span>
+            <strong>Calendar</strong>
+            <small>{weekly.length} weekly actions</small>
+          </span>
+        </Link>
+        <span className="planner-flow-connector" aria-hidden="true" />
+        <Link href="/review">
+          <CircleCheckBig size={16} aria-hidden="true" />
+          <span>
+            <strong>Review</strong>
+            <small>Close the loop</small>
+          </span>
+        </Link>
+      </nav>
+
       <section className="planner-overview" aria-label="Plan overview">
         <div>
           <Target size={17} aria-hidden="true" />
@@ -624,7 +661,7 @@ export function PlannerWorkspace({
         </section>
       ) : null}
 
-      <section className="plan-tree" aria-label="Goal hierarchy">
+      <section className="plan-tree" id="plan-horizons" aria-label="Goal hierarchy">
         {yearly.length === 0 ? (
           <div className="card empty-state">
             <h2>No yearly goals yet</h2>
