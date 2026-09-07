@@ -105,19 +105,13 @@ Legacy tables remain available for rollback while the deployed application is sw
 
 ## Current Decision
 
-Running the browser corpus against a production build rather than a development server was the single highest-yield change in this pass. A development server allows inline styles and shows the message on any error thrown out of a Server Action; a real build does neither. Four defects were hiding in exactly that gap, each of which looked correct throughout development and reached nobody in production: every failure message, every progress bar and chart, the conflict path, and the reduced-motion preference. Any further work that claims a user-visible result should be verified the same way.
+The current delivery goal is a private, deployed Planner AI that its owner can use every day instead of Notion for personal notes and planning. The critical path and scope boundary are defined in [roadmap.md](roadmap.md).
 
-The correct path is convergence, not feature expansion. Keep the long-term database, graph, canvas, collaboration, plugin, and true local-first ideas in the roadmap, but do not build them before the canonical daily loop and production shell are dependable.
+Production-build browser verification remains mandatory at delivery gates because it previously exposed defects hidden by development mode. The product now advances through one active ticket at a time; long-term database, graph, canvas, collaboration, plugin, GenUI, and broad MCP work is deferred until personal dogfood succeeds.
 
 ## Next Deliverable
 
-M0 is complete. Continue M1 and M2 in parallel where safe:
-
-1. deploy the authenticated application with `PLANNER_DATA_MODEL=canonical` and complete production smoke tests;
-2. retain the rollback window and copy the verified backup off-machine;
-3. deepen Notes with backlinks, attachment recovery, and import/export round-trip evidence;
-4. complete live-provider, AI-outage, MCP OAuth, and production monitoring certification;
-5. verify manual screen-reader, keyboard, zoom, and responsive visual evidence before invite beta.
+Complete the real-shell audit against the accepted Workspace and Planner reference screens. Map each Preview element to reuse, rebuild, or discard; identify the real components and CSS systems it replaces; then implement the shared brand and application frame. No unrelated feature expansion runs in parallel.
 
 ## Release Rule
 
