@@ -130,6 +130,9 @@ export function NotesWorkspace({
   const [relationType, setRelationType] =
     useState<NoteKnowledgeContext['links'][number]['relationType']>('related');
   const [editorMode, setEditorMode] = useState<'source' | 'rich' | 'preview'>('source');
+  const [inspectorView, setInspectorView] = useState<'properties' | 'links' | 'history'>(
+    'properties'
+  );
   const [richEditor, setRichEditor] = useState<Editor | null>(null);
   const [isUploadingAttachment, setIsUploadingAttachment] = useState(false);
   const [recentlyRemovedAttachment, setRecentlyRemovedAttachment] = useState<{
@@ -878,8 +881,24 @@ export function NotesWorkspace({
               ) : (
                 <NoteMarkdownPreview markdown={body} />
               )}
-              <aside className="note-inspector" aria-label="Note connections and history">
-                <section className="note-inspector-section">
+              <aside
+                className="note-inspector"
+                aria-label="Note connections and history"
+                data-inspector-view={inspectorView}
+              >
+                <nav className="note-inspector-tabs" aria-label="Note details">
+                  {(['properties', 'links', 'history'] as const).map((view) => (
+                    <button
+                      key={view}
+                      type="button"
+                      aria-pressed={inspectorView === view}
+                      onClick={() => setInspectorView(view)}
+                    >
+                      {view[0].toUpperCase() + view.slice(1)}
+                    </button>
+                  ))}
+                </nav>
+                <section className="note-inspector-section" data-inspector-group="history">
                   <h2>
                     <ListTree size={15} aria-hidden="true" />
                     Outline
@@ -901,7 +920,7 @@ export function NotesWorkspace({
                     <p className="note-inspector-empty">Add headings to create an outline</p>
                   )}
                 </section>
-                <section className="note-inspector-section">
+                <section className="note-inspector-section" data-inspector-group="properties">
                   <h2>
                     <FolderTree size={15} aria-hidden="true" />
                     Filing
@@ -947,7 +966,7 @@ export function NotesWorkspace({
                     </button>
                   </div>
                 </section>
-                <section className="note-inspector-section">
+                <section className="note-inspector-section" data-inspector-group="properties">
                   <h2>
                     <Paperclip size={15} aria-hidden="true" />
                     Attachments
@@ -1016,7 +1035,7 @@ export function NotesWorkspace({
                   </div>
                 </section>
 
-                <section className="note-inspector-section">
+                <section className="note-inspector-section" data-inspector-group="properties">
                   <h2>
                     <Tags size={15} aria-hidden="true" />
                     Tags
@@ -1058,7 +1077,7 @@ export function NotesWorkspace({
                   )}
                 </section>
 
-                <section className="note-inspector-section">
+                <section className="note-inspector-section" data-inspector-group="properties">
                   <h2>
                     <Target size={15} aria-hidden="true" />
                     Plan connections
@@ -1183,7 +1202,7 @@ export function NotesWorkspace({
                   </div>
                 </section>
 
-                <section className="note-inspector-section">
+                <section className="note-inspector-section" data-inspector-group="links">
                   <h2>
                     <Link2 size={15} aria-hidden="true" />
                     Links
@@ -1270,7 +1289,7 @@ export function NotesWorkspace({
                   </div>
                 </section>
 
-                <section className="note-inspector-section">
+                <section className="note-inspector-section" data-inspector-group="history">
                   <h2>
                     <History size={15} aria-hidden="true" />
                     History
@@ -1324,7 +1343,7 @@ export function NotesWorkspace({
                   </div>
                 </section>
 
-                <section className="note-inspector-section">
+                <section className="note-inspector-section" data-inspector-group="links">
                   <h2>
                     <FileInput size={15} aria-hidden="true" />
                     File captures
