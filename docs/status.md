@@ -1,6 +1,6 @@
 # Planner AI Status
 
-Updated: 2026-09-07
+Updated: 2026-09-08
 
 ## Executive Assessment
 
@@ -8,8 +8,8 @@ Planner AI has a substantial, well-tested application foundation, but it is not 
 
 Estimated completion:
 
-- **Private dogfood product:** about 75 percent.
-- **Safe invite beta:** about 54 percent.
+- **Private dogfood product:** about 78 percent.
+- **Safe invite beta:** about 55 percent.
 - **Full long-term Notion/Obsidian/AI-native vision:** about 27 percent.
 
 These percentages describe validated capability, not code volume.
@@ -111,7 +111,7 @@ Production-build browser verification remains mandatory at delivery gates becaus
 
 ## Next Deliverable
 
-Complete the real-shell audit against the accepted Workspace and Planner reference screens. Map each Preview element to reuse, rebuild, or discard; identify the real components and CSS systems it replaces; then implement the shared brand and application frame. No unrelated feature expansion runs in parallel.
+Bring the real Today screen closer to the accepted Planner reference while preserving its canonical data and Operations. The shell audit and shared frame are complete; Notes now owns one real document tree, Note details are grouped into focused views, onboarding preserves completed import reconciliation, and Today plus Action Inbox remain inside Planner navigation.
 
 ## Release Rule
 

@@ -1,19 +1,15 @@
 # Active Agent Work
 
-Roadmap stage: **1 - Brand And Real Shell**
+Roadmap stage: **3 - Daily Planner Loop**
 
 ## Active
 
-- `BR-02-brand-shell`
-  - Owner: Codex
-  - Mode: review and integration
-  - Branch: `codex/br-02-brand-shell`
-  - Contract: `.agents/tasks/BR-02-brand-shell.md`
+No implementation ticket is currently checked out. The next ticket is `PL-03-today-convergence`.
 
 ## Integration
 
 - Owner: Codex lead
 - Branch: `integration/dogfood`
-- Current implementation is verified and ready to merge into `integration/dogfood`.
+- Integration is current through `PL-02-planner-scoped-routes`.
 
-No other implementation ticket is active.
+Claude's next audit is prepared but cannot start until the repository content is approved for disclosure to the external Claude service.
