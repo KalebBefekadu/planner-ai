@@ -989,6 +989,52 @@ button:disabled {
 .planner-workspace-header {
   padding-top: 4px;
 }
+.planner-period-bar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding-block: 8px;
+}
+.planner-period-choice {
+  display: inline-flex;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  overflow: hidden;
+}
+.planner-period-choice button {
+  border: 0;
+  padding: 6px 14px;
+  background: transparent;
+  color: var(--muted);
+  font-size: var(--fs-label);
+  font-weight: 700;
+}
+.planner-period-choice button:hover {
+  color: var(--ink);
+}
+.planner-period-choice .planner-horizon-active {
+  background: var(--brand-soft);
+  color: var(--brand-strong);
+}
+.planner-period-range {
+  color: var(--muted);
+  font-size: var(--fs-label);
+}
+.planner-period-hidden {
+  color: var(--muted);
+  font-size: var(--fs-label);
+}
+.link-button {
+  border: 0;
+  padding: 0;
+  background: transparent;
+  color: var(--brand-strong);
+  font: inherit;
+  font-weight: 700;
+  text-decoration: underline;
+}
 .planner-horizon-tabs {
   display: flex;
   overflow-x: auto;
