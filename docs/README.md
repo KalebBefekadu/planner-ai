@@ -10,7 +10,7 @@ This directory is the product and engineering source of truth. Read only the doc
 4. [Experience](product/experience.md) - information architecture, interaction rules, and visual direction.
 5. [Architecture](engineering/architecture.md) - current system boundaries and staged evolution.
 6. [Data model](engineering/data-model.md) - canonical entities and invariants.
-7. [Roadmap](roadmap.md) - ordered milestones and exit gates.
+7. [Roadmap](roadmap.md) - the four product states, current goal, ordered stages, and exit gates.
 8. [Status](status.md) - current evidence, gaps, and immediate work.
 
 ## Specialized References
