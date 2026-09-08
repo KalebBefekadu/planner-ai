@@ -162,7 +162,10 @@ test('canonical users see the complete workspace navigation after login', async 
     await expect(page.getByRole('link', { name: 'Activity', exact: true })).toBeVisible();
     await expect(page.getByRole('link', { name: 'Trash', exact: true })).toBeVisible();
 
-    await page.getByRole('link', { name: 'Planner', exact: true }).last().click();
+    await page
+      .locator('.experience-mobile-drawer')
+      .getByRole('link', { name: 'Planner', exact: true })
+      .click();
     await expect(page).toHaveURL(/\/planner(?:\?|$)/);
     await expect(
       page.getByRole('heading', { name: 'Plan with a clear line of sight', exact: true })
