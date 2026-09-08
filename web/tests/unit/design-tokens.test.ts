@@ -4,6 +4,7 @@ import { describe, expect, it } from 'vitest';
 const css = readFileSync('src/app/globals.css', 'utf8');
 const layout = readFileSync('src/app/layout.tsx', 'utf8');
 const themeToggle = readFileSync('src/components/theme-toggle.tsx', 'utf8');
+const experienceShell = readFileSync('src/components/experience-shell.tsx', 'utf8');
 
 describe('brand and shell contracts', () => {
   it('defines and consumes one shared typography system', () => {
@@ -25,5 +26,13 @@ describe('brand and shell contracts', () => {
     expect(layout).not.toContain('experienceV2EnabledForOwner');
     expect(layout).not.toContain('PLANNER_UI_V2');
     expect(layout).toContain('{user ? (');
+  });
+
+  it('keeps onboarding outside the authenticated application chrome', () => {
+    expect(experienceShell).toContain("const standaloneFlow = pathname === '/onboarding'");
+    expect(experienceShell).toContain("standaloneFlow ? ' experience-standalone' : ''");
+    expect(css).toMatch(
+      /\.experience-standalone > \.experience-mobile-bottom-nav\s*{[^}]*display:\s*none/
+    );
   });
 });

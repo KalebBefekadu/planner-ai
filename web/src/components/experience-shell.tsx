@@ -84,6 +84,7 @@ export function ExperienceShell({
   unreadNotifications,
 }: ExperienceShellProps) {
   const pathname = usePathname();
+  const standaloneFlow = pathname === '/onboarding';
   const router = useRouter();
   const sidebarOpen = useSyncExternalStore(subscribeToSidebar, sidebarOpenSnapshot, () => true);
   const sidebarWidth = useSyncExternalStore(
@@ -252,7 +253,7 @@ export function ExperienceShell({
   return (
     <div
       ref={shellRef}
-      className={`experience-shell${sidebarOpen ? '' : ' experience-sidebar-collapsed'}`}
+      className={`experience-shell${sidebarOpen ? '' : ' experience-sidebar-collapsed'}${standaloneFlow ? ' experience-standalone' : ''}`}
       data-experience-area={navigation.area}
     >
       <a className="experience-skip-link" href="#experience-main">
