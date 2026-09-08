@@ -1,6 +1,6 @@
 'use client';
 
-import { useMemo, useState, useTransition } from 'react';
+import { useMemo, useRef, useState, useTransition } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import {
@@ -18,14 +18,17 @@ import {
 } from 'lucide-react';
 import {
   completeTodayAction,
+  createTodayAction,
   editTodayAction,
   saveDailyFocus,
+  type CreateTodayActionResult,
   type TodayAction,
   type TodayData,
 } from '@/app/today/actions';
 import { CoachingCue } from '@/components/coaching-cue';
 import { todayCoachingCue } from '@/lib/coaching';
 import { actionFailureMessage } from '@/lib/operations/failure-message';
+import { TODAY_FOCUS_CAPACITY } from '@/lib/today-composer';
 
 function errorMessage(error: unknown) {
   return actionFailureMessage(error, 'Today could not be updated.');
@@ -40,6 +43,31 @@ function dateLabel(value: string | null, today: string) {
   );
 }
 
+// The composer keeps one key per attempt so a double submission or a retry
+// after a failed commitment resolves to the Action that was already created.
+function newRequestKey() {
+  return typeof crypto !== 'undefined' && 'randomUUID' in crypto
+    ? crypto.randomUUID()
+    : `today-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
+}
+
+function focusOutcomeMessage(result: CreateTodayActionResult) {
+  const title = result.action.title;
+  switch (result.focusOutcome) {
+    case 'committed':
+    case 'already-committed':
+      return `"${title}" is saved and committed to today.`;
+    case 'other-day':
+      return `"${title}" is saved for ${result.action.scheduledOn}. Focus only holds today's Actions.`;
+    case 'full':
+      return `"${title}" is saved. Today's focus is already full at ${TODAY_FOCUS_CAPACITY}, so nothing was replaced.`;
+    case 'failed':
+      return `"${title}" is saved, but committing it to today did not go through. ${result.focusFailureMessage ?? ''} Use its focus button to try again.`.trim();
+    default:
+      return `"${title}" is saved to your open Actions.`;
+  }
+}
+
 export function TodayWorkspace({ data }: { data: TodayData }) {
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
@@ -47,6 +75,12 @@ export function TodayWorkspace({ data }: { data: TodayData }) {
   const [actions, setActions] = useState(data.actions);
   const [editing, setEditing] = useState<TodayAction | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [notice, setNotice] = useState<string | null>(null);
+  const [draftTitle, setDraftTitle] = useState('');
+  const [draftGoalId, setDraftGoalId] = useState('');
+  const [draftDate, setDraftDate] = useState(data.localDate);
+  const [draftFocus, setDraftFocus] = useState(true);
+  const requestKey = useRef<string | null>(null);
   const focus = focusIds
     .map((id) => actions.find((action) => action.id === id))
     .filter((action): action is TodayAction => Boolean(action));
@@ -71,8 +105,49 @@ export function TodayWorkspace({ data }: { data: TodayData }) {
     [data.localDate]
   );
 
+  function submitDraft(event: React.FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (isPending) return;
+    setError(null);
+    setNotice(null);
+    // Reuse the key of a failed attempt so a retry cannot create a second
+    // Action for the same submission.
+    if (!requestKey.current) requestKey.current = newRequestKey();
+    const key = requestKey.current;
+    const title = draftTitle;
+    const goalId = draftGoalId || null;
+    const scheduledOn = draftDate;
+    const focus = draftFocus;
+    startTransition(async () => {
+      try {
+        const result = await createTodayAction({
+          title,
+          goalId,
+          scheduledOn,
+          focus,
+          requestKey: key,
+        });
+        setActions((current) =>
+          current.some((item) => item.id === result.action.id)
+            ? current.map((item) => (item.id === result.action.id ? result.action : item))
+            : [result.action, ...current]
+        );
+        setFocusIds(result.focusActionIds);
+        setNotice(focusOutcomeMessage(result));
+        // Only a saved Action clears the draft; a rejected one keeps every
+        // word the person typed.
+        requestKey.current = null;
+        setDraftTitle('');
+        router.refresh();
+      } catch (caught) {
+        setError(errorMessage(caught));
+      }
+    });
+  }
+
   function changeFocus(nextIds: string[]) {
     setError(null);
+    setNotice(null);
     startTransition(async () => {
       try {
         const result = await saveDailyFocus(data.localDate, nextIds);
@@ -172,10 +247,10 @@ export function TodayWorkspace({ data }: { data: TodayData }) {
               changeFocus(
                 focused
                   ? focusIds.filter((id) => id !== action.id)
-                  : [...focusIds, action.id].slice(0, 5)
+                  : [...focusIds, action.id].slice(0, TODAY_FOCUS_CAPACITY)
               )
             }
-            disabled={isPending || (!focused && focusIds.length >= 5)}
+            disabled={isPending || (!focused && focusIds.length >= TODAY_FOCUS_CAPACITY)}
             aria-label={focused ? `Remove ${action.title} from focus` : `Focus ${action.title}`}
             title={focused ? 'Remove from focus' : 'Add to focus'}
           >
@@ -222,6 +297,73 @@ export function TodayWorkspace({ data }: { data: TodayData }) {
         </p>
       ) : null}
 
+      <section className="today-composer" aria-labelledby="today-composer-heading">
+        <div className="section-heading">
+          <div>
+            <p className="eyebrow">Add</p>
+            <h2 id="today-composer-heading">New Action</h2>
+          </div>
+        </div>
+        <form className="today-composer-form" onSubmit={submitDraft}>
+          <label className="today-composer-title">
+            What needs doing
+            <input
+              className="input-field"
+              name="title"
+              value={draftTitle}
+              onChange={(event) => setDraftTitle(event.target.value)}
+              placeholder="Draft the quarterly summary"
+              minLength={3}
+              maxLength={1000}
+              required
+            />
+          </label>
+          <label>
+            Goal
+            <select
+              className="input-field"
+              name="goalId"
+              value={draftGoalId}
+              onChange={(event) => setDraftGoalId(event.target.value)}
+            >
+              <option value="">No goal yet</option>
+              {data.goals.map((goal) => (
+                <option key={goal.id} value={goal.id}>
+                  {goal.title}
+                </option>
+              ))}
+            </select>
+          </label>
+          <label>
+            Scheduled date
+            <input
+              className="input-field"
+              type="date"
+              name="scheduledOn"
+              value={draftDate}
+              onChange={(event) => setDraftDate(event.target.value)}
+              required
+            />
+          </label>
+          <label className="today-composer-focus">
+            <input
+              type="checkbox"
+              name="focus"
+              checked={draftFocus}
+              onChange={(event) => setDraftFocus(event.target.checked)}
+            />
+            Commit to today&apos;s focus
+          </label>
+          <button className="btn-primary button-with-icon" type="submit" disabled={isPending}>
+            <Plus size={16} aria-hidden="true" />
+            {isPending ? 'Saving...' : 'Add Action'}
+          </button>
+        </form>
+        <p className="status-message" role="status">
+          {notice ?? ''}
+        </p>
+      </section>
+
       <CoachingCue
         cue={todayCoachingCue(data.coachingIntensity, {
           focusCount: focus.length,
@@ -261,7 +403,9 @@ export function TodayWorkspace({ data }: { data: TodayData }) {
               <p className="eyebrow">Focus</p>
               <h2 id="today-committed-actions">Committed Actions</h2>
             </div>
-            <span className="focus-capacity">{focus.length} / 5</span>
+            <span className="focus-capacity">
+              {focus.length} / {TODAY_FOCUS_CAPACITY}
+            </span>
           </div>
           <div className="today-action-list">
             {focus.map((action) => actionRow(action, true))}

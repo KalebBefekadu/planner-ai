@@ -1718,6 +1718,29 @@ button:disabled {
   grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 42px;
 }
+.today-composer-form {
+  display: grid;
+  grid-template-columns: minmax(0, 2fr) minmax(0, 1fr) minmax(0, 1fr) auto auto;
+  align-items: end;
+  gap: 14px;
+}
+.today-composer-form label {
+  display: grid;
+  gap: 6px;
+  min-width: 0;
+  color: var(--muted);
+  font-size: var(--fs-label);
+  font-weight: 700;
+}
+.today-composer-focus {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  white-space: nowrap;
+}
+.today-composer .status-message:empty {
+  display: none;
+}
 .focus-capacity {
   color: var(--muted);
   font-size: var(--fs-label);
@@ -5809,6 +5832,10 @@ button:disabled {
   .today-execution-grid,
   .today-capture-strip .capture-preview-list {
     grid-template-columns: 1fr;
+  }
+  .today-composer-form {
+    grid-template-columns: 1fr;
+    align-items: stretch;
   }
   .today-execution-grid {
     gap: 34px;
