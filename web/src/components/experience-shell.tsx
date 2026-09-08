@@ -85,6 +85,7 @@ export function ExperienceShell({
 }: ExperienceShellProps) {
   const pathname = usePathname();
   const standaloneFlow = pathname === '/onboarding';
+  const contentOwnsSidebar = pathname === '/notes';
   const router = useRouter();
   const sidebarOpen = useSyncExternalStore(subscribeToSidebar, sidebarOpenSnapshot, () => true);
   const sidebarWidth = useSyncExternalStore(
@@ -253,7 +254,7 @@ export function ExperienceShell({
   return (
     <div
       ref={shellRef}
-      className={`experience-shell${sidebarOpen ? '' : ' experience-sidebar-collapsed'}${standaloneFlow ? ' experience-standalone' : ''}`}
+      className={`experience-shell${sidebarOpen ? '' : ' experience-sidebar-collapsed'}${standaloneFlow ? ' experience-standalone' : ''}${contentOwnsSidebar ? ' experience-content-sidebar' : ''}`}
       data-experience-area={navigation.area}
     >
       <a className="experience-skip-link" href="#experience-main">
@@ -324,7 +325,7 @@ export function ExperienceShell({
         </div>
       </nav>
 
-      {sidebarOpen ? sidebar : null}
+      {sidebarOpen && !contentOwnsSidebar ? sidebar : null}
       {mobileMenuOpen ? (
         <MobileDrawer onClose={() => setMobileMenuOpen(false)}>{sidebar}</MobileDrawer>
       ) : null}
