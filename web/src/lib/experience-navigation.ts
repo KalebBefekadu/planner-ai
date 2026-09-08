@@ -103,12 +103,12 @@ export function experienceNavigationForPath(
         {
           label: 'Plan',
           items: [
-            { label: 'Today', href: '/', match: 'exact' },
+            { label: 'Today', href: '/planner/today', match: 'exact' },
             { label: 'This week', href: '/planner', match: 'exact' },
             ...(canonical
               ? [
                   { label: 'Calendar', href: '/planner/calendar', match: 'prefix' as const },
-                  { label: 'Action inbox', href: '/inbox', match: 'prefix' as const },
+                  { label: 'Action inbox', href: '/planner/inbox', match: 'prefix' as const },
                 ]
               : []),
           ],
