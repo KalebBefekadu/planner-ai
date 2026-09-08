@@ -1,12 +1,12 @@
 # Active Agent Work
 
-Roadmap stage: **3 - Daily Planner Loop**
+Roadmap stage: **1 - Daily Planner Loop**
 
 ## Active
 
 No implementation ticket is currently checked out.
 
-Next: define the smallest real-data ticket that completes another part of the capture-to-goal-to-Today-to-review loop. Do not invent schedule data or extend `/preview`.
+Next: `PL-05-direct-action-capture`. Create an Action from Today, optionally connect it to a real Goal, schedule it for today, and commit it to focus through existing Operations. Do not invent schedule data or extend `/preview`.
 
 ## Integration
 

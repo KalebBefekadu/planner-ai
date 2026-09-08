@@ -1,6 +1,6 @@
 # Planner AI Product Requirements
 
-Status: **Approved first-release PRD.** Product language comes from [`CONTEXT.md`](../../CONTEXT.md); architecture and delivery details come from the [architecture](../engineering/architecture.md) and [roadmap](../roadmap.md).
+Status: **Approved product requirements.** The [roadmap](../roadmap.md) defines which requirements belong to the personal MVP, invite beta, or later stages. Product language comes from [`CONTEXT.md`](../../CONTEXT.md); architecture comes from [architecture](../engineering/architecture.md).
 
 ## 1. Product Definition
 
@@ -153,7 +153,16 @@ Onboarding is skippable and targets one real planning loop in about ten minutes:
 
 Microphone permission is requested only after the person initiates voice Capture. Incomplete onboarding never blocks the empty Workspace.
 
-## 9. Launch Scope
+## 9. Release Scope
+
+### Required for the personal MVP
+
+- private authentication and one owner-isolated Workspace;
+- Today, Plan, Notes, Capture, Review, Settings, and Activity through the real UI;
+- representative Notion import with item-level reconciliation, complete export, and verified restore;
+- embedded assistant parity for critical Note and Planner Operations with graceful provider failure;
+- one authenticated external MCP client using narrow, revocable grants;
+- responsive desktop/mobile workflows, production migration, monitoring, backup, rollback, and seven-day owner dogfood.
 
 ### Required before invite beta
 

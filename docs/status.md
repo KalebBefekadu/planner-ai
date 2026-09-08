@@ -42,6 +42,8 @@ See [Production](runbooks/production.md) and [Migration reconciliation](runbooks
 - Complete and verify the real direction-to-action loop, including deferral and weekly-review continuity.
 - Run a representative owner Notion import and reconcile imported, duplicate, and unsupported items.
 - Finish authenticated Workspace and Planner parity, then remove superseded `/preview` fixtures.
+- Certify embedded-assistant parity for critical Note and Planner Operations, including useful provider-failure behavior.
+- Verify one external AI client through narrow authenticated MCP discovery, grants, execution, and revocation.
 - Apply pending production migrations during an approved maintenance window and run authenticated deployed smoke tests.
 - Complete seven consecutive days of daily use and resolve workflow-blocking defects.
 
@@ -53,8 +55,8 @@ See [Production](runbooks/production.md) and [Migration reconciliation](runbooks
 
 ### Later beta gates
 
-- Certify live AI-provider fallback, budgets, retention terms, and outage behavior.
-- Complete OAuth MCP host compatibility and independent security review.
+- Complete broader live-provider certification, production budgets, and retention review.
+- Complete additional OAuth MCP host compatibility and independent security review.
 - Add malware scanning before exposing quarantined Note attachments.
 - Record manual keyboard/screen-reader, load/SLO, restore, rollback, and incident-drill evidence.
 

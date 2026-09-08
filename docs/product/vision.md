@@ -18,19 +18,19 @@ Planner AI should make five things easier:
 
 Planner AI is calm, direct, and serious about trust. It may challenge overcommitment, but it does not shame, manipulate, diagnose, or pretend to be a medical, legal, financial, or crisis professional. It is designed for adults managing personal planning and reflection.
 
-## First Legitimate Release
+## Personal MVP
 
-The first release is:
+The current release target is a private, single-owner product that can replace Notion for personal Notes and planning. It is:
 
 - a responsive installable web application;
 - cloud-authoritative with Supabase and complete export;
 - private and single-owner per Workspace;
 - usable without AI and resilient when AI providers fail;
 - equipped with Today, Plan, Notes, Capture, Review, Activity, and a docked assistant;
-- able to expose a narrow authenticated MCP surface;
+- equipped with a useful embedded assistant and a narrow authenticated MCP surface;
 - intentionally smaller than Notion and safer than an unrestricted agent platform.
 
-It is not local-first, collaborative, a general database builder, a habit game, a native mobile suite, or a self-modifying production application.
+It is not yet local-first, collaborative, a general database builder, a habit game, a native mobile suite, or a self-modifying production application. Invite beta and public launch are later release gates, not synonyms for the personal MVP.
 
 ## Long-Term Direction
 
