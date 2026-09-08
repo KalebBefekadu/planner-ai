@@ -2,6 +2,7 @@
 
 import { randomUUID } from 'node:crypto';
 import { revalidatePath } from 'next/cache';
+import { revalidatePlannerAndRecords } from '@/lib/planner-revalidation';
 import { executeOperation, type OperationInput } from '@/lib/operations';
 import { createClient } from '@/lib/supabase/server';
 
@@ -72,9 +73,8 @@ export async function completeGuidedOnboarding(
   });
   revalidatePath('/', 'layout');
   revalidatePath('/onboarding');
-  revalidatePath('/vision');
-  revalidatePath('/planner');
-  revalidatePath('/today');
-  revalidatePath('/inbox');
+  // '/today' was named here but is not a route -- Today is served by '/' and
+  // '/planner/today' -- so that call had never invalidated anything.
+  revalidatePlannerAndRecords();
   return result;
 }

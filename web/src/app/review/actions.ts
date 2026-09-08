@@ -1,7 +1,7 @@
 'use server';
 
 import { randomUUID } from 'node:crypto';
-import { revalidatePath } from 'next/cache';
+import { revalidatePlannerAndRecords } from '@/lib/planner-revalidation';
 import type { CoachingIntensity } from '@/lib/coaching';
 import { dateInTimezone } from '@/lib/date';
 import { executeOperation } from '@/lib/operations';
@@ -246,10 +246,7 @@ export async function completeWeeklyReview(input: {
     idempotencyKey: randomUUID(),
     surface: 'ui',
   });
-  revalidatePath('/');
-  revalidatePath('/planner');
-  revalidatePath('/review');
-  revalidatePath('/activity');
+  revalidatePlannerAndRecords();
   return result;
 }
 
@@ -378,7 +375,6 @@ export async function completePeriodReview(input: {
     idempotencyKey: randomUUID(),
     surface: 'ui',
   });
-  revalidatePath('/review');
-  revalidatePath('/activity');
+  revalidatePlannerAndRecords();
   return result;
 }

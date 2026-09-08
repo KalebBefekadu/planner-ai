@@ -9,6 +9,8 @@ import {
   CalendarDays,
   CalendarCheck2,
   Check,
+  CircleSlash,
+  CornerUpRight,
   Inbox,
   Pencil,
   Plus,
@@ -19,8 +21,10 @@ import {
 import {
   completeTodayAction,
   createTodayAction,
+  deferTodayAction,
   editTodayAction,
   saveDailyFocus,
+  setTodayActionStatus,
   type CreateTodayActionResult,
   type TodayAction,
   type TodayData,
@@ -28,6 +32,7 @@ import {
 import { CoachingCue } from '@/components/coaching-cue';
 import { todayCoachingCue } from '@/lib/coaching';
 import { actionFailureMessage } from '@/lib/operations/failure-message';
+import { addCalendarDays } from '@/lib/planner-calendar';
 import { TODAY_FOCUS_CAPACITY } from '@/lib/today-composer';
 
 function errorMessage(error: unknown) {
@@ -74,7 +79,16 @@ export function TodayWorkspace({ data }: { data: TodayData }) {
   const [focusIds, setFocusIds] = useState(data.focusActionIds);
   const [actions, setActions] = useState(data.actions);
   const [editing, setEditing] = useState<TodayAction | null>(null);
+  // The dialog fields are controlled rather than defaulted. A form action
+  // resets an uncontrolled form once it settles, which threw away the edit
+  // whenever the save was rejected -- the one moment the words typed matter
+  // most.
+  const [editDraft, setEditDraft] = useState({ title: '', scheduledOn: '', description: '' });
   const [error, setError] = useState<string | null>(null);
+  // A conflict raised while a person is inside the edit dialog has to be
+  // readable from inside the dialog. Reported at the top of the page it sits
+  // behind the backdrop, and the save looks as though it simply did nothing.
+  const [editError, setEditError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
   const [draftTitle, setDraftTitle] = useState('');
   const [draftGoalId, setDraftGoalId] = useState('');
@@ -172,12 +186,26 @@ export function TodayWorkspace({ data }: { data: TodayData }) {
     });
   }
 
-  function saveEdit(formData: FormData) {
+  function openEditor(action: TodayAction) {
+    setEditing(action);
+    setEditError(null);
+    setEditDraft({
+      title: action.title,
+      scheduledOn: action.scheduledOn ?? '',
+      description: action.descriptionMarkdown ?? '',
+    });
+  }
+
+  function closeEditor() {
+    setEditing(null);
+    setEditError(null);
+  }
+
+  function saveEdit() {
     if (!editing) return;
     setError(null);
-    const title = String(formData.get('title') ?? '');
-    const description = String(formData.get('description') ?? '');
-    const scheduledOn = String(formData.get('scheduledOn') ?? '');
+    setEditError(null);
+    const { title, description, scheduledOn } = editDraft;
     startTransition(async () => {
       try {
         const result = await editTodayAction({
@@ -201,6 +229,62 @@ export function TodayWorkspace({ data }: { data: TodayData }) {
           )
         );
         setEditing(null);
+      } catch (caught) {
+        // The dialog stays open with every edited field intact, so the retry
+        // is one more click rather than retyping the change.
+        setEditError(errorMessage(caught));
+      }
+    });
+  }
+
+  // Deferring is a decision about the day, not just a date field. Moving work
+  // off today also releases today's commitment to it, and the person is told
+  // that happened rather than discovering an emptier focus list.
+  function defer(action: TodayAction, toDate: string) {
+    setError(null);
+    setNotice(null);
+    startTransition(async () => {
+      try {
+        const result = await deferTodayAction({
+          id: action.id,
+          expectedVersion: action.version,
+          title: action.title,
+          descriptionMarkdown: action.descriptionMarkdown,
+          scheduledOn: toDate,
+        });
+        setActions((current) =>
+          current.map((item) =>
+            item.id === action.id
+              ? { ...item, scheduledOn: result.scheduledOn, version: result.version }
+              : item
+          )
+        );
+        setFocusIds(result.focusActionIds);
+        setNotice(
+          result.releasedFromFocus
+            ? `"${action.title}" moved to ${result.scheduledOn} and is no longer committed to today.`
+            : `"${action.title}" moved to ${result.scheduledOn}.`
+        );
+        router.refresh();
+      } catch (caught) {
+        setError(errorMessage(caught));
+      }
+    });
+  }
+
+  function toggleBlocked(action: TodayAction) {
+    setError(null);
+    setNotice(null);
+    const next = action.status === 'blocked' ? 'open' : 'blocked';
+    startTransition(async () => {
+      try {
+        const result = await setTodayActionStatus(action.id, action.version, next);
+        setActions((current) =>
+          current.map((item) =>
+            item.id === action.id ? { ...item, status: next, version: result.version } : item
+          )
+        );
+        router.refresh();
       } catch (caught) {
         setError(errorMessage(caught));
       }
@@ -233,12 +317,37 @@ export function TodayWorkspace({ data }: { data: TodayData }) {
           <button
             className="icon-button"
             type="button"
-            onClick={() => setEditing(action)}
+            onClick={() => openEditor(action)}
             disabled={isPending}
             aria-label={`Edit ${action.title}`}
             title="Edit Action"
           >
             <Pencil size={15} />
+          </button>
+          <button
+            className="icon-button"
+            type="button"
+            onClick={() => defer(action, addCalendarDays(data.localDate, 1))}
+            disabled={isPending}
+            aria-label={`Defer ${action.title} to tomorrow`}
+            title="Defer to tomorrow"
+          >
+            <CornerUpRight size={15} />
+          </button>
+          <button
+            className="icon-button"
+            type="button"
+            onClick={() => toggleBlocked(action)}
+            disabled={isPending}
+            aria-label={
+              action.status === 'blocked'
+                ? `Unblock ${action.title}`
+                : `Mark ${action.title} blocked`
+            }
+            title={action.status === 'blocked' ? 'Unblock' : 'Mark blocked'}
+            aria-pressed={action.status === 'blocked'}
+          >
+            <CircleSlash size={15} />
           </button>
           <button
             className="icon-button"
@@ -495,7 +604,7 @@ export function TodayWorkspace({ data }: { data: TodayData }) {
       </section>
 
       {editing ? (
-        <div className="dialog-backdrop" role="presentation" onMouseDown={() => setEditing(null)}>
+        <div className="dialog-backdrop" role="presentation" onMouseDown={closeEditor}>
           <section
             className="action-edit-dialog"
             role="dialog"
@@ -511,20 +620,33 @@ export function TodayWorkspace({ data }: { data: TodayData }) {
               <button
                 className="icon-button"
                 type="button"
-                onClick={() => setEditing(null)}
+                onClick={closeEditor}
                 aria-label="Close editor"
                 title="Close"
               >
                 <X size={17} />
               </button>
             </header>
-            <form action={saveEdit}>
+            <form
+              onSubmit={(event) => {
+                event.preventDefault();
+                saveEdit();
+              }}
+            >
+              {editError ? (
+                <p className="status-message status-message-error" role="alert">
+                  {editError}
+                </p>
+              ) : null}
               <label>
                 Title
                 <input
                   className="input-field"
                   name="title"
-                  defaultValue={editing.title}
+                  value={editDraft.title}
+                  onChange={(event) =>
+                    setEditDraft((draft) => ({ ...draft, title: event.target.value }))
+                  }
                   minLength={3}
                   maxLength={1000}
                   required
@@ -536,7 +658,10 @@ export function TodayWorkspace({ data }: { data: TodayData }) {
                   className="input-field"
                   type="date"
                   name="scheduledOn"
-                  defaultValue={editing.scheduledOn ?? ''}
+                  value={editDraft.scheduledOn}
+                  onChange={(event) =>
+                    setEditDraft((draft) => ({ ...draft, scheduledOn: event.target.value }))
+                  }
                 />
               </label>
               <label>
@@ -544,13 +669,16 @@ export function TodayWorkspace({ data }: { data: TodayData }) {
                 <textarea
                   className="input-field"
                   name="description"
-                  defaultValue={editing.descriptionMarkdown ?? ''}
+                  value={editDraft.description}
+                  onChange={(event) =>
+                    setEditDraft((draft) => ({ ...draft, description: event.target.value }))
+                  }
                   maxLength={50_000}
                   rows={6}
                 />
               </label>
               <div className="dialog-actions">
-                <button className="btn-secondary" type="button" onClick={() => setEditing(null)}>
+                <button className="btn-secondary" type="button" onClick={closeEditor}>
                   Cancel
                 </button>
                 <button className="btn-primary button-with-icon" type="submit" disabled={isPending}>

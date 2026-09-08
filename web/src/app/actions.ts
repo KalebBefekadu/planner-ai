@@ -2,6 +2,7 @@
 
 import { randomUUID } from 'node:crypto';
 import { revalidatePath } from 'next/cache';
+import { revalidatePlannerAndRecords, revalidatePlannerViews } from '@/lib/planner-revalidation';
 import { dateInTimezone } from '@/lib/date';
 import { executeOperation, OperationFailure } from '@/lib/operations';
 import { createClient } from '@/lib/supabase/server';
@@ -133,9 +134,7 @@ async function requireWorkspaceId() {
 }
 
 function revalidatePlanner() {
-  revalidatePath('/');
-  revalidatePath('/vision');
-  revalidatePath('/planner');
+  revalidatePlannerViews();
 }
 
 function toGoalStatus(status: CanonicalGoal['status'] | CanonicalAction['status']): GoalStatus {
@@ -680,9 +679,7 @@ export async function updatePlanAction(input: {
     idempotencyKey: randomUUID(),
     surface: 'ui',
   });
-  revalidatePlanner();
-  revalidatePath('/review');
-  revalidatePath('/activity');
+  revalidatePlannerAndRecords();
   return result;
 }
 
@@ -728,9 +725,7 @@ export async function movePlanAction(input: {
     },
     { idempotencyKey: randomUUID(), surface: 'ui' }
   );
-  revalidatePlanner();
-  revalidatePath('/review');
-  revalidatePath('/activity');
+  revalidatePlannerAndRecords();
   return result;
 }
 
@@ -845,7 +840,7 @@ export async function saveTranscript(
       }
       operationReceiptId = receipt.id;
     }
-    revalidatePath('/');
+    revalidatePlannerAndRecords();
     return {
       id: saved.id,
       raw_text: saved.raw_text,
@@ -863,7 +858,7 @@ export async function saveTranscript(
     .select()
     .single();
   if (error) throw new Error('Unable to save your capture.');
-  revalidatePath('/');
+  revalidatePlannerAndRecords();
   return {
     id: data.id,
     raw_text: data.raw_text,

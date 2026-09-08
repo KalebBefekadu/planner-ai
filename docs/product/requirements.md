@@ -33,7 +33,12 @@ The product succeeds when a person can repeatedly:
 
 ### Today
 
-- Show at most three highlighted daily priorities, overdue Actions, Goal context, recent Captures, and the next Review.
+- Show at most five committed daily Actions, overdue Actions, Goal context, recent Captures, and the next Review.
+  The limit is five, not the three this document previously specified. Five is what `daily-focus.set.v1`
+  enforces, what the stored daily focus list holds, and what the product has shipped and tested since the
+  Operation was introduced. Lowering it to three would be a data change requiring a migration for anyone
+  already committing four or five, so the requirement is corrected to the implemented and enforced limit
+  rather than the implementation being changed silently to match the document.
 - Allow completion, rescheduling, blocker, and replacement decisions without opening chat.
 - Keep ordinary screens quiet; proactive coaching appears only at decision points.
 
