@@ -10,10 +10,11 @@ For implementation, open the [build manual](build-manual.md) and its GitHub deli
 2. [Glossary](../CONTEXT.md) - canonical domain language.
 3. [Requirements](product/requirements.md) - first-release behavior and quality requirements.
 4. [Experience](product/experience.md) - information architecture, interaction rules, and visual direction.
-5. [Architecture](engineering/architecture.md) - current system boundaries and staged evolution.
-6. [Data model](engineering/data-model.md) - canonical entities and invariants.
-7. [Roadmap](roadmap.md) - the four product states, current goal, ordered stages, and exit gates.
-8. [Status](status.md) - current evidence, gaps, and immediate work.
+5. [Preview inventory](product/preview-inventory.md) - every `/preview` pattern, its production destination, and what has actually been demonstrated.
+6. [Architecture](engineering/architecture.md) - current system boundaries and staged evolution.
+7. [Data model](engineering/data-model.md) - canonical entities and invariants.
+8. [Roadmap](roadmap.md) - the four product states, current goal, ordered stages, and exit gates.
+9. [Status](status.md) - current evidence, gaps, and immediate work.
 
 ## Specialized References
 
