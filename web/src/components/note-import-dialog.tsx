@@ -41,7 +41,7 @@ export function NoteImportDialog({
 }: {
   open: boolean;
   onClose: () => void;
-  onCompleted: () => void;
+  onCompleted?: () => void;
 }) {
   const directoryInput = useRef<HTMLInputElement>(null);
   const [sourceType, setSourceType] = useState<'notion' | 'obsidian' | 'generic'>('notion');
@@ -114,7 +114,7 @@ export function NoteImportDialog({
         setPreview((value) => (value ? { ...value, job: current } : value));
       }
       if (current.status !== 'completed') throw new Error('Import paused before completion.');
-      onCompleted();
+      onCompleted?.();
     } catch (caught) {
       setError(messageFrom(caught));
     } finally {
