@@ -6,13 +6,9 @@ Updated: 2026-09-08
 
 Planner AI has a mature, tested application foundation but is not yet production-ready. The immediate goal is a private deployment the owner can use every day instead of Notion for personal notes and planning.
 
-Estimated validated completion:
+The earlier 78/55/27 percent estimates had no documented weighting and are not release evidence. Track implemented, locally verified, deployed verified and owner-accepted gates in the [build manual](build-manual.md) and its linked GitHub issues.
 
-- **Private dogfood:** about 78 percent.
-- **Safe invite beta:** about 55 percent.
-- **Long-term Notion, Obsidian, and AI-native vision:** about 27 percent.
-
-Percentages describe evidenced capability, not code volume.
+The owner's actual Notion workflow inventory remains open. Notes import alone cannot establish replacement of required databases, relations, formulas, attachments or sharing.
 
 ## Verified Foundation
 
