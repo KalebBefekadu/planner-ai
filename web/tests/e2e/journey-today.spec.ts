@@ -225,3 +225,94 @@ test('a saved Action is written once and the composer clears itself', async ({ w
   await page.reload();
   await expect(page.getByRole('button', { name: 'Complete Only once' })).toHaveCount(1);
 });
+
+// PL-06: the same Action shown in more than one place has to tell the same
+// story. Deferral, completion and blocking are decisions about the day, and a
+// route that keeps rendering the old answer is indistinguishable from the
+// decision not having been saved.
+
+test('deferring work releases the commitment it made to today', async ({ workspace }) => {
+  const { page } = workspace;
+  await goTo(page, '/');
+
+  const committed = page.getByRole('region', { name: committedRegion });
+  await page.getByRole('button', { name: `Focus ${onboardingSeed.action}` }).click();
+  await expect(committed).toContainText('1 / 5');
+
+  await page.getByRole('button', { name: `Defer ${onboardingSeed.action} to tomorrow` }).click();
+
+  // The day no longer claims to be spoken for by work that is not scheduled
+  // for it.
+  await expect(committed).toContainText('0 / 5');
+  await expect(page.getByText('is no longer committed to today')).toBeVisible();
+
+  await page.reload();
+  await expect(page.getByRole('region', { name: committedRegion })).toContainText('0 / 5');
+  await expect(page.getByRole('region', { name: openRegion })).toContainText(onboardingSeed.action);
+});
+
+test('a completion made on Today is already true on the Planner route', async ({ workspace }) => {
+  const { page } = workspace;
+  await goTo(page, '/');
+
+  await page.getByRole('button', { name: `Complete ${onboardingSeed.action}` }).click();
+  await expect(page.getByRole('button', { name: `Complete ${onboardingSeed.action}` })).toHaveCount(
+    0
+  );
+
+  // Planner navigation links to the scoped alias, not to '/'. Invalidating
+  // '/planner' alone left this route rendering the completed Action.
+  await goTo(page, '/planner/today');
+  await expect(page.getByRole('region', { name: openRegion })).not.toContainText(
+    onboardingSeed.action
+  );
+  await expect(page.getByRole('region', { name: committedRegion })).toContainText('0 / 5');
+});
+
+test('blocking an Action keeps it on the day rather than hiding it', async ({ workspace }) => {
+  const { page } = workspace;
+  await goTo(page, '/');
+
+  await page.getByRole('button', { name: `Focus ${onboardingSeed.action}` }).click();
+  await page.getByRole('button', { name: `Mark ${onboardingSeed.action} blocked` }).click();
+
+  const committed = page.getByRole('region', { name: committedRegion });
+  await expect(committed).toContainText('Blocked');
+  await expect(committed).toContainText('1 / 5');
+
+  await page.reload();
+  await expect(page.getByRole('region', { name: committedRegion })).toContainText('Blocked');
+
+  // The decision is reversible from the same control.
+  await page.getByRole('button', { name: `Unblock ${onboardingSeed.action}` }).click();
+  await expect(page.getByRole('region', { name: committedRegion })).not.toContainText('Blocked');
+});
+
+test('an edit conflict is readable from inside the dialog and keeps the draft', async ({
+  workspace,
+}) => {
+  const { page } = workspace;
+  await goTo(page, '/');
+
+  // A second tab is the honest way to produce a stale version: the first tab
+  // is holding a version number that is about to stop being current.
+  const other = await page.context().newPage();
+  await other.goto('/');
+  await other.getByRole('button', { name: `Complete ${onboardingSeed.action}` }).click();
+  await expect(
+    other.getByRole('button', { name: `Complete ${onboardingSeed.action}` })
+  ).toHaveCount(0);
+  await other.close();
+
+  await page.getByRole('button', { name: `Edit ${onboardingSeed.action}` }).click();
+  const dialog = page.getByRole('dialog', { name: 'Edit Action' });
+  await dialog.getByRole('textbox', { name: 'Title' }).fill('Edited against a stale version');
+  await dialog.getByRole('button', { name: 'Save Action' }).click();
+
+  // Reported inside the dialog, not behind the backdrop, and the typing
+  // survives so the retry is one click rather than a retype.
+  await expect(dialog.getByRole('alert')).toContainText('changed elsewhere');
+  await expect(dialog.getByRole('textbox', { name: 'Title' })).toHaveValue(
+    'Edited against a stale version'
+  );
+});

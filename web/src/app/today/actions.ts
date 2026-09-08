@@ -1,7 +1,7 @@
 'use server';
 
 import { randomUUID } from 'node:crypto';
-import { revalidatePath } from 'next/cache';
+import { revalidatePlannerAndRecords } from '@/lib/planner-revalidation';
 import type { CoachingIntensity } from '@/lib/coaching';
 import { dateInTimezone } from '@/lib/date';
 import { executeOperation, operationFailureMessage } from '@/lib/operations';
@@ -72,6 +72,21 @@ async function todayClient() {
     timezone: workspace.timezone as string,
     coachingIntensity: workspace.coaching_intensity as CoachingIntensity,
   };
+}
+
+async function readFocusIds(
+  supabase: Awaited<ReturnType<typeof todayClient>>['supabase'],
+  workspaceId: string,
+  focusOn: string
+) {
+  const { data, error } = await supabase
+    .from('daily_focus_items')
+    .select('action_id,sort_order')
+    .eq('workspace_id', workspaceId)
+    .eq('focus_on', focusOn)
+    .order('sort_order');
+  if (error) throw new Error('Unable to load today\u2019s focus.');
+  return (data ?? []).map((row) => row.action_id as string);
 }
 
 export async function getTodayData(): Promise<TodayData> {
@@ -169,23 +184,30 @@ export async function saveDailyFocus(focusOn: string, actionIds: string[]) {
     { focusOn, actionIds },
     { idempotencyKey: randomUUID(), surface: 'ui' }
   );
-  revalidatePath('/');
-  revalidatePath('/activity');
+  revalidatePlannerAndRecords();
   return result;
 }
 
 export async function completeTodayAction(id: string, expectedVersion: number) {
+  return setTodayActionStatus(id, expectedVersion, 'done');
+}
+
+// Blocked is a decision about the work, not a way of hiding it: a blocked
+// Action keeps its place in today's focus so the day still shows what was
+// committed to and why it did not move.
+export async function setTodayActionStatus(
+  id: string,
+  expectedVersion: number,
+  status: 'open' | 'in_progress' | 'blocked' | 'done'
+) {
   const { supabase } = await todayClient();
   const result = await executeOperation(
     supabase,
     'action.status.v1',
-    { id, expectedVersion, status: 'done' },
+    { id, expectedVersion, status },
     { idempotencyKey: randomUUID(), surface: 'ui' }
   );
-  revalidatePath('/');
-  revalidatePath('/planner');
-  revalidatePath('/review');
-  revalidatePath('/activity');
+  revalidatePlannerAndRecords();
   return result;
 }
 
@@ -201,10 +223,7 @@ export async function editTodayAction(input: {
     idempotencyKey: randomUUID(),
     surface: 'ui',
   });
-  revalidatePath('/');
-  revalidatePath('/planner');
-  revalidatePath('/review');
-  revalidatePath('/activity');
+  revalidatePlannerAndRecords();
   return result;
 }
 
@@ -256,13 +275,7 @@ export async function createTodayAction(
     goalTitle,
   };
 
-  const { data: focusRows, error: focusError } = await supabase
-    .from('daily_focus_items')
-    .select('action_id,sort_order')
-    .eq('workspace_id', created.workspace_id)
-    .eq('focus_on', localDate)
-    .order('sort_order');
-  const currentFocusIds = focusError ? [] : (focusRows ?? []).map((row) => row.action_id as string);
+  const currentFocusIds = await readFocusIds(supabase, created.workspace_id, localDate);
 
   let focusOutcome: TodayFocusOutcome =
     plan.focusIntent === 'commit'
@@ -298,9 +311,62 @@ export async function createTodayAction(
     }
   }
 
-  revalidatePath('/');
-  revalidatePath('/planner');
-  revalidatePath('/activity');
+  revalidatePlannerAndRecords();
 
   return { action, localDate, focusActionIds, focusOutcome, focusFailureMessage };
+}
+
+// Move an Action to another day. A commitment is about one specific day, so
+// deferring work out of today also releases today's commitment to it --
+// otherwise the focus list keeps claiming the day is spoken for by work that
+// is no longer scheduled for it, which is exactly the stale commitment this
+// view is supposed to make impossible.
+export async function deferTodayAction(input: {
+  id: string;
+  expectedVersion: number;
+  title: string;
+  descriptionMarkdown: string | null;
+  scheduledOn: string;
+}): Promise<{
+  id: string;
+  title: string;
+  descriptionMarkdown: string | null;
+  scheduledOn: string | null;
+  version: number;
+  focusActionIds: string[];
+  releasedFromFocus: boolean;
+}> {
+  const { supabase, workspaceId, timezone } = await todayClient();
+  const localDate = dateInTimezone(timezone);
+
+  const updated = await executeOperation(supabase, 'action.update.v1', input, {
+    idempotencyKey: randomUUID(),
+    surface: 'ui',
+  });
+
+  let focusActionIds = await readFocusIds(supabase, workspaceId, localDate);
+  let releasedFromFocus = false;
+  const stillToday = (updated.scheduled_on ?? null) === localDate;
+  if (!stillToday && focusActionIds.includes(updated.id)) {
+    const next = focusActionIds.filter((id) => id !== updated.id);
+    const result = await executeOperation(
+      supabase,
+      'daily-focus.set.v1',
+      { focusOn: localDate, actionIds: next },
+      { idempotencyKey: randomUUID(), surface: 'ui' }
+    );
+    focusActionIds = result.actionIds;
+    releasedFromFocus = true;
+  }
+
+  revalidatePlannerAndRecords();
+  return {
+    id: updated.id,
+    title: updated.title,
+    descriptionMarkdown: updated.description_markdown ?? null,
+    scheduledOn: updated.scheduled_on ?? null,
+    version: updated.version,
+    focusActionIds,
+    releasedFromFocus,
+  };
 }
