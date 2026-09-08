@@ -4,16 +4,16 @@ Roadmap stage: **1 - Brand And Real Shell**
 
 ## Active
 
-- `BR-01-shell-audit`
-  - Owner: Claude
-  - Mode: independent read-only audit
-  - Branch: `claude/br-01-shell-audit`
-  - Contract: `.agents/tasks/BR-01-shell-audit.md`
+- `BR-02-brand-shell`
+  - Owner: Codex
+  - Mode: review and integration
+  - Branch: `codex/br-02-brand-shell`
+  - Contract: `.agents/tasks/BR-02-brand-shell.md`
 
 ## Integration
 
 - Owner: Codex lead
 - Branch: `integration/dogfood`
-- Next implementation: brand tokens and shared authenticated frame after the audit is reviewed.
+- Current implementation is verified and ready to merge into `integration/dogfood`.
 
 No other implementation ticket is active.
