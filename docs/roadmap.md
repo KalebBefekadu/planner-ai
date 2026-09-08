@@ -2,6 +2,8 @@
 
 Status: **execution authority.** [Status](status.md) records verified facts. [Vision](product/vision.md) defines the destination. [Requirements](product/requirements.md) defines product behavior.
 
+The [build manual](build-manual.md) links all detailed GitHub tickets, dependencies, acceptance cases, and verification. GitHub owns ticket status; this roadmap owns delivery order.
+
 ## Goal Hierarchy
 
 ### Final Product
@@ -32,14 +34,16 @@ The MVP is complete only when the owner can:
 
 The MVP is for one owner. It is not yet an invite beta, team product, or public launch.
 
+Before declaring Notion replaced, complete [MVP-01](https://github.com/KalebBefekadu/planner-ai/issues/115): inventory the owner's actual workflows. If native databases, formulas, relations, files, or sharing are essential, create a bounded implementation or record an explicitly accepted workaround. CSV converted into Markdown is not equivalent to a working database. An unanswered inventory is an open gate, not an assumption that notes-only is sufficient.
+
 ## Four Product States
 
-| State              | Meaning                                                                                                                  | Source of truth                | Rule                                               |
-| ------------------ | ------------------------------------------------------------------------------------------------------------------------ | ------------------------------ | -------------------------------------------------- |
-| **Real app today** | Authenticated canonical routes backed by actual data and Operations. Approximately 78% of the personal MVP is evidenced. | `web/` and [Status](status.md) | All new product behavior lands here.               |
-| **Personal MVP**   | The private Notion replacement and daily-planning finish line defined above.                                             | This roadmap                   | Current delivery target.                           |
-| **Preview app**    | Fixture-backed visual reference for accepted Workspace and Planner patterns.                                             | `/preview`                     | No new product behavior or separate design system. |
-| **Final product**  | The complete customizable, local-first, collaborative, agent-native operating system.                                    | [Vision](product/vision.md)    | Built only through gated post-MVP stages.          |
+| State              | Meaning                                                                                                                 | Source of truth                | Rule                                               |
+| ------------------ | ----------------------------------------------------------------------------------------------------------------------- | ------------------------------ | -------------------------------------------------- |
+| **Real app today** | Authenticated canonical routes backed by actual data and Operations; completion is measured by verified workflow gates. | `web/` and [Status](status.md) | All new product behavior lands here.               |
+| **Personal MVP**   | The private Notion replacement and daily-planning finish line defined above.                                            | This roadmap                   | Current delivery target.                           |
+| **Preview app**    | Fixture-backed visual reference for accepted Workspace and Planner patterns.                                            | `/preview`                     | No new product behavior or separate design system. |
+| **Final product**  | The complete customizable, local-first, collaborative, agent-native operating system.                                   | [Vision](product/vision.md)    | Built only through gated post-MVP stages.          |
 
 ## Product Shape
 
@@ -84,7 +88,7 @@ Status: **active.** Finish the smallest complete direction-to-action workflow us
 
 ### Stage 2: Notion Replacement Pilot
 
-Status: **product foundation complete; owner-data pilot pending.**
+Status: **Notes/import foundations exist; workflow equivalence and owner-data pilot pending.**
 
 - Run preflight and dry-run on a representative Notion export.
 - Reconcile every imported, duplicate, skipped, and unsupported item.
@@ -157,6 +161,7 @@ A ticket is complete only when it uses real data and Operations, enforces author
 ## Delivery Discipline
 
 - Keep this file as the only execution sequence and [Status](status.md) as the factual snapshot.
+- Use the linked GitHub issues for detailed scope and evidence; do not duplicate their live checkbox status in local documents.
 - Keep one Codex implementation ticket and at most one non-overlapping external audit active.
 - Use TokenSave and targeted reads before broad scans.
 - Batch shared design changes by component family.
