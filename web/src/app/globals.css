@@ -31,6 +31,9 @@
   --experience-sidebar: #f0f2ef;
   --shadow-sm: 0 1px 3px rgba(19, 37, 28, 0.09);
   --shadow-lg: 0 24px 64px rgba(10, 18, 15, 0.2);
+  --font-ui: Inter, 'Avenir Next', Avenir, 'Segoe UI', Helvetica, Arial, sans-serif;
+  --font-display: 'Iowan Old Style', Charter, 'Bitstream Charter', Georgia, serif;
+  --font-mono: 'SFMono-Regular', Consolas, 'Liberation Mono', monospace;
 
   /* Type scale, radius and motion from docs/product/experience.md.
      Six sizes, three radii, three durations -- the same contract the /preview
@@ -153,7 +156,7 @@ body {
   margin: 0;
   background: var(--canvas);
   color: var(--ink);
-  font-family: Arial, Helvetica, sans-serif;
+  font-family: var(--font-ui);
   font-size: var(--fs-read);
   line-height: 1.5;
 }
@@ -176,7 +179,7 @@ a {
   display: grid;
   grid-template-columns: 56px var(--experience-sidebar-w, 236px) minmax(0, 1fr);
   background: var(--surface);
-  font-family: 'Avenir Next', Avenir, 'Segoe UI', Helvetica, Arial, sans-serif;
+  font-family: var(--font-ui);
 }
 .experience-shell button:focus-visible,
 .experience-shell a:focus-visible {
@@ -338,7 +341,14 @@ a {
   padding: 12px 8px;
   overflow-y: auto;
 }
-.experience-secondary-nav > p {
+.experience-nav-section {
+  display: grid;
+  gap: 2px;
+}
+.experience-nav-section + .experience-nav-section {
+  margin-top: 14px;
+}
+.experience-nav-section > p {
   margin: 0 8px 7px;
   color: var(--muted);
   font-size: var(--fs-label);
@@ -425,6 +435,9 @@ a {
   white-space: nowrap;
 }
 .experience-sync-state {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
   color: var(--muted);
   font-size: var(--fs-label);
   white-space: nowrap;
@@ -456,7 +469,7 @@ a {
   border-left: 1px solid var(--line);
   padding-left: 6px;
   color: var(--muted);
-  font-family: 'SFMono-Regular', Consolas, monospace;
+  font-family: var(--font-mono);
   font-size: var(--fs-label);
 }
 .experience-command-backdrop {
@@ -547,13 +560,18 @@ a {
   min-height: calc(100vh - 50px);
   padding-top: 42px;
 }
+.experience-main h1 {
+  font-family: var(--font-display);
+  letter-spacing: 0;
+}
 .experience-sidebar-collapsed {
   grid-template-columns: 56px minmax(0, 1fr);
 }
 .experience-mobile-header,
 .experience-mobile-drawer,
 .experience-mobile-close,
-.experience-mobile-primary {
+.experience-mobile-primary,
+.experience-mobile-bottom-nav {
   display: none;
 }
 
@@ -5507,7 +5525,42 @@ button:disabled {
   }
   .experience-main {
     min-height: calc(100vh - 96px);
-    padding: 28px 18px;
+    padding: 28px 18px 92px;
+  }
+  .experience-mobile-bottom-nav {
+    position: fixed;
+    z-index: 11;
+    right: 0;
+    bottom: 0;
+    left: 0;
+    min-height: 58px;
+    display: grid;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    padding: 5px max(8px, env(safe-area-inset-right)) max(5px, env(safe-area-inset-bottom))
+      max(8px, env(safe-area-inset-left));
+    border-top: 1px solid var(--line);
+    background: color-mix(in srgb, var(--surface) 96%, transparent);
+    backdrop-filter: blur(12px);
+  }
+  .experience-mobile-bottom-nav a {
+    min-width: 0;
+    display: grid;
+    place-items: center;
+    align-content: center;
+    gap: 2px;
+    border-radius: var(--r-control);
+    color: var(--muted);
+    font-size: 10px;
+    font-weight: 700;
+  }
+  .experience-mobile-bottom-nav a span {
+    max-width: 100%;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .experience-mobile-bottom-nav .experience-mobile-bottom-active {
+    color: var(--brand-strong);
   }
   .capture-proposal-editor {
     grid-template-columns: 1fr;
