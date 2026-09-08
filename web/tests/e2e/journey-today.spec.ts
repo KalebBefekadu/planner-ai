@@ -18,7 +18,8 @@ test('Planner navigation keeps Today inside the planning workflow', async ({ wor
   await plannerNavigation.getByRole('link', { name: 'Today', exact: true }).click();
 
   await expect(page).toHaveURL(/\/planner\/today(?:\?|$)/);
-  await expect(page.getByRole('heading', { name: 'Today', exact: true })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Make today count', exact: true })).toBeVisible();
+  await expect(page.getByRole('navigation', { name: 'Planning views' })).toBeVisible();
 });
 
 test('an Action can be committed to today and shows up in the focus list', async ({

@@ -1687,6 +1687,29 @@ button:disabled {
 .canonical-today-page {
   gap: 34px;
 }
+.planner-today-tabs {
+  display: flex;
+  align-items: center;
+  gap: 28px;
+  min-height: 44px;
+  overflow-x: auto;
+  border-bottom: 1px solid var(--line);
+}
+.planner-today-tabs a {
+  min-height: 44px;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  border-bottom: 2px solid transparent;
+  color: var(--muted);
+  font-size: var(--fs-body);
+  font-weight: 700;
+  white-space: nowrap;
+}
+.planner-today-tabs a[aria-current='page'] {
+  border-bottom-color: var(--brand);
+  color: var(--ink);
+}
 .today-execution-grid {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
