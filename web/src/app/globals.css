@@ -195,6 +195,15 @@ a {
 .experience-standalone .experience-main {
   min-height: 100vh;
 }
+/* Notes supplies the real document tree as its contextual sidebar. Keeping the
+   generic Workspace menu beside it produced two competing sidebars and made
+   the authenticated product diverge from the Preview frame. */
+.experience-content-sidebar {
+  grid-template-columns: 56px minmax(0, 1fr);
+}
+.experience-content-sidebar .experience-main {
+  padding: 0;
+}
 .experience-shell button:focus-visible,
 .experience-shell a:focus-visible {
   outline: 2px solid var(--link);
@@ -1994,13 +2003,19 @@ button:disabled {
 .notes-shell {
   display: grid;
   grid-template-columns: 264px minmax(0, 1fr);
-  min-height: calc(100vh - 96px);
+  min-height: calc(100vh - 50px);
   background: var(--surface);
 }
 .notes-sidebar {
   min-width: 0;
   border-right: 1px solid var(--line);
-  background: color-mix(in srgb, var(--surface-muted) 78%, var(--surface));
+  background: var(--experience-sidebar);
+}
+.experience-content-sidebar.experience-sidebar-collapsed .notes-shell {
+  grid-template-columns: minmax(0, 1fr);
+}
+.experience-content-sidebar.experience-sidebar-collapsed .notes-sidebar {
+  display: none;
 }
 .notes-sidebar-heading {
   display: flex;
@@ -5920,6 +5935,9 @@ button:disabled {
   .notes-sidebar {
     border-right: 0;
     border-bottom: 1px solid var(--line);
+  }
+  .experience-content-sidebar.experience-sidebar-collapsed .notes-sidebar {
+    display: block;
   }
   .note-tree {
     display: flex;

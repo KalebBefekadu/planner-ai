@@ -153,14 +153,7 @@ test('canonical users see the complete workspace navigation after login', async 
     await experienceWorkspace.click();
     await expect(page).toHaveURL(/\/notes(?:\?|$)/);
     await expect(page.getByRole('heading', { name: 'Notes', exact: true })).toBeVisible();
-    const notesLink = page.getByRole('link', { name: 'Notes', exact: true });
-    if (!(await notesLink.isVisible())) {
-      await page.getByRole('button', { name: 'Open menu' }).click();
-    }
-    await expect(notesLink).toBeVisible();
-    await expect(page.getByRole('link', { name: 'Conversations', exact: true })).toBeVisible();
-    await expect(page.getByRole('link', { name: 'Activity', exact: true })).toBeVisible();
-    await expect(page.getByRole('link', { name: 'Trash', exact: true })).toBeVisible();
+    await expect(page.getByRole('navigation', { name: 'Notes' })).toBeVisible();
 
     const mobileDrawer = page.locator('.experience-mobile-drawer');
     if (await mobileDrawer.isVisible()) {

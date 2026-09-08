@@ -35,4 +35,18 @@ describe('brand and shell contracts', () => {
       /\.experience-standalone > \.experience-mobile-bottom-nav\s*{[^}]*display:\s*none/
     );
   });
+
+  it('lets Notes provide the single real workspace tree', () => {
+    expect(experienceShell).toContain("const contentOwnsSidebar = pathname === '/notes'");
+    expect(experienceShell).toContain('sidebarOpen && !contentOwnsSidebar');
+    expect(css).toMatch(
+      /\.experience-content-sidebar\s*{[^}]*grid-template-columns:\s*56px minmax\(0, 1fr\)/
+    );
+    expect(css).toMatch(
+      /\.experience-content-sidebar\.experience-sidebar-collapsed \.notes-sidebar\s*{[^}]*display:\s*none/
+    );
+    expect(css).toMatch(
+      /@media \(max-width: 760px\)[\s\S]*\.experience-content-sidebar\.experience-sidebar-collapsed \.notes-sidebar\s*{[^}]*display:\s*block/
+    );
+  });
 });
