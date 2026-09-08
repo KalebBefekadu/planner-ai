@@ -181,6 +181,20 @@ a {
   background: var(--surface);
   font-family: var(--font-ui);
 }
+.experience-standalone {
+  display: block;
+}
+.experience-standalone > .experience-rail,
+.experience-standalone > .experience-sidebar,
+.experience-standalone > .experience-mobile-header,
+.experience-standalone > .experience-mobile-assistant,
+.experience-standalone .experience-topbar,
+.experience-standalone > .experience-mobile-bottom-nav {
+  display: none;
+}
+.experience-standalone .experience-main {
+  min-height: 100vh;
+}
 .experience-shell button:focus-visible,
 .experience-shell a:focus-visible {
   outline: 2px solid var(--link);
