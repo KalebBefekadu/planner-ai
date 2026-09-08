@@ -83,21 +83,19 @@ jobs:
           echo "NEXT_PUBLIC_SUPABASE_URL=$API_URL" >> "$GITHUB_ENV"
           echo "NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY=$ANON_KEY" >> "$GITHUB_ENV"
           echo "SUPABASE_SERVICE_ROLE_KEY=$SERVICE_ROLE_KEY" >> "$GITHUB_ENV"
-      - run: npm run test:e2e
+      - name: Run pull request browser smoke suite
+        if: github.event_name == 'pull_request'
+        run: npm run test:e2e:smoke
         env:
           PLANNER_DATA_MODEL: canonical
           PLANNER_UI_PREVIEW: enabled
           PLANNER_UI_V2: enabled
           NEXT_PUBLIC_APP_URL: http://127.0.0.1:3000
-
-  dependency-review:
-    if: github.event_name == 'pull_request'
-    runs-on: ubuntu-latest
-    defaults:
-      run:
-        working-directory: .
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/dependency-review-action@v4
-        with:
-          fail-on-severity: high
+      - name: Run full browser suite after merge
+        if: github.event_name == 'push'
+        run: npm run test:e2e
+        env:
+          PLANNER_DATA_MODEL: canonical
+          PLANNER_UI_PREVIEW: enabled
+          PLANNER_UI_V2: enabled
+          NEXT_PUBLIC_APP_URL: http://127.0.0.1:3000

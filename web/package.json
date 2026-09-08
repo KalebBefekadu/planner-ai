@@ -19,6 +19,7 @@
     "test:ai:live": "node --env-file-if-exists=.env.local ./node_modules/vitest/vitest.mjs run --config vitest.live.config.ts",
     "test:watch": "vitest",
     "test:e2e": "playwright test",
+    "test:e2e:smoke": "playwright test tests/e2e/auth-boundary.spec.ts tests/e2e/keyboard-navigation.spec.ts tests/e2e/security-headers.spec.ts tests/e2e/journey-today.spec.ts tests/e2e/journey-notes.spec.ts tests/e2e/journey-planner.spec.ts --grep 'anonymous users cannot see the workspace|planner and settings use their own navigation surfaces|canonical users see the complete workspace navigation|a Markdown Note persists across navigation|the cascade runs from Vision to a weekly Action|an Action can be committed to today|the mobile workspace menu is keyboard-operable|sends the baseline security headers'",
     "test:db": "supabase test db",
     "types:generate": "supabase gen types typescript --local --schema public > src/types/supabase.generated.ts",
     "backup:production-db": "./scripts/backup-production-db.sh",
