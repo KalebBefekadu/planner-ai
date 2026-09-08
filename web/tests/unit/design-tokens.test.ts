@@ -5,6 +5,7 @@ const css = readFileSync('src/app/globals.css', 'utf8');
 const layout = readFileSync('src/app/layout.tsx', 'utf8');
 const themeToggle = readFileSync('src/components/theme-toggle.tsx', 'utf8');
 const experienceShell = readFileSync('src/components/experience-shell.tsx', 'utf8');
+const notesWorkspace = readFileSync('src/components/notes-workspace.tsx', 'utf8');
 
 describe('brand and shell contracts', () => {
   it('defines and consumes one shared typography system', () => {
@@ -48,5 +49,13 @@ describe('brand and shell contracts', () => {
     expect(css).toMatch(
       /@media \(max-width: 760px\)[\s\S]*\.experience-content-sidebar\.experience-sidebar-collapsed \.notes-sidebar\s*{[^}]*display:\s*block/
     );
+  });
+
+  it('groups Note details without a hardcoded viewport-height calculation', () => {
+    expect(notesWorkspace).toContain('aria-label="Note details"');
+    expect(notesWorkspace).toContain('data-inspector-group="properties"');
+    expect(notesWorkspace).toContain('data-inspector-group="links"');
+    expect(notesWorkspace).toContain('data-inspector-group="history"');
+    expect(css).not.toContain('max-height: calc(100vh - 224px)');
   });
 });
