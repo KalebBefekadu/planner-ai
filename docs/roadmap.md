@@ -109,12 +109,15 @@ Only after the four critical-path stages pass:
 
 Only one ticket is active at a time:
 
-1. close the real Today screen's visual and responsive gaps against the accepted Planner reference;
-2. complete the real direction-to-action daily loop inside Planner-scoped routes;
-3. run a representative Notion pilot import and reconcile its item-level report;
-4. complete private deployment checks and begin seven-day dogfood.
+1. complete the real Planner daily loop: direct capture, goal connection, Today commitment, completion or deferral, and weekly review;
+2. run a representative Notion pilot import and reconcile every imported, duplicate, and unsupported item;
+3. close remaining authenticated Workspace and Planner parity gaps, then retire superseded Preview fixtures;
+4. execute the approved production migration and private-deployment gates;
+5. complete seven consecutive days of owner dogfooding and fix workflow-blocking defects.
 
-The shared shell, single Notes tree, grouped Note details, persistent import report, and Planner-scoped Today and Action Inbox routes are merged. The next implementation ticket is **Planner Today convergence**. The Notion pilot remains a user-data gate, so Planner work may continue without weakening that gate.
+The shared shell, single Notes tree, grouped Note details, persistent import report, Planner-scoped Today and Action Inbox, outcome-focused Today hierarchy, and real Goal direction band are merged through PR #111.
+
+No implementation ticket is active. The next ticket must be the smallest real-data gap in item 1; do not add fixture-only schedule behavior. The Notion pilot remains a user-data gate, so Planner work may continue without weakening that gate.
 
 ## Definition Of Done
 
