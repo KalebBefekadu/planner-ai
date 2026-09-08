@@ -94,3 +94,95 @@ test('an achieved Goal stays in the plan and is counted as completed', async ({ 
   await expect(overview.getByText('Completed').locator('..')).toContainText('1');
   await expect(hierarchy).toContainText(onboardingSeed.goal);
 });
+
+// PL-07: a Planning Horizon is a time boundary, not a category. "Week" used to
+// return every weekly Action ever created, so the filter named a period it did
+// not apply.
+
+function isoDaysFromToday(days: number) {
+  const date = new Date();
+  date.setUTCDate(date.getUTCDate() + days);
+  return date.toISOString().slice(0, 10);
+}
+
+test('the period filter excludes other periods without hiding the work', async ({ workspace }) => {
+  const { page } = workspace;
+
+  // Create work in a week that is definitely not this one. Sixty days out
+  // crosses at least one month boundary, so it lands in a different week and
+  // a different month.
+  await goTo(page, '/');
+  const composer = page.getByRole('region', { name: 'New Action' });
+  await composer.getByRole('textbox', { name: 'What needs doing' }).fill('Work for a later week');
+  await composer.getByRole('textbox', { name: 'Scheduled date' }).fill(isoDaysFromToday(60));
+  await composer.getByRole('button', { name: 'Add Action' }).click();
+  await expect(composer).toContainText('is saved');
+
+  await page.goto('/planner');
+  const horizons = page.getByRole('navigation', { name: 'Filter plan by horizon' });
+  const weekTab = horizons.getByRole('button', { name: /^Week/ });
+  const monthTab = horizons.getByRole('button', { name: /^Month/ });
+
+  // Onboarding leaves one Action in this month, which the current period
+  // keeps. The Action sixty days out is real and saved, and is not part of
+  // this week -- which is the whole distinction the filter exists to make.
+  await expect(monthTab).toContainText('1');
+  await expect(weekTab).toContainText('0');
+  await expect(page.getByText(/item is outside this period/)).toBeVisible();
+
+  // Filtered, never hidden: one control brings all of it back.
+  await page.getByRole('button', { name: 'Show all time' }).click();
+  await expect(page).toHaveURL(/period=all/);
+  await expect(weekTab).toContainText('1');
+  await expect(monthTab).toContainText('1');
+});
+
+test('the chosen period and horizon survive reload, back and forward', async ({ workspace }) => {
+  const { page } = workspace;
+  await goTo(page, '/planner');
+
+  const periods = page.getByRole('group', { name: 'Filter plan by period' });
+  await expect(periods.getByRole('button', { name: 'This period' })).toHaveAttribute(
+    'aria-pressed',
+    'true'
+  );
+
+  await periods.getByRole('button', { name: 'All time' }).click();
+  await expect(page).toHaveURL(/period=all/);
+
+  // The filters are in the URL, so a filtered plan can be bookmarked and
+  // reached with browser history instead of resetting on every reload.
+  await page.reload();
+  await expect(periods.getByRole('button', { name: 'All time' })).toHaveAttribute(
+    'aria-pressed',
+    'true'
+  );
+
+  await page.goBack();
+  await expect(periods.getByRole('button', { name: 'This period' })).toHaveAttribute(
+    'aria-pressed',
+    'true'
+  );
+});
+
+test('choosing a horizon names the actual period it covers', async ({ workspace }) => {
+  const { page } = workspace;
+  await goTo(page, '/planner');
+
+  await page
+    .getByRole('navigation', { name: 'Filter plan by horizon' })
+    .getByRole('button', { name: /^Week/ })
+    .click();
+  await expect(page).toHaveURL(/horizon=weekly/);
+
+  // A date range rather than the word "Week": the point is that the filter
+  // now refers to a period a person can check against a calendar.
+  await expect(page.getByText(/^[A-Z][a-z]{2} \d+ - [A-Z][a-z]{2} \d+$/)).toBeVisible();
+
+  await page.reload();
+  await expect(
+    page
+      .getByRole('navigation', { name: 'Filter plan by horizon' })
+      .getByRole('button', { name: /^Week/ })
+  ).toHaveAttribute('aria-pressed', 'true');
+});
