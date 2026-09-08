@@ -37,6 +37,9 @@ test('an Action can be committed to today and shows up in the focus list', async
   await expect(committed).toContainText('1 / 5');
   await expect(committed).toContainText(onboardingSeed.action);
   await expect(page.getByRole('region', { name: 'Today summary' })).toContainText('1');
+  await expect(page.getByRole('region', { name: onboardingSeed.goal })).toContainText(
+    'Your focused work advances this goal.'
+  );
 });
 
 test('committing survives a reload, so the day is a decision and not a view state', async ({

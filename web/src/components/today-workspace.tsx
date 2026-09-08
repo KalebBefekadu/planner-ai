@@ -56,6 +56,10 @@ export function TodayWorkspace({ data }: { data: TodayData }) {
   ).length;
   const dueTodayCount = actions.filter((action) => action.scheduledOn === data.localDate).length;
   const blockedCount = actions.filter((action) => action.status === 'blocked').length;
+  const directionGoal =
+    focus.find((action) => action.goalTitle)?.goalTitle ??
+    actions.find((action) => action.goalTitle)?.goalTitle ??
+    null;
   const readableDate = useMemo(
     () =>
       new Intl.DateTimeFormat('en-US', {
@@ -294,6 +298,21 @@ export function TodayWorkspace({ data }: { data: TodayData }) {
           </div>
         </section>
       </div>
+
+      <section className="direction-band today-direction-band" aria-labelledby="today-direction">
+        <div>
+          <p className="eyebrow">Direction</p>
+          <h2 id="today-direction">{directionGoal ?? 'Connect today to a meaningful goal'}</h2>
+        </div>
+        <p>
+          {directionGoal
+            ? 'Your focused work advances this goal. Review the larger plan before adding more.'
+            : 'Link an Action to a Goal so today has a visible line back to what matters.'}
+        </p>
+        <Link className="btn-secondary" href="/goals">
+          {directionGoal ? 'Open goal' : 'Choose direction'}
+        </Link>
+      </section>
 
       {/* A section with no accessible name is not exposed as a landmark, so
           this block was unreachable by landmark navigation while every other
