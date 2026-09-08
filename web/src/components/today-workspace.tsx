@@ -6,6 +6,7 @@ import { useRouter } from 'next/navigation';
 import {
   AlertTriangle,
   ArrowRight,
+  CalendarDays,
   CalendarCheck2,
   Check,
   Inbox,
@@ -186,14 +187,30 @@ export function TodayWorkspace({ data }: { data: TodayData }) {
       <header className="page-heading today-heading">
         <div>
           <p className="eyebrow">{readableDate}</p>
-          <h1>Today</h1>
-          <p className="lede">Commit to a short list, then finish one thing at a time.</p>
+          <h1>Make today count</h1>
+          <p className="lede">
+            {focus.length
+              ? `${focus.length} committed ${focus.length === 1 ? 'outcome' : 'outcomes'}. Enough space to do them well.`
+              : 'Choose a few outcomes. Leave enough space to do them well.'}
+          </p>
         </div>
-        <Link className="btn-primary button-with-icon" href="/inbox">
+        <Link className="btn-primary button-with-icon" href="/planner/inbox">
           <Plus size={16} aria-hidden="true" />
-          New capture
+          Capture an action
         </Link>
       </header>
+
+      <nav className="planner-today-tabs" aria-label="Planning views">
+        <Link href="/planner/today" aria-current="page">
+          Today
+        </Link>
+        <Link href="/planner">This week</Link>
+        <Link href="/planner/calendar">
+          <CalendarDays size={15} aria-hidden="true" /> Calendar
+        </Link>
+        <Link href="/goals">Goals</Link>
+        <Link href="/vision">Vision</Link>
+      </nav>
 
       {error ? (
         <p className="status-message status-message-error" role="alert">
@@ -290,7 +307,7 @@ export function TodayWorkspace({ data }: { data: TodayData }) {
             <p className="eyebrow">Inbox</p>
             <h2 id="today-recent-captures">Recent captures</h2>
           </div>
-          <Link href="/inbox" aria-label="Open Inbox" title="Open Inbox">
+          <Link href="/planner/inbox" aria-label="Open Inbox" title="Open Inbox">
             <Inbox size={18} />
           </Link>
         </div>
@@ -308,7 +325,7 @@ export function TodayWorkspace({ data }: { data: TodayData }) {
           {!data.recentCaptures.length ? (
             <div className="inline-empty">
               <p>Your unstructured thoughts will land here.</p>
-              <Link href="/inbox">Make a capture</Link>
+              <Link href="/planner/inbox">Make a capture</Link>
             </div>
           ) : null}
         </div>
