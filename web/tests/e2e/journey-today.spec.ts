@@ -7,6 +7,20 @@ import { test, expect, goTo, onboardingSeed } from './support/workspace';
 const committedRegion = 'Committed Actions';
 const openRegion = 'Open Actions';
 
+test('Planner navigation keeps Today inside the planning workflow', async ({ workspace }) => {
+  const { page } = workspace;
+  await goTo(page, '/planner');
+
+  const plannerNavigation = page.getByRole('complementary', { name: 'Planner navigation' });
+  if (!(await plannerNavigation.isVisible())) {
+    await page.getByRole('button', { name: 'Open menu' }).click();
+  }
+  await plannerNavigation.getByRole('link', { name: 'Today', exact: true }).click();
+
+  await expect(page).toHaveURL(/\/planner\/today(?:\?|$)/);
+  await expect(page.getByRole('heading', { name: 'Today', exact: true })).toBeVisible();
+});
+
 test('an Action can be committed to today and shows up in the focus list', async ({
   workspace,
 }) => {

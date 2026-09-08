@@ -10,6 +10,8 @@ import {
 describe('experience navigation', () => {
   it('keeps Planner routes in a Planner-specific navigation surface', () => {
     expect(experienceAreaForPath('/planner')).toBe('planner');
+    expect(experienceAreaForPath('/planner/today')).toBe('planner');
+    expect(experienceAreaForPath('/planner/inbox')).toBe('planner');
     expect(experienceAreaForPath('/planner/calendar')).toBe('planner');
     expect(experienceAreaForPath('/goals')).toBe('planner');
     expect(experienceAreaForPath('/vision')).toBe('planner');
@@ -29,6 +31,9 @@ describe('experience navigation', () => {
       'Vision',
     ]);
     expect(navigation.subtitle).not.toContain('Personal workspace');
+    expect(
+      experienceNavItems(navigation).every((item) => experienceAreaForPath(item.href) === 'planner')
+    ).toBe(true);
   });
 
   it('keeps Workspace and Settings destinations separate', () => {
