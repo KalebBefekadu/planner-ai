@@ -109,14 +109,12 @@ Only after the four critical-path stages pass:
 
 Only one ticket is active at a time:
 
-1. audit the current real shell against the two reference screens and identify the exact components and CSS systems to replace;
-2. extract brand tokens and fixture-free frame components that both Preview and authenticated routes can render;
-3. move Workspace and its real Notes workflow into that frame;
-4. complete the Notion pilot and recovery evidence;
-5. move the real Planner daily loop into the frame;
-6. deploy privately and begin seven-day dogfood.
+1. close the real Today screen's visual and responsive gaps against the accepted Planner reference;
+2. complete the real direction-to-action daily loop inside Planner-scoped routes;
+3. run a representative Notion pilot import and reconcile its item-level report;
+4. complete private deployment checks and begin seven-day dogfood.
 
-The active ticket is **1: real-shell audit**. The next code change must follow that audit; no isolated page polish precedes it.
+The shared shell, single Notes tree, grouped Note details, persistent import report, and Planner-scoped Today and Action Inbox routes are merged. The next implementation ticket is **Planner Today convergence**. The Notion pilot remains a user-data gate, so Planner work may continue without weakening that gate.
 
 ## Definition Of Done
 
