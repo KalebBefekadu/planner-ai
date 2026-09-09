@@ -3351,6 +3351,13 @@ export type Database = {
         Returns: undefined;
       };
       release_beta_invite: { Args: { p_invite_id: string }; Returns: undefined };
+      review_week_eligible_actions: {
+        Args: { p_ends_on: string; p_starts_on: string; p_workspace_id: string };
+        Returns: {
+          action_id: string;
+          horizon_kind: string;
+        }[];
+      };
       revoke_mcp_access_token: {
         Args: { p_token_id: string };
         Returns: undefined;
