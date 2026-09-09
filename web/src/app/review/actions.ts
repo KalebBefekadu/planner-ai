@@ -2,9 +2,10 @@
 
 import { revalidatePlannerAndRecords } from '@/lib/planner-revalidation';
 import { periodBounds } from '@/lib/planning-period';
+import { ReviewIntentError, reviewCompletionKey } from '@/lib/reviews/completion-intent';
 import type { CoachingIntensity } from '@/lib/coaching';
 import { dateInTimezone } from '@/lib/date';
-import { executeOperation } from '@/lib/operations';
+import { executeOperation, OperationFailure } from '@/lib/operations';
 import { currentLongReviewPeriod, type LongReviewPeriod } from '@/lib/reviews/periods';
 import { parsePersistedReviewProposal, type ResolvedReviewProposal } from '@/lib/review-proposals';
 import { createClient } from '@/lib/supabase/server';
@@ -266,15 +267,24 @@ export async function completeWeeklyReview(input: {
   endsOn: string;
   reflectionMarkdown: string;
   decisions: WeeklyReviewDecision[];
+  /** Identifies one submission, so a transport retry replays it. */
+  intentId: string;
 }) {
   const { supabase } = await reviewClient();
-  // One completed weekly review per week is a database invariant, so a second
-  // submission with a fresh key does not create a second review -- it hits the
-  // unique index and fails. Keying on the week instead makes the retry replay
-  // the recorded result, which is what a person clicking twice, or clicking
-  // again after a dropped connection, actually means.
-  const result = await executeOperation(supabase, 'review.complete-weekly.v1', input, {
-    idempotencyKey: `weekly-review:${input.startsOn}`,
+  const { intentId, ...operationInput } = input;
+  let idempotencyKey: string;
+  try {
+    idempotencyKey = reviewCompletionKey('weekly', input.startsOn, intentId);
+  } catch (error) {
+    throw new OperationFailure(
+      'invalid_review_intent',
+      error instanceof ReviewIntentError
+        ? error.message
+        : 'This review cannot be submitted safely. Reload and try again.'
+    );
+  }
+  const result = await executeOperation(supabase, 'review.complete-weekly.v1', operationInput, {
+    idempotencyKey,
     surface: 'ui',
   });
   revalidatePlannerAndRecords();
@@ -400,12 +410,24 @@ export async function completePeriodReview(input: {
   startsOn: string;
   endsOn: string;
   reflectionMarkdown: string;
+  /** Identifies one submission, so a transport retry replays it. */
+  intentId: string;
 }) {
   const { supabase } = await reviewClient();
-  // Same invariant as the weekly review: one completed review per period, so
-  // the key is the period rather than a fresh id.
-  const result = await executeOperation(supabase, 'review.complete-period.v1', input, {
-    idempotencyKey: `${input.kind}-review:${input.startsOn}`,
+  const { intentId, ...operationInput } = input;
+  let idempotencyKey: string;
+  try {
+    idempotencyKey = reviewCompletionKey(input.kind, input.startsOn, intentId);
+  } catch (error) {
+    throw new OperationFailure(
+      'invalid_review_intent',
+      error instanceof ReviewIntentError
+        ? error.message
+        : 'This review cannot be submitted safely. Reload and try again.'
+    );
+  }
+  const result = await executeOperation(supabase, 'review.complete-period.v1', operationInput, {
+    idempotencyKey,
     surface: 'ui',
   });
   revalidatePlannerAndRecords();

@@ -1132,6 +1132,12 @@ function stableFailure(message: string) {
       'A Capture keeps the words you recorded. Save the change as a Note instead.'
     );
   }
+  if (message.includes('review_already_completed')) {
+    return new OperationFailure(
+      'review_already_completed',
+      'This period has already been reviewed. Undo the completed review before recording a different one.'
+    );
+  }
   if (message.includes('vision_required')) {
     return new OperationFailure('vision_required', 'Create a Vision before adding Goals.');
   }
