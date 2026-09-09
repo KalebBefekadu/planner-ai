@@ -13,8 +13,18 @@ export type NoteView = {
   bodyMarkdown: string;
   sortKey: number;
   aiExcluded: boolean;
+  // The instant this Note was marked a favourite, or null when it is not one.
+  // Kept as the instant rather than a flag so the favourites list has a
+  // meaningful order and Undo can restore exactly what was there before.
+  favoritedAt: string | null;
   version: number;
   updatedAt: string;
+  /**
+   * Whether this Note is a search result, as opposed to an ancestor carried
+   * alongside one so the result can say where it is filed. Undefined when no
+   * search is running, because then every Note is simply itself.
+   */
+  matchesQuery?: boolean;
 };
 
 export type NoteKnowledgeContext = {
@@ -85,6 +95,7 @@ function mapNote(note: Record<string, unknown>): NoteView {
     bodyMarkdown: note.body_markdown as string,
     sortKey: Number(note.sort_key),
     aiExcluded: Boolean(note.ai_excluded),
+    favoritedAt: (note.favorited_at as string | null) ?? null,
     version: Number(note.version),
     updatedAt: note.updated_at as string,
   };
@@ -108,7 +119,101 @@ export async function getNotes(query?: string) {
   }
   const { data, error } = await request;
   if (error) throw new Error('Unable to load Notes.');
+  const matches = (data ?? []).map((note) => mapNote(note as Record<string, unknown>));
+  if (!normalizedQuery) return matches;
+
+  // A result is identified by where it is filed, so the Notes that say where
+  // that is have to come back with it. Without them a match filed two levels
+  // down has no path to show and, once opened, no ancestors to name -- which
+  // is precisely the case a search is for.
+  const byId = new Map(matches.map((note) => [note.id, note]));
+  const wanted = new Set<string>();
+  for (const note of matches) {
+    let parentId = note.parentNoteId;
+    while (parentId && !byId.has(parentId) && !wanted.has(parentId)) {
+      wanted.add(parentId);
+      const { data: parent } = await supabase
+        .from('notes')
+        .select('*')
+        .eq('workspace_id', workspaceId)
+        .eq('id', parentId)
+        .maybeSingle();
+      if (!parent) break;
+      const mapped = mapNote(parent as Record<string, unknown>);
+      byId.set(mapped.id, mapped);
+      parentId = mapped.parentNoteId;
+    }
+  }
+  // Ancestors travel with the results but are not results themselves; the
+  // caller decides what to render, and marking them keeps that decision
+  // possible.
+  return [...byId.values()].map((note) => ({
+    ...note,
+    matchesQuery: matches.some((match) => match.id === note.id),
+  }));
+}
+
+// Favourites are read independently of the search box. They are the pages
+// someone returns to daily, so they stay reachable while a query is narrowing
+// the tree to something else entirely; scoping them to the query would make
+// them vanish exactly when a person was hunting for something.
+//
+// Most recently marked first, which is the order the stored instant exists to
+// provide.
+export async function getFavoriteNotes(): Promise<NoteView[]> {
+  const { supabase, workspaceId } = await notesClient();
+  const { data, error } = await supabase
+    .from('notes')
+    .select('*')
+    .eq('workspace_id', workspaceId)
+    .is('archived_at', null)
+    .is('trashed_at', null)
+    .not('favorited_at', 'is', null)
+    .order('favorited_at', { ascending: false });
+  if (error) throw new Error('Unable to load your favourite Notes.');
   return (data ?? []).map((note) => mapNote(note as Record<string, unknown>));
+}
+
+// Where each Note sits, as the titles of its ancestors from the root down.
+//
+// Search results are drawn flat, because a match nested under a Note that does
+// not itself match has no rendered ancestor to hang from. Flat results made two
+// Notes both called "Notes" into two identical buttons with nothing to tell
+// them apart. The path is what distinguishes them, and it cannot be read off
+// the matches alone: the ancestors are exactly the Notes the query filtered
+// out, so it is read from the whole tree.
+export async function getNoteAncestorTitles(): Promise<Record<string, string[]>> {
+  const { supabase, workspaceId } = await notesClient();
+  const { data, error } = await supabase
+    .from('notes')
+    .select('id,parent_note_id,title')
+    .eq('workspace_id', workspaceId)
+    .is('archived_at', null)
+    .is('trashed_at', null);
+  if (error) throw new Error('Unable to load Notes.');
+  const rows = new Map(
+    (data ?? []).map((note) => [
+      note.id as string,
+      { parentNoteId: note.parent_note_id as string | null, title: note.title as string },
+    ])
+  );
+  const paths: Record<string, string[]> = {};
+  for (const id of rows.keys()) {
+    const ancestors: string[] = [];
+    // A cycle cannot be written through note.move.v1, but a corrupted row must
+    // not hang the page that reads it.
+    const seen = new Set<string>([id]);
+    let parentId = rows.get(id)?.parentNoteId ?? null;
+    while (parentId && !seen.has(parentId)) {
+      seen.add(parentId);
+      const parent = rows.get(parentId);
+      if (!parent) break;
+      ancestors.unshift(parent.title);
+      parentId = parent.parentNoteId;
+    }
+    paths[id] = ancestors;
+  }
+  return paths;
 }
 
 export async function getNoteKnowledgeContext(noteId: string): Promise<NoteKnowledgeContext> {
@@ -309,6 +414,22 @@ export async function setNoteAiExcluded(id: string, aiExcluded: boolean, expecte
       aiExcluded,
       expectedVersion,
     },
+    { idempotencyKey: randomUUID(), surface: 'ui' }
+  );
+  revalidatePath('/notes');
+  return mapNote(note);
+}
+
+// Marking a favourite goes through the same versioned Operation as every other
+// change to a Note, so it survives a version conflict, is recorded in Activity,
+// and can be undone. Holding it in the page instead would have lost it on the
+// next reload and on every other device.
+export async function setNoteFavorite(id: string, favorite: boolean, expectedVersion: number) {
+  const { supabase } = await notesClient();
+  const note = await executeOperation(
+    supabase,
+    'note.favorite.v1',
+    { id, favorite, expectedVersion },
     { idempotencyKey: randomUUID(), surface: 'ui' }
   );
   revalidatePath('/notes');

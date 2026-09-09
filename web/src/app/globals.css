@@ -7214,3 +7214,36 @@ button:disabled {
 .capture-filing .capture-filing-filed {
   opacity: 0.72;
 }
+
+/* WS-02: favourite Notes and the path shown on a search result. */
+.note-favorites {
+  padding: 0 0.25rem 0.5rem;
+  border-bottom: 1px solid var(--border, rgba(0, 0, 0, 0.08));
+  margin-bottom: 0.5rem;
+}
+.note-favorites-heading {
+  font-size: 0.7rem;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  opacity: 0.6;
+  margin: 0 0 0.25rem 0.5rem;
+}
+.note-tree-item-label {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  min-width: 0;
+  gap: 0.05rem;
+}
+.note-tree-item-path {
+  font-size: 0.7rem;
+  opacity: 0.6;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  max-width: 100%;
+}
+.note-favorite-toggle-on {
+  color: #d99b1c;
+}

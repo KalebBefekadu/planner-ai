@@ -37,6 +37,7 @@ import {
   RotateCcw,
   Search,
   ShieldOff,
+  Star,
   Table2,
   Tags,
   Target,
@@ -60,6 +61,7 @@ import {
   restoreNoteRevision,
   setNoteTags,
   setNoteAiExcluded,
+  setNoteFavorite,
   unlinkNote,
   unlinkNoteAction,
   unlinkNoteGoal,
@@ -153,6 +155,8 @@ export function NotesWorkspace({
   notes,
   selectedId,
   query,
+  ancestorTitles,
+  favorites,
   knowledge,
   inspectorView,
   onInspectorViewChange,
@@ -161,6 +165,8 @@ export function NotesWorkspace({
   notes: NoteView[];
   selectedId: string | null;
   query: string;
+  ancestorTitles: Record<string, string[]>;
+  favorites: NoteView[];
   knowledge: NoteKnowledgeContext | null;
   inspectorView: InspectorView;
   onInspectorViewChange: (view: InspectorView) => void;
@@ -281,26 +287,60 @@ export function NotesWorkspace({
   // dropped -- the deeper a Note was filed, the less findable it became, which
   // is the opposite of what search is for. While a query is active the sidebar
   // shows the matches themselves, flat and in tree order.
+  //
+  // Each result carries where it is filed. Two Notes both called "Notes" were
+  // two identical buttons: the list gave a person no way to tell which one they
+  // were about to open, and opening the wrong one is how notes get written into
+  // the wrong page. Titles are not unique and were never meant to be, so the
+  // path is what makes a result identifiable.
   function renderSearchResults() {
-    const results = [...notes].sort((first, second) => first.sortKey - second.sortKey);
+    // Ancestors arrive with the results so a result can name where it is
+    // filed. They are not results themselves and listing them would answer a
+    // question nobody asked.
+    const results = notes
+      .filter((note) => note.matchesQuery !== false)
+      .sort((first, second) => first.sortKey - second.sortKey);
     if (!results.length) return null;
     return (
       <ul className="note-tree-level">
         {results.map((note) => (
-          <li key={note.id}>{renderNoteButton(note)}</li>
+          <li key={note.id}>{renderNoteButton(note, ancestorTitles[note.id] ?? [])}</li>
         ))}
       </ul>
     );
   }
 
-  function renderNoteButton(note: NoteView) {
+  // The pages someone returns to daily, reachable without walking the tree or
+  // remembering a name well enough to search for it. Ancestors are shown for
+  // the same reason they are shown in search: a favourite is displaced from its
+  // place in the hierarchy, so its title alone may not identify it.
+  function renderFavorites() {
+    if (!favorites.length) return null;
+    return (
+      <nav className="note-favorites" aria-label="Favorite notes">
+        <h2 className="note-favorites-heading">Favorites</h2>
+        <ul className="note-tree-level">
+          {favorites.map((note) => (
+            <li key={note.id}>{renderNoteButton(note, ancestorTitles[note.id] ?? [])}</li>
+          ))}
+        </ul>
+      </nav>
+    );
+  }
+
+  function renderNoteButton(note: NoteView, ancestors: string[] = []) {
     return (
       <button
         className={`note-tree-item${note.id === selected?.id ? ' note-tree-item-active' : ''}`}
         type="button"
         onClick={() => openNoteFromTree(note.id)}
       >
-        <span>{note.title}</span>
+        <span className="note-tree-item-label">
+          <span>{note.title}</span>
+          {ancestors.length ? (
+            <span className="note-tree-item-path">{ancestors.join(' / ')}</span>
+          ) : null}
+        </span>
         {note.aiExcluded ? <ShieldOff size={13} aria-label="Excluded from AI" /> : null}
       </button>
     );
@@ -678,6 +718,7 @@ export function NotesWorkspace({
             aria-label="Search notes"
           />
         </form>
+        {renderFavorites()}
         <nav className="note-tree" aria-label="Notes">
           {notes.length ? (
             query ? (
@@ -745,6 +786,34 @@ export function NotesWorkspace({
                         ? 'Unsaved changes'
                         : 'Saved'}
                 </span>
+                <button
+                  className={`icon-button note-favorite-toggle${
+                    selected.favoritedAt ? ' note-favorite-toggle-on' : ''
+                  }`}
+                  type="button"
+                  aria-pressed={selected.favoritedAt !== null}
+                  title={selected.favoritedAt ? 'Remove from favorites' : 'Add to favorites'}
+                  aria-label={selected.favoritedAt ? 'Remove from favorites' : 'Add to favorites'}
+                  disabled={isPending}
+                  onClick={() => {
+                    const favorite = selected.favoritedAt === null;
+                    startTransition(async () => {
+                      try {
+                        const saved = await setNoteFavorite(
+                          selected.id,
+                          favorite,
+                          versionRef.current
+                        );
+                        versionRef.current = saved.version;
+                        router.refresh();
+                      } catch (caught) {
+                        setError(errorMessage(caught));
+                      }
+                    });
+                  }}
+                >
+                  <Star size={16} />
+                </button>
                 <label className="ai-exclusion-toggle">
                   <input
                     type="checkbox"

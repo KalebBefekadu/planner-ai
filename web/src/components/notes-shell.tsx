@@ -26,6 +26,8 @@ export function NotesShell({
   selectedId,
   activeKey,
   query,
+  ancestorTitles,
+  favorites,
   knowledge,
   initialImportOpen = false,
 }: {
@@ -33,6 +35,8 @@ export function NotesShell({
   selectedId: string | null;
   activeKey: string;
   query: string;
+  ancestorTitles: Record<string, string[]>;
+  favorites: NoteView[];
   knowledge: NoteKnowledgeContext | null;
   initialImportOpen?: boolean;
 }) {
@@ -54,6 +58,8 @@ export function NotesShell({
         notes={notes}
         selectedId={selectedId}
         query={query}
+        ancestorTitles={ancestorTitles}
+        favorites={favorites}
         knowledge={knowledge}
         inspectorView={inspectorView}
         onInspectorViewChange={setInspectorView}
