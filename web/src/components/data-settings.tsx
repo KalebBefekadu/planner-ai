@@ -113,6 +113,12 @@ export function DataSettings({
           <div>
             <h2>Markdown Notes vault</h2>
             <p>Portable Markdown files plus a hierarchy manifest for your personal vault.</p>
+            <p className="export-scope-note">
+              Rebuilds Note bodies, hierarchy, order, tags and AI Exclusion. Attachments are
+              included as files but are not rebuilt by import, and Goals, Actions, Vision and
+              Reviews are not in this vault. Download the full Workspace export as well to keep a
+              copy of those.
+            </p>
           </div>
         </div>
         <button

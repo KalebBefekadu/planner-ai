@@ -7198,3 +7198,12 @@ button:disabled {
 .onboarding-resumed {
   border-left: 3px solid var(--accent, currentColor);
 }
+
+/* IM-04: the Notes vault is not a whole-Workspace backup, so its scope note
+   must read as a caveat next to the download rather than as body copy. */
+.export-section .export-scope-note {
+  margin-top: 0.35rem;
+  font-size: 0.82rem;
+  line-height: 1.45;
+  opacity: 0.78;
+}
