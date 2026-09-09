@@ -167,6 +167,11 @@ const noteOutput = z
     body_markdown: z.string(),
     sort_key: z.union([z.number(), z.string()]),
     ai_excluded: z.boolean(),
+    /* Optional so a receipt replayed from before the appearance migration
+       still parses. The columns are non-null-defaulted going forward. */
+    icon_emoji: z.string().nullable().optional(),
+    cover_key: z.string().nullable().optional(),
+    cover_position: z.union([z.number(), z.string()]).optional(),
     version,
     created_at: timestamp,
     updated_at: timestamp,
@@ -701,6 +706,30 @@ export const operationDefinitions = {
     exposure: ['ui', 'chat', 'mcp'],
     reversible: true,
     input: z.object({ id, aiExcluded: z.boolean(), expectedVersion: version }).strict(),
+    output: noteOutput,
+  },
+  /* Appearance is its own operation rather than three more fields on
+     note.update.v1. That contract is already called by chat and MCP, and it
+     writes a Note revision on every call -- nudging a cover two percent is not
+     an edit to the writing, and it should not push the previous draft into the
+     history panel. */
+  'note.appearance.v1': {
+    summary: 'Set or clear one Note page icon, cover image and cover position.',
+    risk: 'low',
+    exposure: ['ui'],
+    /* No operation_undo_support row backs this, so operation.undo.v1 would
+       have nothing to replay. Reset is offered directly in the document
+       header instead. */
+    reversible: false,
+    input: z
+      .object({
+        id,
+        iconEmoji: z.string().min(1).max(32).nullable(),
+        coverKey: z.enum(['focus', 'north', 'health', 'product']).nullable(),
+        coverPosition: z.number().int().min(0).max(100),
+        expectedVersion: version,
+      })
+      .strict(),
     output: noteOutput,
   },
   'note.import-preview.v1': {

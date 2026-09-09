@@ -44,6 +44,8 @@ const HUMAN_ONLY: Partial<Record<OperationId, string>> = {
   'review.complete-period.v1': 'A review is the user reflecting; an agent cannot do it for them.',
   'workspace.preferences.v1': 'Preferences describe how the user wants to be treated.',
   'workspace.onboarding-complete.v1': 'Onboarding completes when the person says it has.',
+  'note.appearance.v1':
+    'How a page looks is a preference about the owner workspace, like workspace.preferences.v1; an agent asked to tidy up must not restyle pages.',
 };
 
 describe('human and agent parity', () => {
