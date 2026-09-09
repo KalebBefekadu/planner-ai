@@ -181,7 +181,7 @@ export function WeeklyReview({ data }: { data: WeeklyReviewData }) {
           <section className="review-workspace" aria-label="Completed weekly review">
             <h2>Week reviewed</h2>
             <p>{data.completedReview.reflectionMarkdown || 'No reflection recorded.'}</p>
-            <Link href="/planner">Plan next week</Link>
+            {!notice ? <Link href="/planner">Plan next week</Link> : null}
             <p>
               <Link href="/activity">View Activity</Link>
             </p>

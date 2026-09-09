@@ -1,4 +1,4 @@
-import { test, expect, goTo } from './support/workspace';
+import { test, expect, goTo, onboardingSeed } from './support/workspace';
 
 for (const period of ['week', 'month', 'quarter'] as const) {
   test(`${period} review persists a new completion after undo`, async ({ workspace }) => {
@@ -13,9 +13,9 @@ for (const period of ['week', 'month', 'quarter'] as const) {
     }
     async function submit(reflection: string) {
       if (period === 'week') {
-        for (const select of await page.getByRole('combobox', { name: /^Decision for / }).all()) {
-          await select.selectOption('left_overdue');
-        }
+        await page
+          .getByRole('combobox', { name: `Decision for ${onboardingSeed.action}`, exact: true })
+          .selectOption('left_overdue');
         await page.getByLabel('What should you remember from this week?').fill(reflection);
         await page.getByRole('button', { name: 'Complete weekly review' }).click();
         await expect(page.getByRole('status')).toContainText('Review completed');
