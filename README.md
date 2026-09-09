@@ -4,6 +4,13 @@ Planner AI is a private, voice-first planning and knowledge workspace with a com
 
 The core promise is simple: people can always work directly, and AI can perform the same authorized Operations without becoming a hidden source of truth or an uncontrolled administrator.
 
+## Licensing
+
+This repository is public but **not open source**. All rights are reserved, and
+its visibility grants no licence to use it — see [LICENSE](LICENSE). It is
+public so that continuous integration runs against it, not as an invitation to
+reuse it. If you want to do something with this code, open an issue and ask.
+
 ## Repository
 
 | Path         | Role                                                               |
