@@ -57,7 +57,7 @@ Two properties keep Preview from becoming a second design system. Both are curre
 | Markdown document editing, autosave | keep | `notes-workspace.tsx`, `rich-markdown-editor.tsx` | WS-01 / [#122](https://github.com/KalebBefekadu/planner-ai/issues/122) | behavior — `journey-notes.spec.ts`, `markdown-rich-editor.test.ts` |
 | Formatting controls (bold, italic, heading, list, task list, table) | keep | `notes-workspace.tsx` | WS-01 / [#122](https://github.com/KalebBefekadu/planner-ai/issues/122) | behavior — `markdown-editing.test.ts` |
 | Note outline / document navigation | keep | `notes-workspace.tsx` ("Note outline") | WS-02 / [#123](https://github.com/KalebBefekadu/planner-ai/issues/123) | visual |
-| Backlinks and note-to-note links | keep | `notes-workspace.tsx` | WS-02 / [#123](https://github.com/KalebBefekadu/planner-ai/issues/123) | behavior — `journey-notes.spec.ts` |
+| Backlinks and note-to-note links | keep | `notes-workspace.tsx` | WS-02 / [#123](https://github.com/KalebBefekadu/planner-ai/issues/123) | behavior — `journey-notes.spec.ts` (this row was claimed on a test that had never passed; see [#162](https://github.com/KalebBefekadu/planner-ai/issues/162)) |
 | Attachments | keep | `notes-workspace.tsx` ("Attach a file") | WS-05 / [#129](https://github.com/KalebBefekadu/planner-ai/issues/129) | visual — upload exists; availability and recovery states are the open part |
 | Page cover image and reposition | adapt | Note appearance | WS-03 / [#124](https://github.com/KalebBefekadu/planner-ai/issues/124) | open — no real implementation |
 | Page icon picker | adapt | Note appearance | WS-03 / [#124](https://github.com/KalebBefekadu/planner-ai/issues/124) | open — no real implementation |

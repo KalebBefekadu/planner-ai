@@ -156,6 +156,7 @@ test('a Note link becomes a navigable backlink from the related Note', async ({ 
   await createRootNote(page, targetTitle, 'Evidence and open questions.');
 
   await page.getByRole('button', { name: sourceTitle, exact: true }).click();
+  await page.getByRole('button', { name: 'Links', exact: true }).click();
   const noteSelector = page.getByRole('combobox', { name: 'Note to link' });
   await noteSelector.selectOption({ label: targetTitle });
   await page.getByRole('button', { name: 'Add link' }).click();
@@ -163,11 +164,17 @@ test('a Note link becomes a navigable backlink from the related Note', async ({ 
   await expect(page.getByRole('button', { name: `related ${targetTitle}` })).toBeVisible();
   await page.getByRole('button', { name: `related ${targetTitle}` }).click();
 
+  // Following the link must land on the related Note with its connections still
+  // on screen. The workspace is remounted per Note, so an inspector pane held
+  // inside it reset to Properties on arrival and hid the backlink that was the
+  // whole reason for the journey -- the reader had to rediscover the tab at
+  // every hop.
   await expect(page.getByRole('textbox', { name: 'Note title' })).toHaveValue(targetTitle);
   const backlink = page.getByRole('button', { name: `backlink · related ${sourceTitle}` });
   await expect(backlink).toBeVisible();
   await backlink.click();
   await expect(page.getByRole('textbox', { name: 'Note title' })).toHaveValue(sourceTitle);
+  await expect(page.getByRole('button', { name: `related ${targetTitle}` })).toBeVisible();
 });
 
 // Sibling order is a decision a person makes about their own material. Until

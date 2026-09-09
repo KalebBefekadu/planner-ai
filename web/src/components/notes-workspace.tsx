@@ -107,17 +107,23 @@ export function NoteMarkdownPreview({ markdown }: { markdown: string }) {
   );
 }
 
+export type InspectorView = 'properties' | 'links' | 'history';
+
 export function NotesWorkspace({
   notes,
   selectedId,
   query,
   knowledge,
+  inspectorView,
+  onInspectorViewChange,
   onRequestImport,
 }: {
   notes: NoteView[];
   selectedId: string | null;
   query: string;
   knowledge: NoteKnowledgeContext | null;
+  inspectorView: InspectorView;
+  onInspectorViewChange: (view: InspectorView) => void;
   onRequestImport: () => void;
 }) {
   const router = useRouter();
@@ -138,9 +144,6 @@ export function NotesWorkspace({
   const [relationType, setRelationType] =
     useState<NoteKnowledgeContext['links'][number]['relationType']>('related');
   const [editorMode, setEditorMode] = useState<'source' | 'rich' | 'preview'>('source');
-  const [inspectorView, setInspectorView] = useState<'properties' | 'links' | 'history'>(
-    'properties'
-  );
   const [richEditor, setRichEditor] = useState<Editor | null>(null);
   const [isUploadingAttachment, setIsUploadingAttachment] = useState(false);
   const [recentlyRemovedAttachment, setRecentlyRemovedAttachment] = useState<{
@@ -556,6 +559,10 @@ export function NotesWorkspace({
     const allowed = new Set(parentCandidateIds(tree, selected.id));
     return notes.filter((note) => allowed.has(note.id) && note.id !== selected.parentNoteId);
   }, [notes, selected]);
+  const connectionCount =
+    (knowledge?.links.length ?? 0) +
+    (knowledge?.goalLinks.length ?? 0) +
+    (knowledge?.actionLinks.length ?? 0);
   const noteName = (id: string) => notes.find((note) => note.id === id)?.title ?? 'Missing Note';
 
   return (
@@ -1001,9 +1008,20 @@ export function NotesWorkspace({
                       key={view}
                       type="button"
                       aria-pressed={inspectorView === view}
-                      onClick={() => setInspectorView(view)}
+                      onClick={() => onInspectorViewChange(view)}
                     >
                       {view[0].toUpperCase() + view.slice(1)}
+                      {/*
+                       * Nothing outside this pane says a Note has connections,
+                       * so a backlink someone else created was invisible unless
+                       * they thought to look. The count is decoration over the
+                       * label, which stays the button's accessible name.
+                       */}
+                      {view === 'links' && connectionCount ? (
+                        <span className="note-inspector-tab-count" aria-hidden="true">
+                          {connectionCount}
+                        </span>
+                      ) : null}
                     </button>
                   ))}
                 </nav>
