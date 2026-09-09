@@ -533,7 +533,12 @@ test('a downloaded vault re-imports as an exact match and rebuilds Notes that ar
   await expect(treeNote(page, childTitle)).toBeVisible();
 });
 
-test('a supported attachment is retained in quarantine instead of becoming an unsafe download', async ({
+// WS-05: an attachment is only worth keeping if the person can get it back.
+// Uploading is the easy half; the half that matters is that the bytes are
+// still reachable later, and that removing one is a decision that can be taken
+// back rather than a silent loss.
+
+test('an uploaded attachment can be opened again after the page is reloaded', async ({
   workspace,
 }) => {
   const { page } = workspace;
@@ -547,13 +552,80 @@ test('a supported attachment is retained in quarantine instead of becoming an un
   });
 
   await expect(page.getByText('research.md', { exact: true })).toBeVisible();
-  await expect(page.getByText('Security review pending', { exact: true })).toBeVisible();
+
+  // Reload before downloading. An attachment that is only reachable from the
+  // state left behind by the upload is not really stored anywhere a person can
+  // return to.
+  await page.reload();
+  await waitForHydration(page);
+
+  const download = page.waitForEvent('download');
+  await page.getByRole('button', { name: 'Download attachment research.md' }).click();
+  const file = await download;
+  expect(readFileSync(await file.path(), 'utf8')).toBe('# Research\n\nSource material.');
+});
+
+test('a file whose contents do not match its declared type is refused rather than stored as usable', async ({
+  workspace,
+}) => {
+  const { page } = workspace;
+  await goTo(page, '/notes');
+  await createRootNote(page, 'Disguised upload', 'A PDF that is not a PDF.');
+
+  // The browser decides the declared type from the file extension, so a person
+  // can hand the server anything under any label. The recorded state has to
+  // reflect what the bytes actually are, not what the upload claimed.
+  await page.getByLabel('Attach a file').setInputFiles({
+    name: 'invoice.pdf',
+    mimeType: 'application/pdf',
+    buffer: Buffer.from('MZ this is not a PDF at all'),
+  });
+
+  await expect(page.getByText('invoice.pdf', { exact: true })).toBeVisible();
+  await expect(
+    page.getByText('Not available: contents do not match a PDF', { exact: true })
+  ).toBeVisible();
+  // A refused file is never offered for download, because offering it would be
+  // the one thing the quarantine gate exists to prevent.
+  await expect(page.getByRole('button', { name: 'Download attachment invoice.pdf' })).toHaveCount(
+    0
+  );
+});
+
+test('a removed attachment is still recoverable after the page is reloaded', async ({
+  workspace,
+}) => {
+  const { page } = workspace;
+  await goTo(page, '/notes');
+  await createRootNote(
+    page,
+    'Attachment recovery',
+    'Removing a file is not the same as losing it.'
+  );
+
+  await page.getByLabel('Attach a file').setInputFiles({
+    name: 'contract.txt',
+    mimeType: 'text/plain',
+    buffer: Buffer.from('The agreed terms.'),
+  });
+  await expect(page.getByText('contract.txt', { exact: true })).toBeVisible();
 
   page.once('dialog', (dialog) => dialog.accept());
-  await page.getByRole('button', { name: 'Remove attachment research.md' }).click();
-  await expect(page.getByText('research.md removed', { exact: true })).toBeVisible();
-  await page.getByRole('button', { name: 'Restore attachment research.md' }).click();
-  await expect(page.getByText('research.md', { exact: true })).toBeVisible();
+  await page.getByRole('button', { name: 'Remove attachment contract.txt' }).click();
+  await expect(page.getByRole('button', { name: 'Restore attachment contract.txt' })).toBeVisible();
+
+  // The undo used to live only in the tab that did the removal. A person who
+  // reloaded, or came back the next day still inside the retention window, was
+  // shown nothing at all -- the file was still there, but unreachable and
+  // unmentioned.
+  await page.reload();
+  await waitForHydration(page);
+
+  await page.getByRole('button', { name: 'Restore attachment contract.txt' }).click();
+  const download = page.waitForEvent('download');
+  await page.getByRole('button', { name: 'Download attachment contract.txt' }).click();
+  const file = await download;
+  expect(readFileSync(await file.path(), 'utf8')).toBe('The agreed terms.');
 });
 
 // WS-01: the writing has to be safe. Autosave waits 800ms after the last

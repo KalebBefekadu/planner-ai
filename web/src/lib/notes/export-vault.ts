@@ -21,9 +21,17 @@ export type ExportAttachment = {
   media_type: string;
   byte_size: number;
   checksum_sha256: string;
+  scan_state: string;
 };
 
-type AttachmentDownloader = (objectKey: string) => Promise<Buffer>;
+// An export must never quietly contain less than the workspace holds. A file
+// that cannot be written into the archive is reported instead of skipped, so
+// the downloader answers with the reason rather than throwing it away.
+export type AttachmentExportResult =
+  | { available: true; bytes: Buffer }
+  | { available: false; reason: 'rejected' | 'missing' };
+
+type AttachmentDownloader = (attachment: ExportAttachment) => Promise<AttachmentExportResult>;
 
 const createZipArchive = (
   archiverModule as unknown as {
@@ -117,9 +125,31 @@ export async function zipNotes(
     byteSize: number;
     checksumSha256: string;
   }>;
+  const unavailableAttachments = [] as Array<{
+    id: string;
+    noteId: string;
+    originalName: string;
+    mediaType: string;
+    byteSize: number;
+    checksumSha256: string;
+    reason: 'rejected' | 'missing';
+  }>;
   for (const attachment of attachments) {
+    const result = await downloadAttachment(attachment);
+    if (!result.available) {
+      unavailableAttachments.push({
+        id: attachment.id,
+        noteId: attachment.note_id,
+        originalName: attachment.original_name,
+        mediaType: attachment.media_type,
+        byteSize: attachment.byte_size,
+        checksumSha256: attachment.checksum_sha256,
+        reason: result.reason,
+      });
+      continue;
+    }
     const path = `Attachments/${attachment.note_id}/${attachment.id}-${safeAttachmentName(attachment.original_name)}`;
-    archive.append(await downloadAttachment(attachment.object_key), { name: path });
+    archive.append(result.bytes, { name: path });
     attachmentManifest.push({
       id: attachment.id,
       noteId: attachment.note_id,
@@ -138,12 +168,33 @@ export async function zipNotes(
         exportedAt: new Date().toISOString(),
         notes: manifest,
         attachments: attachmentManifest,
+        unavailableAttachments,
       },
       null,
       2
     ),
     { name: 'planner-ai-vault.json' }
   );
+  if (unavailableAttachments.length) {
+    archive.append(
+      [
+        'Some files attached to your Notes are not in this export.',
+        '',
+        ...unavailableAttachments.map(
+          (attachment) =>
+            `- ${attachment.originalName} (${attachment.byteSize} bytes) - ${
+              attachment.reason === 'missing'
+                ? 'the stored file is no longer in storage'
+                : 'the file contents did not match its declared type, so it was never made available'
+            }`
+        ),
+        '',
+        'Their details are recorded under "unavailableAttachments" in planner-ai-vault.json.',
+        '',
+      ].join('\n'),
+      { name: 'Attachments/UNAVAILABLE.txt' }
+    );
+  }
   await archive.finalize();
   return completed;
 }
