@@ -316,3 +316,15 @@ test('an edit conflict is readable from inside the dialog and keeps the draft', 
     'Edited against a stale version'
   );
 });
+
+test('/today reaches Today instead of a not-found page', async ({ workspace }) => {
+  const { page } = workspace;
+
+  // The address a person is most likely to type or bookmark for the screen
+  // they use every day. It used to return "That page doesn't exist any more",
+  // and the same missing route had already fooled onboarding into calling
+  // revalidatePath('/today') on nothing.
+  await page.goto('/today');
+  await expect(page).toHaveURL(/\/planner\/today(?:\?|$)/);
+  await expect(page.getByRole('heading', { name: 'Make today count', exact: true })).toBeVisible();
+});
