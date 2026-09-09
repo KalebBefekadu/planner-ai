@@ -1,4 +1,5 @@
 import path from 'node:path';
+import { resolveImportStructure, type StructureSourceType } from './import-structure';
 import { parse as parseCsv } from 'csv-parse/sync';
 import yauzl from 'yauzl';
 
@@ -286,8 +287,18 @@ function vaultCandidates(files: ImportSourceFile[]) {
   });
 }
 
-export function candidatesFromVaultOrFiles(files: ImportSourceFile[]) {
-  const candidates = vaultCandidates(files) ?? candidatesFromFiles(files);
+export function candidatesFromVaultOrFiles(
+  files: ImportSourceFile[],
+  options: { sourceType: StructureSourceType } = { sourceType: 'generic' }
+) {
+  // A Planner AI vault is this application's own export: its hierarchy, order
+  // and identity are already exact, and its bodies were written by the editor
+  // rather than by another product. Structure resolution exists to repair what
+  // a foreign export loses, so a vault is restored untouched.
+  const vault = vaultCandidates(files);
+  const candidates = vault
+    ? vault
+    : resolveImportStructure(candidatesFromFiles(files), { sourceType: options.sourceType });
   return candidates.map((candidate) => ({
     aiExcluded: false,
     sourceSortKey: null,

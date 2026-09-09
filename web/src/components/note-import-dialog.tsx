@@ -276,6 +276,13 @@ export function NoteImportDialog({
   const resumable = Boolean(job) && job!.status !== 'completed' && job!.status !== 'canceled';
   const partiallyCommitted = Boolean(job && job.committedCount > 0 && resumable);
   const historyEntries = history?.entries ?? [];
+  // An item that will be created but still carries a reason is one whose
+  // meaning changed on the way in: a converted database row, or a page whose
+  // links or attachments could not all come across. It is counted here so the
+  // owner sees that a decision is waiting before scrolling the list, rather
+  // than after agreeing to the import.
+  const convertedCount =
+    preview?.items.filter((item) => item.disposition === 'create' && item.reason).length ?? 0;
 
   return (
     <div className="dialog-backdrop" role="presentation" onMouseDown={onClose}>
@@ -375,6 +382,13 @@ export function NoteImportDialog({
                 <span>Unsupported</span>
               </div>
             </div>
+            {convertedCount ? (
+              <p className="status-message" role="status">
+                {convertedCount} of these {convertedCount === 1 ? 'item changes' : 'items change'}{' '}
+                on import. Each one says what changed below, and nothing is dropped without a
+                reason.
+              </p>
+            ) : null}
             <div className="note-import-list" aria-label="Import preview">
               {preview.items.map((item) => (
                 <div key={item.id} className="note-import-row">

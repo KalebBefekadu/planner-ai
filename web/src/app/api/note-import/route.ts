@@ -234,7 +234,12 @@ export async function POST(request: Request) {
       const firstPath = String(paths[0] || uploads[0].name);
       sourceName = firstPath.includes('/') ? firstPath.split('/')[0] : uploads[0].name;
     }
-    const items = candidatesFromVaultOrFiles(sourceFiles);
+    // The source matters to structure: only a Notion export carries page IDs
+    // in its file names, and only its relative links can be resolved to the
+    // Notes this import is about to create.
+    const items = candidatesFromVaultOrFiles(sourceFiles, {
+      sourceType: sourceType as 'notion' | 'obsidian' | 'generic',
+    });
     if (!items.length) return jsonError('No supported Notes were found.', 400);
     const result = await executeOperation(
       context.supabase,
