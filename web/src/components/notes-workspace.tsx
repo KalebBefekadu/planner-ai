@@ -175,7 +175,17 @@ export function NotesWorkspace({
 }) {
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
-  const selected = notes.find((note) => note.id === selectedId) ?? null;
+  /* A Note is reachable from two places, and opening it has to work from
+     both. `notes` is the tree, which a search narrows; the favourites list is
+     deliberately not narrowed, because being able to leave a search is the
+     point of keeping a Note close. Resolving the selection from the tree alone
+     meant clicking a favourite while a search was active navigated correctly
+     and then displayed whatever the filtered tree happened to list first --
+     the one moment the list exists for. */
+  const selected =
+    notes.find((note) => note.id === selectedId) ??
+    favorites.find((note) => note.id === selectedId) ??
+    null;
   const activeNoteId = selected?.id ?? null;
   const [title, setTitle] = useState(selected?.title ?? '');
   const [body, setBody] = useState(selected?.bodyMarkdown ?? '');
