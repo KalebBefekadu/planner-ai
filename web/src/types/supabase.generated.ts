@@ -1793,7 +1793,6 @@ export type Database = {
           archived_at: string | null;
           body_markdown: string;
           created_at: string;
-          favorited_at: string | null;
           id: string;
           parent_note_id: string | null;
           purge_after: string | null;
@@ -1810,7 +1809,6 @@ export type Database = {
           archived_at?: string | null;
           body_markdown?: string;
           created_at?: string;
-          favorited_at?: string | null;
           id?: string;
           parent_note_id?: string | null;
           purge_after?: string | null;
@@ -1827,7 +1825,6 @@ export type Database = {
           archived_at?: string | null;
           body_markdown?: string;
           created_at?: string;
-          favorited_at?: string | null;
           id?: string;
           parent_note_id?: string | null;
           purge_after?: string | null;
@@ -3348,6 +3345,10 @@ export type Database = {
           p_starts_on: string;
         };
         Returns: string;
+      };
+      raise_if_period_already_reviewed: {
+        Args: { p_horizon_id: string; p_kind: string; p_workspace_id: string };
+        Returns: undefined;
       };
       read_mcp_oauth_workspace_snapshot: {
         Args: { p_grant_id: string };
