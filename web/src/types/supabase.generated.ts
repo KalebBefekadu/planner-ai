@@ -139,6 +139,7 @@ export type Database = {
           description_markdown: string | null;
           goal_id: string | null;
           id: string;
+          monthly_anchor_day: number | null;
           next_occurrence_on: string;
           status: string;
           title: string;
@@ -153,6 +154,7 @@ export type Database = {
           description_markdown?: string | null;
           goal_id?: string | null;
           id?: string;
+          monthly_anchor_day?: number | null;
           next_occurrence_on: string;
           status?: string;
           title: string;
@@ -167,6 +169,7 @@ export type Database = {
           description_markdown?: string | null;
           goal_id?: string | null;
           id?: string;
+          monthly_anchor_day?: number | null;
           next_occurrence_on?: string;
           status?: string;
           title?: string;
@@ -3215,7 +3218,7 @@ export type Database = {
         Returns: undefined;
       };
       next_monthly_occurrence: {
-        Args: { p_occurrence_on: string };
+        Args: { p_anchor_day: number; p_occurrence_on: string };
         Returns: string;
       };
       persist_capture_proposal_analysis: {
