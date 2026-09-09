@@ -46,6 +46,56 @@ async function importContext() {
   return { supabase, workspaceId: workspace.id as string } as const;
 }
 
+// A report is only reopenable if the owner can find it again, and a job id
+// exists nowhere in the browser after a reload. History is that index. It is
+// bounded because a workspace accumulates jobs forever (#168) and an unbounded
+// list would grow into the response until it stopped loading at all.
+const HISTORY_PAGE_SIZE = 10;
+const MAX_HISTORY_PAGE_SIZE = 50;
+
+const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+async function readHistory(
+  context: Awaited<ReturnType<typeof importContext>> & { workspaceId: string },
+  options: { limit: number; before?: string }
+) {
+  // One row past the page is read so the client can be told whether another
+  // page exists without a second round trip or a count over the whole table.
+  let request = context.supabase
+    .from('note_import_jobs')
+    .select(
+      'id,source_name,source_type,status,total_count,create_count,duplicate_count,unsupported_count,committed_count,created_at,completed_at'
+    )
+    .eq('workspace_id', context.workspaceId)
+    .order('created_at', { ascending: false })
+    .order('id', { ascending: false })
+    .limit(options.limit + 1);
+  if (options.before) request = request.lt('created_at', options.before);
+  const { data, error } = await request;
+  if (error) throw new Error('Import history could not be loaded.');
+  const rows = data ?? [];
+  const page = rows.slice(0, options.limit);
+  return {
+    entries: page.map((row) => ({
+      id: row.id,
+      sourceName: row.source_name,
+      sourceType: row.source_type,
+      status: row.status,
+      totalCount: row.total_count,
+      createCount: row.create_count,
+      duplicateCount: row.duplicate_count,
+      unsupportedCount: row.unsupported_count,
+      committedCount: row.committed_count,
+      createdAt: row.created_at,
+      completedAt: row.completed_at,
+    })),
+    // The cursor is the last row's own timestamp, so paging never depends on
+    // an offset that shifts when a new import starts mid-read.
+    nextCursor:
+      rows.length > options.limit && page.length ? page[page.length - 1].created_at : null,
+  };
+}
+
 async function readJob(
   context: Awaited<ReturnType<typeof importContext>> & { workspaceId: string },
   jobId?: string
@@ -97,15 +147,26 @@ export async function GET(request: Request) {
   // A committed job is no longer in 'preview' or 'committing', so the report
   // can only be re-read by naming the job. readJob stays scoped to the
   // caller's workspace, so an unknown or foreign id reads as no job at all.
-  const jobIdParam = new URL(request.url).searchParams.get('jobId');
-  const requestedJobId =
-    jobIdParam && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(jobIdParam)
-      ? jobIdParam
-      : undefined;
+  const params = new URL(request.url).searchParams;
+  const jobIdParam = params.get('jobId');
+  const requestedJobId = jobIdParam && UUID_PATTERN.test(jobIdParam) ? jobIdParam : undefined;
+  const limitParam = Number(params.get('historyLimit') ?? '');
+  const limit = Number.isInteger(limitParam)
+    ? Math.min(Math.max(limitParam, 1), MAX_HISTORY_PAGE_SIZE)
+    : HISTORY_PAGE_SIZE;
+  // An unparseable cursor is treated as no cursor rather than an error: the
+  // worst case is the first page again, never a failed dialog.
+  const beforeParam = params.get('historyBefore');
+  const before = beforeParam && !Number.isNaN(Date.parse(beforeParam)) ? beforeParam : undefined;
   try {
-    return NextResponse.json(await readJob(context, requestedJobId), {
-      headers: { 'Cache-Control': 'private, no-store' },
-    });
+    const [current, history] = await Promise.all([
+      readJob(context, requestedJobId),
+      readHistory(context, { limit, before }),
+    ]);
+    return NextResponse.json(
+      { ...(current ?? { job: null, items: [] }), history },
+      { headers: { 'Cache-Control': 'private, no-store' } }
+    );
   } catch {
     return jsonError('Import preview could not be loaded.', 500);
   }
@@ -185,10 +246,12 @@ export async function POST(request: Request) {
       },
       { idempotencyKey: randomUUID(), surface: 'ui' }
     );
-    return NextResponse.json(await readJob(context, result.jobId), {
-      status: 201,
-      headers: { 'Cache-Control': 'private, no-store' },
-    });
+    const staged = await readJob(context, result.jobId);
+    const history = await readHistory(context, { limit: HISTORY_PAGE_SIZE });
+    return NextResponse.json(
+      { ...(staged ?? { job: null, items: [] }), history },
+      { status: 201, headers: { 'Cache-Control': 'private, no-store' } }
+    );
   } catch (error) {
     const message = error instanceof Error ? error.message : '';
     const safeMessage = /^(ZIP|The import|The expanded import|An import|One import)/.test(message)

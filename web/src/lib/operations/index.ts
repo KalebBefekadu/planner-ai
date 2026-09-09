@@ -725,6 +725,10 @@ export const operationDefinitions = {
                 // order. The bound is the integer headroom of
                 // notes.sort_key numeric(24, 12).
                 sourceSortKey: z.number().min(-999_999_999_999).max(999_999_999_999).nullable(),
+                // Set when the item is imported but not as a faithful copy of
+                // the source, and stored as the item's reason so the
+                // pre-commit report can say what the conversion cost.
+                conversionNotice: z.string().max(500).nullable(),
               })
               .strict()
           )

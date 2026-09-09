@@ -29,7 +29,21 @@ export type NoteImportCandidate = {
   // are normalised to null by candidatesFromVaultOrFiles and fall back to the
   // dependency-safe staging order.
   sourceSortKey?: number | null;
+  // Set when the item is imported but not as a faithful copy of the source.
+  // It is stored as the item's reason so the pre-commit report can say what a
+  // conversion cost, instead of showing a converted row and an intact page
+  // identically. Null for anything carried over unchanged.
+  conversionNotice?: string | null;
 };
+
+/**
+ * A CSV export is a snapshot of a database view, not the database. Planner AI
+ * has no native database, so each row becomes a Note and everything the table
+ * knew about itself is left behind. Naming that here keeps the wording in one
+ * place and keeps it identical in the preview and in the stored report.
+ */
+export const CSV_ROW_CONVERSION_NOTICE =
+  'Converted from a CSV row. Column types, formulas, relations, filters and views are not imported.';
 
 // notes.sort_key is numeric(24, 12), so a manifest value has twelve integer
 // digits of headroom. Reordering a Note writes the midpoint between its new
@@ -128,6 +142,7 @@ function csvCandidates(sourcePath: string, body: string, parentSourcePath: strin
       bodyMarkdown: markdown,
       parentSourcePath,
       unsupportedReason: null,
+      conversionNotice: CSV_ROW_CONVERSION_NOTICE,
     };
   });
 }
@@ -276,6 +291,7 @@ export function candidatesFromVaultOrFiles(files: ImportSourceFile[]) {
   return candidates.map((candidate) => ({
     aiExcluded: false,
     sourceSortKey: null,
+    conversionNotice: null,
     ...candidate,
   }));
 }
