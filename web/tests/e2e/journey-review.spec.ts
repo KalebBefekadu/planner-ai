@@ -86,7 +86,9 @@ test('a completed review survives navigation and appears in the history', async 
   await expect(history).toContainText('2 actions');
 });
 
-test('submitting the same week twice does not record a second review', async ({ workspace }) => {
+test('a week that is already reviewed refuses a second review and says why', async ({
+  workspace,
+}) => {
   const { page } = workspace;
   await goTo(page, '/');
   await addAction(page, 'Something to carry');
@@ -101,10 +103,10 @@ test('submitting the same week twice does not record a second review', async ({ 
   await page.getByRole('button', { name: 'Complete weekly review' }).click();
   await expect(page.getByRole('status')).toContainText('Review completed');
 
-  // A second submission of the same week is a retry, not a second review. One
-  // completed review per week is a database invariant, so a fresh idempotency
-  // key would have hit the unique index and surfaced as an unexplained
-  // failure instead of replaying the result.
+  // Reloading and pressing the button again is not a retry of the first
+  // submission -- it is a second, deliberate one. The week is already
+  // reviewed, so it is refused, and the refusal says what to do instead of
+  // reporting a success that saved nothing.
   await page.reload();
   await page
     .getByRole('combobox', { name: 'Decision for Something to carry' })
@@ -113,7 +115,9 @@ test('submitting the same week twice does not record a second review', async ({ 
     .getByRole('combobox', { name: `Decision for ${onboardingSeed.action}` })
     .selectOption('left_overdue');
   await page.getByRole('button', { name: 'Complete weekly review' }).click();
-  await expect(page.getByRole('status')).toContainText('Review completed');
+  // Scoped to the review's own message: Next renders a permanently present
+  // empty route announcer with role="alert" at the document root.
+  await expect(page.locator('p.status-message-error')).toContainText('already been reviewed');
 
   await page.reload();
   const history = page.getByRole('complementary', { name: 'Past reviews' });
@@ -171,4 +175,54 @@ test('work planned monthly and committed to this week must be resolved too', asy
   const horizons = page.getByRole('navigation', { name: 'Filter plan by horizon' });
   await expect(horizons.getByRole('button', { name: /^Month/ })).toContainText('1');
   await expect(horizons.getByRole('button', { name: /^Week/ })).toContainText('0');
+});
+
+test('a week completed, undone and completed again is really saved the second time', async ({
+  workspace,
+}) => {
+  const { page } = workspace;
+  await goTo(page, '/');
+  await addAction(page, 'Work to resolve twice');
+
+  await goTo(page, '/review');
+  await page
+    .getByRole('combobox', { name: 'Decision for Work to resolve twice' })
+    .selectOption('left_overdue');
+  await page
+    .getByRole('combobox', { name: `Decision for ${onboardingSeed.action}` })
+    .selectOption('left_overdue');
+  await page
+    .getByRole('textbox', { name: 'What should you remember from this week?' })
+    .fill('First attempt.');
+  await page.getByRole('button', { name: 'Complete weekly review' }).click();
+  await expect(page.getByRole('status')).toContainText('Review completed');
+
+  // Undo leaves the original receipt in place, marked reversed, because
+  // history is not rewritten. A completion key derived only from the period
+  // therefore found that receipt and replayed a success for a review that no
+  // longer existed -- the week reported complete and saved nothing.
+  await goTo(page, '/activity');
+  await page.getByRole('button', { name: 'Undo' }).first().click();
+  await expect(page.getByRole('button', { name: 'Undoing' })).toHaveCount(0);
+
+  await goTo(page, '/review');
+  await page
+    .getByRole('combobox', { name: 'Decision for Work to resolve twice' })
+    .selectOption('next_week');
+  await page
+    .getByRole('combobox', { name: `Decision for ${onboardingSeed.action}` })
+    .selectOption('left_overdue');
+  await page
+    .getByRole('textbox', { name: 'What should you remember from this week?' })
+    .fill('Second attempt, with a different decision.');
+  await page.getByRole('button', { name: 'Complete weekly review' }).click();
+  await expect(page.getByRole('status')).toContainText('Review completed');
+
+  // The second completion is a real review with the second reflection, not the
+  // first one played back.
+  await page.reload();
+  const history = page.getByRole('complementary', { name: 'Past reviews' });
+  await expect(history).toContainText('Second attempt, with a different decision.');
+  await expect(history).not.toContainText('First attempt.');
+  await expect(history.locator('article')).toHaveCount(1);
 });

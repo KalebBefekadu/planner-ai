@@ -1,6 +1,6 @@
 'use client';
 
-import { useMemo, useState, useTransition } from 'react';
+import { useMemo, useRef, useState, useTransition } from 'react';
 import Link from 'next/link';
 import { AlertCircle, CalendarRange, CheckCircle2, Flag, History } from 'lucide-react';
 import {
@@ -8,6 +8,7 @@ import {
   type WeeklyReviewData,
   type WeeklyReviewDecision,
 } from '@/app/review/actions';
+import { newReviewIntent } from '@/lib/reviews/completion-intent';
 import { CoachingCue } from '@/components/coaching-cue';
 import { ReviewTabs } from '@/components/review-tabs';
 import { ReviewAiProposal } from '@/components/review-ai-proposal';
@@ -35,6 +36,10 @@ function errorMessage(error: unknown) {
 
 export function WeeklyReview({ data }: { data: WeeklyReviewData }) {
   const [isPending, startTransition] = useTransition();
+  // Null until this screen submits, and cleared when a submission succeeds, so
+  // the next completion of the same period is recognised as a new decision
+  // rather than a replay of the one that was undone.
+  const intentRef = useRef<string | null>(null);
   const [reflection, setReflection] = useState('');
   const [notice, setNotice] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -82,7 +87,12 @@ export function WeeklyReview({ data }: { data: WeeklyReviewData }) {
     setNotice(null);
     startTransition(async () => {
       try {
+        // The same intent for every send of this submission, so a retry
+        // replays rather than writing a second review. Undoing and completing
+        // again mounts the screen afresh and therefore starts a new intent.
+        intentRef.current ??= newReviewIntent();
         const result = await completeWeeklyReview({
+          intentId: intentRef.current,
           startsOn: data.startsOn,
           endsOn: data.endsOn,
           reflectionMarkdown: reflection,
@@ -90,6 +100,7 @@ export function WeeklyReview({ data }: { data: WeeklyReviewData }) {
             (decision): decision is WeeklyReviewDecision => decision.resolution !== 'unset'
           ),
         });
+        intentRef.current = null;
         setNotice(
           `Review completed. ${result.resolvedCount} actions resolved and ${result.priorityCount} priorities committed.`
         );
