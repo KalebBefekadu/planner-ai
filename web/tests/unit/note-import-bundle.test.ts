@@ -1,5 +1,9 @@
 import { describe, expect, it } from 'vitest';
-import { candidatesFromFiles, candidatesFromVaultOrFiles } from '@/lib/notes/import-bundle';
+import {
+  candidatesFromFiles,
+  candidatesFromVaultOrFiles,
+  CSV_ROW_CONVERSION_NOTICE,
+} from '@/lib/notes/import-bundle';
 
 describe('Notes import bundle', () => {
   it('preserves Markdown and builds folder hierarchy', () => {
@@ -36,6 +40,30 @@ describe('Notes import bundle', () => {
       title: 'Grow, carefully',
       bodyMarkdown: '## Context\n\nLine one\nLine two',
     });
+  });
+
+  // A converted row and a carried-over Markdown page arrive looking identical
+  // in the report. Without a stated reason the owner agrees to a commit
+  // believing a Notion database came across whole, when its columns, formulas,
+  // relations and views did not.
+  it('says on every CSV row that the database around it was not imported', () => {
+    const candidates = candidatesFromFiles([
+      { path: 'Goals.csv', bytes: Buffer.from('Name,Status\nShip,Doing\nRest,Done') },
+    ]);
+    expect(candidates.map((candidate) => candidate.conversionNotice)).toEqual([
+      CSV_ROW_CONVERSION_NOTICE,
+      CSV_ROW_CONVERSION_NOTICE,
+    ]);
+    expect(CSV_ROW_CONVERSION_NOTICE).toContain('formulas');
+  });
+
+  // Content that is carried over unchanged must not carry a lossiness notice,
+  // or the notice stops meaning anything.
+  it('leaves faithfully imported Markdown without a conversion notice', () => {
+    const candidates = candidatesFromVaultOrFiles([
+      { path: 'Launch.md', bytes: Buffer.from('# Launch\n\nBody') },
+    ]);
+    expect(candidates.every((candidate) => candidate.conversionNotice === null)).toBe(true);
   });
 
   it('rejects traversal paths before content is parsed', () => {
@@ -97,6 +125,7 @@ describe('Notes import bundle', () => {
         unsupportedReason: null,
         aiExcluded: false,
         sourceSortKey: 1000,
+        conversionNotice: null,
       },
       {
         sourcePath: `planner-ai-vault/${childId}`,
@@ -106,6 +135,7 @@ describe('Notes import bundle', () => {
         unsupportedReason: null,
         aiExcluded: false,
         sourceSortKey: 2000,
+        conversionNotice: null,
       },
     ]);
   });
