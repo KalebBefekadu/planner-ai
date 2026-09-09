@@ -3214,6 +3214,10 @@ export type Database = {
         Args: { p_action: string; p_conversation_id: string; p_title?: string };
         Returns: undefined;
       };
+      next_monthly_occurrence: {
+        Args: { p_occurrence_on: string };
+        Returns: string;
+      };
       persist_capture_proposal_analysis: {
         Args: {
           p_analysis: Json;
