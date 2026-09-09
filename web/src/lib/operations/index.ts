@@ -224,7 +224,7 @@ const captureFileActionOutput = z
 const noteImportOutput = z
   .object({
     jobId: id,
-    status: z.enum(['preview', 'committing', 'completed']),
+    status: z.enum(['preview', 'committing', 'completed', 'canceled']),
     totalCount: z.number().int().nonnegative().max(500),
     createCount: z.number().int().nonnegative().max(500),
     duplicateCount: z.number().int().nonnegative().max(500),
@@ -747,6 +747,17 @@ export const operationDefinitions = {
     exposure: ['ui', 'chat'],
     reversible: true,
     input: z.object({ jobId: id, batchSize: z.number().int().min(1).max(50) }).strict(),
+    output: noteImportOutput,
+  },
+  // Deciding not to import something is a decision. Without this the only way
+  // to leave a staged import was to close the dialog, which left the job in
+  // 'preview' and brought it back as unfinished business every time.
+  'note.import-cancel.v1': {
+    summary: 'Record that a reviewed Notes import will not be committed.',
+    risk: 'low',
+    exposure: ['ui'],
+    reversible: false,
+    input: z.object({ jobId: id }).strict(),
     output: noteImportOutput,
   },
   'memory.create.v1': {

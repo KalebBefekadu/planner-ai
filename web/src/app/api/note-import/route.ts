@@ -172,6 +172,47 @@ export async function GET(request: Request) {
   }
 }
 
+// Closing a window is not a decision. Until an owner could say "no" to a
+// staged import, an abandoned preview stayed the active job and greeted them
+// as unfinished business every time the dialog opened.
+export async function DELETE(request: Request) {
+  const context = await importContext();
+  if ('error' in context) return context.error;
+  const jobId = new URL(request.url).searchParams.get('jobId') ?? '';
+  if (!UUID_PATTERN.test(jobId)) return jsonError('Choose an import to cancel.', 400);
+  try {
+    await executeOperation(
+      context.supabase,
+      'note.import-cancel.v1',
+      { jobId },
+      { idempotencyKey: randomUUID(), surface: 'ui' }
+    );
+  } catch (error) {
+    // The Operation refuses a job that is committing, finished, already
+    // cancelled, or owned by someone else. All of those read the same from
+    // here: this is not an import that can be called off.
+    const message = error instanceof Error ? error.message : '';
+    return jsonError(
+      message.includes('import_job_not_cancelable')
+        ? 'This import can no longer be canceled.'
+        : 'Planner AI could not cancel this import.',
+      message.includes('import_job_not_cancelable') ? 409 : 500
+    );
+  }
+  try {
+    const [current, history] = await Promise.all([
+      readJob(context, jobId),
+      readHistory(context, { limit: HISTORY_PAGE_SIZE }),
+    ]);
+    return NextResponse.json(
+      { ...(current ?? { job: null, items: [] }), history },
+      { headers: { 'Cache-Control': 'private, no-store' } }
+    );
+  } catch {
+    return jsonError('The canceled import could not be re-read.', 500);
+  }
+}
+
 export async function POST(request: Request) {
   const context = await importContext();
   if ('error' in context) return context.error;

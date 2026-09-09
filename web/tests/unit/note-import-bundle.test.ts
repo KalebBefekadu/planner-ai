@@ -4,6 +4,7 @@ import {
   candidatesFromVaultOrFiles,
   CSV_ROW_CONVERSION_NOTICE,
 } from '@/lib/notes/import-bundle';
+import { IMPORT_LINK_SCHEME, importLinkToken } from '@/lib/notes/import-links';
 
 describe('Notes import bundle', () => {
   it('preserves Markdown and builds folder hierarchy', () => {
@@ -138,5 +139,120 @@ describe('Notes import bundle', () => {
         conversionNotice: null,
       },
     ]);
+  });
+});
+
+// A Notion export is a web of pages that reference each other by relative
+// file path. Imported as written those hrefs name files that do not exist in
+// Planner AI, so the structure the owner built arrives as dead text. The
+// target Note has no id at staging time, so the link is rewritten to a token
+// naming the target item and the commit turns it into the Note's URL.
+describe('Notes import internal links', () => {
+  it('rewrites a relative link to the item it names', () => {
+    const candidates = candidatesFromFiles([
+      { path: 'Roadmap.md', bytes: Buffer.from('# Roadmap\n\nSee [Launch](Projects/Launch.md).') },
+      { path: 'Projects/Launch.md', bytes: Buffer.from('# Launch') },
+    ]);
+    const roadmap = candidates.find((candidate) => candidate.sourcePath === 'Roadmap.md')!;
+    expect(roadmap.bodyMarkdown).toBe(
+      `# Roadmap\n\nSee [Launch](${IMPORT_LINK_SCHEME}:${importLinkToken('Projects/Launch.md')}).`
+    );
+    expect(roadmap.conversionNotice).toContain('1 internal link rewritten');
+  });
+
+  // Notion percent-encodes spaces and non-ASCII characters in exported hrefs,
+  // and writes the page's own id into the file name. A link that is not
+  // decoded before it is matched resolves to nothing at all.
+  it('follows percent-encoded and non-ASCII link targets', () => {
+    const target = 'Équipe/Réunion hebdo 1a2b3c.md';
+    const candidates = candidatesFromFiles([
+      {
+        path: 'Index.md',
+        bytes: Buffer.from('# Index\n\n[Réunion](%C3%89quipe/R%C3%A9union%20hebdo%201a2b3c.md)'),
+      },
+      { path: target, bytes: Buffer.from('# Réunion') },
+    ]);
+    const index = candidates.find((candidate) => candidate.sourcePath === 'Index.md')!;
+    expect(index.bodyMarkdown).toContain(`${IMPORT_LINK_SCHEME}:${importLinkToken(target)}`);
+  });
+
+  // Two Notion pages routinely share a title. Resolving a link by title would
+  // pick one of them arbitrarily; resolving by path is the only way the link
+  // opens the page that was actually referenced.
+  it('resolves to the referenced page when two pages share a title', () => {
+    const body = '# Notes\n\n[Meeting](Team%20A/Meeting.md) and [Meeting](Team%20B/Meeting.md)';
+    const candidates = candidatesFromFiles([
+      { path: 'Notes.md', bytes: Buffer.from(body) },
+      { path: 'Team A/Meeting.md', bytes: Buffer.from('# Meeting') },
+      { path: 'Team B/Meeting.md', bytes: Buffer.from('# Meeting') },
+    ]);
+    const notes = candidates.find((candidate) => candidate.sourcePath === 'Notes.md')!;
+    expect(notes.bodyMarkdown).toContain(
+      `[Meeting](${IMPORT_LINK_SCHEME}:${importLinkToken('Team A/Meeting.md')})`
+    );
+    expect(notes.bodyMarkdown).toContain(
+      `[Meeting](${IMPORT_LINK_SCHEME}:${importLinkToken('Team B/Meeting.md')})`
+    );
+    expect(importLinkToken('Team A/Meeting.md')).not.toBe(importLinkToken('Team B/Meeting.md'));
+  });
+
+  // A link the import cannot follow must stay exactly as the owner wrote it,
+  // and the report has to say it will not resolve. Silently deleting the href
+  // would hide the one thing they need to know before agreeing to a commit.
+  it('leaves an unfollowable link untouched and says so before commit', () => {
+    const candidates = candidatesFromFiles([
+      {
+        path: 'Index.md',
+        bytes: Buffer.from(
+          '# Index\n\n[Gone](Archive/Gone.md) [Sheet](Data.csv) [Web](https://example.com/a.md)'
+        ),
+      },
+      { path: 'Data.csv', bytes: Buffer.from('Name\nRow one') },
+    ]);
+    const index = candidates.find((candidate) => candidate.sourcePath === 'Index.md')!;
+    expect(index.bodyMarkdown).toContain('[Gone](Archive/Gone.md)');
+    expect(index.bodyMarkdown).toContain('[Web](https://example.com/a.md)');
+    expect(index.conversionNotice).toContain('does not contain');
+    expect(index.conversionNotice).toContain('not imported as a Note');
+  });
+
+  // A fenced code block that shows a Markdown link is documentation about a
+  // link, not a link. Rewriting inside it would change what the page says.
+  it('does not rewrite links inside fenced code', () => {
+    const body = '# Doc\n\n```\n[Launch](Projects/Launch.md)\n```\n';
+    const candidates = candidatesFromFiles([
+      { path: 'Doc.md', bytes: Buffer.from(body) },
+      { path: 'Projects/Launch.md', bytes: Buffer.from('# Launch') },
+    ]);
+    const doc = candidates.find((candidate) => candidate.sourcePath === 'Doc.md')!;
+    expect(doc.bodyMarkdown).toBe(body);
+    // candidatesFromFiles leaves the field unset; only the normalising entry
+    // point fills it in, and either way nothing was reported as converted.
+    expect(doc.conversionNotice ?? null).toBeNull();
+  });
+
+  // A Planner AI vault already stores links as application URLs against Note
+  // ids that the restore preserves. Rewriting them would break a restore.
+  it('leaves an exported Planner AI vault body untouched', () => {
+    const manifest = {
+      format: 'planner-ai-notes-vault',
+      schemaVersion: 1,
+      notes: [
+        {
+          id: '11111111-1111-4111-8111-111111111111',
+          parentNoteId: null,
+          path: 'notes/one.md',
+          title: 'One',
+          sortKey: 1000,
+        },
+      ],
+    };
+    const body = '# One\n\n[Two](/notes?note=22222222-2222-4222-8222-222222222222)';
+    const candidates = candidatesFromVaultOrFiles([
+      { path: 'planner-ai-vault.json', bytes: Buffer.from(JSON.stringify(manifest)) },
+      { path: 'notes/one.md', bytes: Buffer.from(body) },
+    ]);
+    expect(candidates[0].bodyMarkdown).toBe(body);
+    expect(candidates[0].conversionNotice).toBeNull();
   });
 });
