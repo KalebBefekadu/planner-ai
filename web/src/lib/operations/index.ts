@@ -1159,6 +1159,12 @@ function stableFailure(message: string) {
       'This change cannot be undone because its record changed or the undo window expired.'
     );
   }
+  if (message.includes('review_already_completed')) {
+    return new OperationFailure(
+      'review_already_completed',
+      'This period already has a completed review. Refresh to read it, or undo it before completing again.'
+    );
+  }
   if (message.includes('undo_not_supported')) {
     return new OperationFailure('undo_not_supported', 'This change does not have an undo action.');
   }

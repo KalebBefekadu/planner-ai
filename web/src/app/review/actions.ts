@@ -5,6 +5,12 @@ import { periodBounds } from '@/lib/planning-period';
 import type { CoachingIntensity } from '@/lib/coaching';
 import { dateInTimezone } from '@/lib/date';
 import { executeOperation } from '@/lib/operations';
+import {
+  periodReviewIntentKey,
+  periodReviewKeyPrefix,
+  weeklyReviewIntentKey,
+  weeklyReviewKeyPrefix,
+} from '@/lib/reviews/completion-intent';
 import { currentLongReviewPeriod, type LongReviewPeriod } from '@/lib/reviews/periods';
 import { parsePersistedReviewProposal, type ResolvedReviewProposal } from '@/lib/review-proposals';
 import { createClient } from '@/lib/supabase/server';
@@ -261,20 +267,50 @@ export async function getWeeklyReviewData(): Promise<WeeklyReviewData> {
   };
 }
 
+// How many completions of this period have already been undone.
+//
+// Receipt keys are unique per workspace and Operation, so a completion that
+// replaces an undone one cannot reuse that receipt's key. Counting the
+// reversed receipts gives each replacement a key namespace of its own while
+// leaving retries inside one namespace idempotent.
+async function undoneCompletionCount(
+  supabase: Awaited<ReturnType<typeof createClient>>,
+  workspaceId: string,
+  operationId: string,
+  keyPrefix: string
+): Promise<number> {
+  const { count, error } = await supabase
+    .from('operation_receipts')
+    .select('id', { count: 'exact', head: true })
+    .eq('workspace_id', workspaceId)
+    .eq('operation_id', operationId)
+    .like('idempotency_key', `${keyPrefix}%`)
+    .not('reversed_at', 'is', null);
+  // Assuming zero would reuse the key of an undone completion, which is the
+  // replay this exists to prevent. A failed read is a failed submission.
+  if (error) throw new Error('Unable to save this review. Please try again.');
+  return count ?? 0;
+}
+
 export async function completeWeeklyReview(input: {
   startsOn: string;
   endsOn: string;
   reflectionMarkdown: string;
   decisions: WeeklyReviewDecision[];
 }) {
-  const { supabase } = await reviewClient();
-  // One completed weekly review per week is a database invariant, so a second
-  // submission with a fresh key does not create a second review -- it hits the
-  // unique index and fails. Keying on the week instead makes the retry replay
-  // the recorded result, which is what a person clicking twice, or clicking
-  // again after a dropped connection, actually means.
+  const { supabase, workspaceId } = await reviewClient();
+  // The key covers the week, how many of its completions have been undone, and
+  // what is being submitted, so a transport retry of the same submission
+  // replays one durable result while an edited reflection or a completion
+  // after an undo is a new intent. See completion-intent.ts.
+  const generation = await undoneCompletionCount(
+    supabase,
+    workspaceId,
+    'review.complete-weekly.v1',
+    weeklyReviewKeyPrefix(input.startsOn)
+  );
   const result = await executeOperation(supabase, 'review.complete-weekly.v1', input, {
-    idempotencyKey: `weekly-review:${input.startsOn}`,
+    idempotencyKey: weeklyReviewIntentKey(input, generation),
     surface: 'ui',
   });
   revalidatePlannerAndRecords();
@@ -401,11 +437,17 @@ export async function completePeriodReview(input: {
   endsOn: string;
   reflectionMarkdown: string;
 }) {
-  const { supabase } = await reviewClient();
-  // Same invariant as the weekly review: one completed review per period, so
-  // the key is the period rather than a fresh id.
+  const { supabase, workspaceId } = await reviewClient();
+  // Same rule as the weekly review: the intent is the period, its undo
+  // generation, and the submission -- not the period alone.
+  const generation = await undoneCompletionCount(
+    supabase,
+    workspaceId,
+    'review.complete-period.v1',
+    periodReviewKeyPrefix(input.kind, input.startsOn)
+  );
   const result = await executeOperation(supabase, 'review.complete-period.v1', input, {
-    idempotencyKey: `${input.kind}-review:${input.startsOn}`,
+    idempotencyKey: periodReviewIntentKey(input, generation),
     surface: 'ui',
   });
   revalidatePlannerAndRecords();
