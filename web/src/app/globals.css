@@ -6944,3 +6944,75 @@ button:disabled {
 .capture-filing-error {
   color: var(--danger);
 }
+
+/* Import history: reopening a past import report from the import dialog. */
+.note-import-history {
+  display: grid;
+  gap: 8px;
+  padding: 12px 20px;
+  border-top: 1px solid var(--line);
+}
+.note-import-history h3 {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin: 0;
+  color: var(--muted);
+  font-size: var(--fs-label);
+  font-weight: 600;
+}
+.note-import-history ul {
+  display: grid;
+  gap: 6px;
+  max-height: 190px;
+  margin: 0;
+  padding: 0;
+  overflow-y: auto;
+  list-style: none;
+}
+.note-import-history-entry {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 2px;
+  width: 100%;
+  padding: 8px 10px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: none;
+  color: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+.note-import-history-entry:hover:not(:disabled) {
+  background: var(--surface-muted);
+}
+.note-import-history-entry:disabled {
+  cursor: default;
+  opacity: 0.6;
+}
+.note-import-history-entry[aria-current='true'] {
+  border-color: var(--accent, var(--muted));
+}
+.note-import-history-entry strong {
+  overflow: hidden;
+  font-size: var(--fs-label);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.note-import-history-entry span,
+.note-import-history-entry small {
+  color: var(--muted);
+  font-size: var(--fs-label);
+}
+.note-import-history-empty {
+  padding: 12px 20px;
+  border-top: 1px solid var(--line);
+  margin: 0;
+  color: var(--muted);
+  font-size: var(--fs-label);
+}
+@media (max-width: 640px) {
+  .note-import-history ul {
+    max-height: 140px;
+  }
+}
