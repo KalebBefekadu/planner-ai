@@ -3,7 +3,7 @@
 -- that refuses to misstate later work, and rows only their owner can read.
 
 begin;
-select plan(24);
+select plan(25);
 
 select ok(
   (select relrowsecurity from pg_catalog.pg_class
