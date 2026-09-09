@@ -46,7 +46,12 @@ export type NoteKnowledgeContext = {
     id: string;
     originalName: string;
     byteSize: number;
+    mediaType: string;
     scanState: 'quarantined' | 'approved' | 'rejected';
+    // Present only while a removed attachment is still inside its retention
+    // window, which is exactly when a person can still take the removal back.
+    removedAt: string | null;
+    purgeAfter: string | null;
   }>;
 };
 
@@ -170,12 +175,16 @@ export async function getNoteKnowledgeContext(noteId: string): Promise<NoteKnowl
       .is('archived_at', null)
       .is('trashed_at', null)
       .order('title'),
+    // Removed attachments are still listed while they can be restored. Hiding
+    // them made the undo live only in the tab that did the removal: a reload
+    // left the file present in storage, recoverable for another thirty days,
+    // and invisible to the only person who could recover it.
     supabase
       .from('note_attachments')
-      .select('id,original_name,byte_size,scan_state')
+      .select('id,original_name,byte_size,media_type,scan_state,removed_at,purge_after')
       .eq('workspace_id', workspaceId)
       .eq('note_id', noteId)
-      .is('removed_at', null)
+      .or(`removed_at.is.null,purge_after.gt.${new Date().toISOString()}`)
       .order('created_at', { ascending: false }),
   ]);
   if (
@@ -238,7 +247,10 @@ export async function getNoteKnowledgeContext(noteId: string): Promise<NoteKnowl
       id: attachment.id,
       originalName: attachment.original_name,
       byteSize: attachment.byte_size,
+      mediaType: attachment.media_type,
       scanState: attachment.scan_state as NoteKnowledgeContext['attachments'][number]['scanState'],
+      removedAt: attachment.removed_at,
+      purgeAfter: attachment.purge_after,
     })),
   };
 }

@@ -2910,6 +2910,21 @@ button:disabled {
   color: var(--muted);
   font-size: 12px;
 }
+
+/* WS-05: a row now carries both download and remove, so the controls need to
+   stay together on the right rather than being spaced apart from each other. */
+.note-attachment-actions {
+  align-items: center;
+  display: inline-flex;
+  flex: none;
+  gap: 2px;
+}
+
+.note-attachment-actions a.note-icon-quiet {
+  align-items: center;
+  display: inline-flex;
+  justify-content: center;
+}
 .note-empty {
   display: grid;
   align-content: center;

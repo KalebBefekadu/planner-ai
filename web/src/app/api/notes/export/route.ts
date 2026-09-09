@@ -1,17 +1,22 @@
 import { NextResponse } from 'next/server';
 import { createAdminClient } from '@/lib/supabase/admin';
-import { type ExportAttachment, type ExportNote, zipNotes } from '@/lib/notes/export-vault';
+import { resolveAttachment } from '@/lib/notes/attachment-availability';
+import {
+  type AttachmentExportResult,
+  type ExportAttachment,
+  type ExportNote,
+  zipNotes,
+} from '@/lib/notes/export-vault';
 import { createClient } from '@/lib/supabase/server';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 
-async function downloadAttachmentFromStorage(objectKey: string) {
-  const { data, error } = await createAdminClient()
-    .storage.from('note-attachments')
-    .download(objectKey);
-  if (error || !data) throw new Error('Attachment export failed.');
-  return Buffer.from(await data.arrayBuffer());
+async function exportAttachment(attachment: ExportAttachment): Promise<AttachmentExportResult> {
+  const resolved = await resolveAttachment(createAdminClient(), attachment);
+  return resolved.state === 'approved'
+    ? { available: true, bytes: resolved.bytes }
+    : { available: false, reason: resolved.state };
 }
 
 export async function GET() {
@@ -52,9 +57,8 @@ export async function GET() {
       .order('sort_key'),
     supabase
       .from('note_attachments')
-      .select('id,note_id,object_key,original_name,media_type,byte_size,checksum_sha256')
+      .select('id,note_id,object_key,original_name,media_type,byte_size,checksum_sha256,scan_state')
       .eq('workspace_id', workspace.id)
-      .eq('scan_state', 'approved')
       .is('removed_at', null)
       .order('created_at'),
   ]);
@@ -65,7 +69,7 @@ export async function GET() {
     const archive = await zipNotes(
       (notesResult.data ?? []) as ExportNote[],
       (attachmentsResult.data ?? []) as ExportAttachment[],
-      downloadAttachmentFromStorage
+      exportAttachment
     );
     const date = new Date().toISOString().slice(0, 10);
     return new NextResponse(new Uint8Array(archive), {

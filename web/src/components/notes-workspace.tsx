@@ -31,6 +31,7 @@ import {
   ListTodo,
   Mic,
   NotebookPen,
+  Download,
   Paperclip,
   Plus,
   RotateCcw,
@@ -109,6 +110,45 @@ export function NoteMarkdownPreview({ markdown }: { markdown: string }) {
 
 export type InspectorView = 'properties' | 'links' | 'history';
 
+type NoteAttachment = NoteKnowledgeContext['attachments'][number];
+
+const attachmentTypeNames: Record<string, string> = {
+  'application/pdf': 'PDF',
+  'image/jpeg': 'JPEG image',
+  'image/png': 'PNG image',
+  'text/markdown': 'Markdown file',
+  'text/plain': 'text file',
+};
+
+function attachmentSize(byteSize: number) {
+  if (byteSize < 1024) return `${byteSize} bytes`;
+  if (byteSize < 1024 * 1024) return `${Math.round(byteSize / 1024)} KB`;
+  return `${(byteSize / (1024 * 1024)).toFixed(1)} MB`;
+}
+
+// What the person is told about a file. "Security review pending" used to be
+// shown for every attachment forever, which described a review that was never
+// going to run and a file that could never be opened. Each state here is
+// something that is actually true of the stored file.
+function attachmentStatus(attachment: NoteAttachment) {
+  if (attachment.scanState === 'rejected') {
+    return `Not available: contents do not match a ${
+      attachmentTypeNames[attachment.mediaType] ?? 'file'
+    }`;
+  }
+  if (attachment.scanState === 'quarantined') return 'Checking this file';
+  return attachmentSize(attachment.byteSize);
+}
+
+function restorableUntil(purgeAfter: string | null) {
+  if (!purgeAfter) return 'Restore is no longer available.';
+  return `Restore by ${new Date(purgeAfter).toLocaleDateString(undefined, {
+    day: 'numeric',
+    month: 'short',
+    year: 'numeric',
+  })}.`;
+}
+
 export function NotesWorkspace({
   notes,
   selectedId,
@@ -146,10 +186,6 @@ export function NotesWorkspace({
   const [editorMode, setEditorMode] = useState<'source' | 'rich' | 'preview'>('source');
   const [richEditor, setRichEditor] = useState<Editor | null>(null);
   const [isUploadingAttachment, setIsUploadingAttachment] = useState(false);
-  const [recentlyRemovedAttachment, setRecentlyRemovedAttachment] = useState<{
-    id: string;
-    originalName: string;
-  } | null>(null);
   const editorRef = useRef<HTMLTextAreaElement>(null);
   const attachmentInputRef = useRef<HTMLInputElement>(null);
   const persistedDraftRef = useRef({
@@ -544,10 +580,6 @@ export function NotesWorkspace({
         response.status === 204 ? null : ((await response.json()) as { error?: string });
       if (!response.ok)
         throw new Error(payload?.error ?? 'Attachment removal could not be completed.');
-      const removed = knowledge?.attachments.find((attachment) => attachment.id === attachmentId);
-      if (removed) {
-        setRecentlyRemovedAttachment({ id: removed.id, originalName: removed.originalName });
-      }
       router.refresh();
     } catch (caught) {
       setError(errorMessage(caught));
@@ -569,7 +601,6 @@ export function NotesWorkspace({
         const payload = (await response.json()) as { error?: string };
         throw new Error(payload.error ?? 'Attachment restoration could not be completed.');
       }
-      setRecentlyRemovedAttachment(null);
       router.refresh();
     } catch (caught) {
       setError(errorMessage(caught));
@@ -577,6 +608,13 @@ export function NotesWorkspace({
       setIsUploadingAttachment(false);
     }
   }
+
+  const liveAttachments = (knowledge?.attachments ?? []).filter(
+    (attachment) => !attachment.removedAt
+  );
+  const removedAttachments = (knowledge?.attachments ?? []).filter(
+    (attachment) => attachment.removedAt
+  );
 
   const availableTargets = notes.filter((note) => note.id !== selected?.id);
   // A Note cannot be filed under itself or under anything hanging beneath it,
@@ -1161,46 +1199,59 @@ export function NotesWorkspace({
                     {isUploadingAttachment ? 'Uploading' : 'Attach file'}
                   </button>
                   <div className="note-attachment-list">
-                    {knowledge?.attachments.map((attachment) => (
+                    {liveAttachments.map((attachment) => (
+                      <div key={attachment.id} className="note-attachment-row">
+                        <div>
+                          <strong>{attachment.originalName}</strong>
+                          <span className="note-attachment-actions">
+                            {attachment.scanState === 'rejected' ? null : (
+                              <a
+                                className="note-icon-quiet"
+                                href={`/api/notes/attachments?attachmentId=${encodeURIComponent(attachment.id)}`}
+                                title="Download attachment"
+                                aria-label={`Download attachment ${attachment.originalName}`}
+                                role="button"
+                                download
+                              >
+                                <Download size={14} />
+                              </a>
+                            )}
+                            <button
+                              type="button"
+                              className="note-icon-quiet"
+                              title="Remove attachment"
+                              aria-label={`Remove attachment ${attachment.originalName}`}
+                              disabled={isUploadingAttachment}
+                              onClick={() => void removeAttachment(attachment.id)}
+                            >
+                              <Trash2 size={14} />
+                            </button>
+                          </span>
+                        </div>
+                        <span>{attachmentStatus(attachment)}</span>
+                      </div>
+                    ))}
+                    {!liveAttachments.length && !removedAttachments.length ? (
+                      <p className="note-inspector-empty">No attachments</p>
+                    ) : null}
+                    {removedAttachments.map((attachment) => (
                       <div key={attachment.id} className="note-attachment-row">
                         <div>
                           <strong>{attachment.originalName}</strong>
                           <button
                             type="button"
                             className="note-icon-quiet"
-                            title="Remove attachment"
-                            aria-label={`Remove attachment ${attachment.originalName}`}
+                            title="Restore attachment"
+                            aria-label={`Restore attachment ${attachment.originalName}`}
                             disabled={isUploadingAttachment}
-                            onClick={() => void removeAttachment(attachment.id)}
+                            onClick={() => void restoreAttachment(attachment.id)}
                           >
-                            <Trash2 size={14} />
+                            <RotateCcw size={14} />
                           </button>
                         </div>
-                        <span>
-                          {attachment.scanState === 'quarantined'
-                            ? 'Security review pending'
-                            : attachment.scanState}
-                        </span>
+                        <span>Removed. {restorableUntil(attachment.purgeAfter)}</span>
                       </div>
                     ))}
-                    {!knowledge?.attachments.length ? (
-                      <p className="note-inspector-empty">No attachments</p>
-                    ) : null}
-                    {recentlyRemovedAttachment ? (
-                      <div className="note-attachment-row">
-                        <span>{recentlyRemovedAttachment.originalName} removed</span>
-                        <button
-                          type="button"
-                          className="note-icon-quiet"
-                          title="Restore attachment"
-                          aria-label={`Restore attachment ${recentlyRemovedAttachment.originalName}`}
-                          disabled={isUploadingAttachment}
-                          onClick={() => void restoreAttachment(recentlyRemovedAttachment.id)}
-                        >
-                          <RotateCcw size={14} />
-                        </button>
-                      </div>
-                    ) : null}
                   </div>
                 </section>
 
