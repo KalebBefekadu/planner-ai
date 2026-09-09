@@ -7201,11 +7201,17 @@ button:disabled {
 
 /* IM-04: the Notes vault is not a whole-Workspace backup, so its scope note
    must read as a caveat next to the download rather than as body copy. */
+/* Quiet by colour rather than by opacity. Opacity blended --muted towards the
+   surface behind it, which at this size landed on 3.47:1 against white and
+   failed WCAG AA -- and the text it dims is the sentence telling someone what
+   their export does and does not contain, which is not a sentence to make hard
+   to read. The muted token is already the quiet voice of this interface and it
+   meets the ratio on its own. */
 .export-section .export-scope-note {
   margin-top: 0.35rem;
+  color: var(--muted);
   font-size: 0.82rem;
   line-height: 1.45;
-  opacity: 0.78;
 }
 
 /* WS-07: a Capture that has already become a Note or an Action says so on
