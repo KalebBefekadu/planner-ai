@@ -3,6 +3,7 @@ import { FileText, Inbox, Search, Target, WandSparkles } from 'lucide-react';
 import { getGoalsHierarchy, getTranscripts } from '@/app/actions';
 import { getNotes, type NoteView } from '@/app/notes/actions';
 import { buildWorkspaceSearchResults, type WorkspaceSearchResult } from '@/lib/workspace-search';
+import { noteLocationLabel } from '@/lib/notes/note-paths';
 
 const resultIcons = {
   page: FileText,
@@ -31,11 +32,30 @@ export default async function SearchPage({
     ]);
   }
 
+  /* A result list is only useful if each row names one page. Two Notes filed in
+     different parts of the tree can carry the same title, and with nothing but
+     that title on screen the person has to open both to find out which is which.
+     Their location tells them apart.
+     Resolving a location needs the ancestors of the match. A filtered query
+     would not return them, so getNotes carries them alongside the matches and
+     marks them as not being matches themselves; they are what the location is
+     read from here, and they are excluded from the results and from the
+     duplicate check. */
+  const matched = notes.filter((note) => note.matchesQuery !== false);
+  const duplicateTitles = new Set(
+    matched
+      .map((note) => note.title.trim().toLocaleLowerCase())
+      .filter((title, index, all) => all.indexOf(title) !== index)
+  );
+
   const results = buildWorkspaceSearchResults(query, {
-    pages: notes.map((note) => ({
+    pages: matched.map((note) => ({
       id: note.id,
       title: note.title,
       body: note.bodyMarkdown,
+      context: duplicateTitles.has(note.title.trim().toLocaleLowerCase())
+        ? noteLocationLabel(notes, note.id)
+        : '',
       updatedAt: note.updatedAt,
     })),
     goals: plan
@@ -114,6 +134,9 @@ export default async function SearchPage({
                   </span>
                   <span className="workspace-search-result-copy">
                     <strong>{result.title}</strong>
+                    {result.context ? (
+                      <small className="workspace-search-result-context">{result.context}</small>
+                    ) : null}
                     <small>{result.excerpt}</small>
                   </span>
                   <span className="workspace-search-result-kind">{result.kind}</span>
