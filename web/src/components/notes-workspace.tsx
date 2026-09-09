@@ -7,6 +7,7 @@ import {
   useMemo,
   useRef,
   useState,
+  useSyncExternalStore,
   useTransition,
 } from 'react';
 import {
@@ -72,6 +73,12 @@ import { extractPlannerMarkdownHeadings } from '@/lib/markdown/contract';
 import { continueMarkdownList, wrapMarkdownSelection } from '@/lib/markdown/editing';
 import { plannerMarkdownSupportsRichEditing } from '@/lib/markdown/rich-editor';
 import { actionFailureMessage } from '@/lib/operations/failure-message';
+import {
+  forgetNoteDraft,
+  noteDraftSnapshot,
+  rememberNoteDraft,
+  subscribeToNoteDrafts,
+} from '@/lib/note-draft-recovery';
 
 function errorMessage(error: unknown) {
   return actionFailureMessage(error, 'Unable to save this Note.');
@@ -120,7 +127,8 @@ export function NotesWorkspace({
   const [title, setTitle] = useState(selected?.title ?? '');
   const [body, setBody] = useState(selected?.bodyMarkdown ?? '');
   const versionRef = useRef(selected?.version ?? 1);
-  const [saveState, setSaveState] = useState<'saved' | 'saving' | 'error'>('saved');
+  const [saveState, setSaveState] = useState<'saved' | 'unsaved' | 'saving' | 'error'>('saved');
+  const [dismissedDraftFor, setDismissedDraftFor] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [tagText, setTagText] = useState(knowledge?.tags.join(', ') ?? '');
   const [targetNoteId, setTargetNoteId] = useState('');
@@ -147,6 +155,28 @@ export function NotesWorkspace({
   });
   const saveInFlightRef = useRef(false);
   const queuedDraftRef = useRef<{ title: string; bodyMarkdown: string } | null>(null);
+  // The autosave pipeline is bound to the Note it belongs to. Switching Notes
+  // used to clear the pending timer and drop whatever had been typed in the
+  // last 800ms, and the draft had no way of naming which Note it came from.
+  const pendingSaveRef = useRef<{
+    noteId: string;
+    draft: { title: string; bodyMarkdown: string };
+  } | null>(null);
+  // A draft left behind by a refused save. Read through the store rather than
+  // mirrored into state, so the server and the first client render agree that
+  // there is nothing to offer until storage has actually been read.
+  const storedDraft = useSyncExternalStore(
+    subscribeToNoteDrafts,
+    () => (activeNoteId ? noteDraftSnapshot(activeNoteId) : null),
+    () => null
+  );
+  const recoverableDraft =
+    storedDraft &&
+    storedDraft.noteId === activeNoteId &&
+    storedDraft.bodyMarkdown !== body &&
+    dismissedDraftFor !== activeNoteId
+      ? storedDraft
+      : null;
   const outline = useMemo(() => extractPlannerMarkdownHeadings(body), [body]);
   const richEditable = useMemo(() => plannerMarkdownSupportsRichEditing(body), [body]);
   const activeEditorMode = editorMode === 'rich' && !richEditable ? 'source' : editorMode;
@@ -265,9 +295,11 @@ export function NotesWorkspace({
   );
   const voice = useVoiceTranscription({ onTranscript: insertTranscript });
 
+  // The Note being saved is passed in rather than read from the closure. The
+  // save that matters most is the one for the Note a person has just left, and
+  // by then activeNoteId already names a different Note.
   const queueAutosave = useCallback(
-    async (draft: { title: string; bodyMarkdown: string }) => {
-      if (!activeNoteId) return;
+    async (noteId: string, draft: { title: string; bodyMarkdown: string }) => {
       queuedDraftRef.current = draft;
       if (saveInFlightRef.current) return;
 
@@ -279,15 +311,27 @@ export function NotesWorkspace({
           queuedDraftRef.current = null;
           try {
             const saved = await updateNote({
-              id: activeNoteId,
+              id: noteId,
               title: nextDraft.title.trim() || 'Untitled',
               bodyMarkdown: nextDraft.bodyMarkdown,
               expectedVersion: versionRef.current,
             });
             versionRef.current = saved.version;
             persistedDraftRef.current = nextDraft;
+            pendingSaveRef.current = null;
+            forgetNoteDraft(noteId);
           } catch (caught) {
             queuedDraftRef.current ??= nextDraft;
+            // A refused save is the moment the words are least safe: they
+            // exist only in this tab. Keep a local copy so a reload, a crash
+            // or a closed laptop does not take them with it.
+            rememberNoteDraft({
+              noteId,
+              title: nextDraft.title,
+              bodyMarkdown: nextDraft.bodyMarkdown,
+              savedAt: Date.now(),
+              expectedVersion: versionRef.current,
+            });
             setError(errorMessage(caught));
             setSaveState('error');
             return;
@@ -299,7 +343,7 @@ export function NotesWorkspace({
         saveInFlightRef.current = false;
       }
     },
-    [activeNoteId, router]
+    [router]
   );
 
   useEffect(() => {
@@ -310,17 +354,38 @@ export function NotesWorkspace({
     ) {
       return;
     }
+    const noteId = activeNoteId;
+    const draft = { title, bodyMarkdown: body };
+    pendingSaveRef.current = { noteId, draft };
+    setSaveState((current) => (current === 'error' ? current : 'unsaved'));
     const timer = window.setTimeout(() => {
-      void queueAutosave({ title, bodyMarkdown: body });
+      void queueAutosave(noteId, draft);
     }, 800);
+    // Only the timer is cancelled here. This effect re-runs on every
+    // keystroke, so flushing from this cleanup would save on every keystroke
+    // and the debounce would stop debouncing.
     return () => window.clearTimeout(timer);
   }, [activeNoteId, body, queueAutosave, title]);
+
+  // Leaving the Note is the case that matters. The editor is remounted per
+  // Note, so this cleanup runs exactly when a person navigates away or opens
+  // another one -- the moment the pending edit would otherwise be dropped
+  // along with its timer.
+  useEffect(() => {
+    return () => {
+      const pending = pendingSaveRef.current;
+      if (pending) void queueAutosave(pending.noteId, pending.draft);
+    };
+  }, [queueAutosave]);
 
   useEffect(() => {
     if (selected?.version && selected.version > versionRef.current) {
       versionRef.current = selected.version;
     }
   }, [selected?.version]);
+
+  // Offer back anything a refused save left behind, rather than letting a
+  // reload quietly decide the writing never happened.
 
   function newNote(parentNoteId: string | null) {
     startTransition(async () => {
@@ -589,7 +654,9 @@ export function NotesWorkspace({
                     ? 'Saving'
                     : saveState === 'error'
                       ? 'Not saved'
-                      : 'Saved'}
+                      : saveState === 'unsaved'
+                        ? 'Unsaved changes'
+                        : 'Saved'}
                 </span>
                 <label className="ai-exclusion-toggle">
                   <input
@@ -688,6 +755,48 @@ export function NotesWorkspace({
               <p className="status-message status-message-error" role="alert">
                 {voice.error}
               </p>
+            ) : null}
+            {recoverableDraft ? (
+              // A refused save left the only copy of this writing in the
+              // browser. Offer it back rather than deciding for the person
+              // which version wins. Not a live region: this is a prompt to act
+              // on, and the save state is the editor's one status.
+              <section className="note-draft-recovery" aria-label="Recover unsaved changes">
+                <p>
+                  Unsaved changes from{' '}
+                  {new Intl.DateTimeFormat('en-US', {
+                    month: 'short',
+                    day: 'numeric',
+                    hour: 'numeric',
+                    minute: '2-digit',
+                  }).format(new Date(recoverableDraft.savedAt))}{' '}
+                  were kept on this device because a save did not go through.
+                </p>
+                <div className="note-draft-recovery-actions">
+                  <button
+                    className="btn-primary"
+                    type="button"
+                    onClick={() => {
+                      setTitle(recoverableDraft.title);
+                      setBody(recoverableDraft.bodyMarkdown);
+                      setDismissedDraftFor(activeNoteId);
+                    }}
+                  >
+                    Restore them
+                  </button>
+                  <button
+                    className="btn-secondary"
+                    type="button"
+                    onClick={() => {
+                      if (activeNoteId) forgetNoteDraft(activeNoteId);
+                      setDismissedDraftFor(activeNoteId);
+                    }}
+                  >
+                    Discard
+                  </button>
+                </div>
+                <small>Kept on this device for seven days, then removed.</small>
+              </section>
             ) : null}
             <div className="markdown-toolbar" role="toolbar" aria-label="Markdown formatting">
               <div className="markdown-tools">
