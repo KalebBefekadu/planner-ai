@@ -32,6 +32,8 @@ export type TodayGoalOption = {
 export type TodayData = {
   localDate: string;
   timezone: string;
+  /** 0 = Sunday. A stored workspace preference, not an assumption. */
+  weekStartsOn: number;
   coachingIntensity: CoachingIntensity;
   focusActionIds: string[];
   actions: TodayAction[];
@@ -62,7 +64,7 @@ async function todayClient() {
   if (!user) throw new Error('Please sign in to continue.');
   const { data: workspace, error } = await supabase
     .from('workspaces')
-    .select('id,timezone,coaching_intensity')
+    .select('id,timezone,week_starts_on,coaching_intensity')
     .eq('owner_user_id', user.id)
     .single();
   if (error || !workspace) throw new Error('Unable to load your Workspace.');
@@ -70,6 +72,7 @@ async function todayClient() {
     supabase,
     workspaceId: workspace.id as string,
     timezone: workspace.timezone as string,
+    weekStartsOn: Number(workspace.week_starts_on),
     coachingIntensity: workspace.coaching_intensity as CoachingIntensity,
   };
 }
@@ -90,7 +93,7 @@ async function readFocusIds(
 }
 
 export async function getTodayData(): Promise<TodayData> {
-  const { supabase, workspaceId, timezone, coachingIntensity } = await todayClient();
+  const { supabase, workspaceId, timezone, weekStartsOn, coachingIntensity } = await todayClient();
   const localDate = dateInTimezone(timezone);
   const [actionsResult, focusResult, goalsResult, capturesResult] = await Promise.all([
     supabase
@@ -161,6 +164,7 @@ export async function getTodayData(): Promise<TodayData> {
   return {
     localDate,
     timezone,
+    weekStartsOn,
     coachingIntensity,
     focusActionIds,
     actions,
