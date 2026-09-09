@@ -130,6 +130,30 @@ test('a saved Capture is filed as an Action by hand and shows up on Today', asyn
   await expect(open.getByText(raw, { exact: true })).toBeVisible();
 });
 
+test('a Capture filed as an Action still reads as filed after a reload', async ({ workspace }) => {
+  const { page } = workspace;
+  const raw = 'renew the parking permit before the month turns over';
+
+  await goTo(page, '/inbox');
+  await page.getByRole('textbox', { name: 'Unstructured capture' }).fill(raw);
+  await page.getByRole('button', { name: 'Save capture' }).click();
+
+  const entry = page.getByRole('article').filter({ hasText: raw });
+  await entry.getByRole('button', { name: 'File as Action' }).click();
+  await expect(entry.getByText('Filed as an Action')).toBeVisible();
+
+  // The reload is the whole test. Before this change the Capture stayed in
+  // state 'new', so the inbox went on presenting work that had already been
+  // filed as though nothing had been done with it -- and an inbox whose state
+  // is not trusted stops being read.
+  await page.reload();
+  const reloaded = page.getByRole('article').filter({ hasText: raw });
+  await expect(reloaded.getByText('Filed', { exact: true })).toBeVisible();
+
+  // The words themselves are untouched by filing.
+  await expect(reloaded.getByText(raw, { exact: true })).toBeVisible();
+});
+
 test('filing the same Capture twice does not create a second record', async ({ workspace }) => {
   const { page } = workspace;
   const raw = 'ask the landlord about the roof inspection';

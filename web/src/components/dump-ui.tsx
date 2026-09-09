@@ -557,7 +557,10 @@ export function DumpUI({
                     }).format(new Date(transcript.created_at))}
                   </time>
                   <p>{transcript.raw_text}</p>
-                  <CaptureFilingControls captureId={transcript.id} />
+                  <CaptureFilingControls
+                    captureId={transcript.id}
+                    captureState={transcript.state}
+                  />
                   {captureProposalsEnabled ? (
                     <AnalyzeCaptureButton
                       captureId={transcript.id}

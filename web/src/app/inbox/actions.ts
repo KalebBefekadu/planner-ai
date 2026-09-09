@@ -306,28 +306,15 @@ export async function fileCaptureAsActionAction(captureId: string): Promise<Capt
     const supabase = await authenticatedClient();
     const rawText = await readCaptureText(supabase, parsed.data);
     const { localDate, weekStartsOn } = await workspaceClock(supabase);
-    const plan = planCaptureAction(rawText, localDate, weekStartsOn);
-    const action = await executeOperation(supabase, 'action.create.v1', plan.create, {
+    const plan = planCaptureAction(parsed.data, rawText, localDate, weekStartsOn);
+    // One Operation, not two. The Action, the link back to the Capture and the
+    // Capture's move to reviewed either all land or none of them do, so there
+    // is no window in which an Action exists with no record of where it came
+    // from -- which was the whole defect.
+    await executeOperation(supabase, 'capture.file-to-action.v1', plan, {
       idempotencyKey: captureFilingKey(parsed.data, 'action'),
       surface: 'ui',
     });
-    if (plan.descriptionMarkdown !== null) {
-      // action.create.v1 carries no description field, so the full thought is
-      // written in a follow-up edit. Its key is derived too: on a retry this
-      // replays instead of colliding with the version the first edit produced.
-      await executeOperation(
-        supabase,
-        'action.update.v1',
-        {
-          id: String(action.id),
-          expectedVersion: Number(action.version),
-          title: plan.create.title,
-          descriptionMarkdown: plan.descriptionMarkdown,
-          scheduledOn: null,
-        },
-        { idempotencyKey: captureFilingKey(parsed.data, 'action-source'), surface: 'ui' }
-      );
-    }
     refreshQueue();
     // Every planner surface renders this Action, and they are listed in one
     // place precisely so a new caller cannot cover fewer of them than it looks.

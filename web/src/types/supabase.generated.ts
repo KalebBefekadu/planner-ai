@@ -682,6 +682,49 @@ export type Database = {
         };
         Relationships: [];
       };
+      capture_action_links: {
+        Row: {
+          action_id: string;
+          capture_id: string;
+          created_at: string;
+          workspace_id: string;
+        };
+        Insert: {
+          action_id: string;
+          capture_id: string;
+          created_at?: string;
+          workspace_id: string;
+        };
+        Update: {
+          action_id?: string;
+          capture_id?: string;
+          created_at?: string;
+          workspace_id?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: 'capture_action_links_action_id_workspace_id_fkey';
+            columns: ['action_id', 'workspace_id'];
+            isOneToOne: false;
+            referencedRelation: 'actions';
+            referencedColumns: ['id', 'workspace_id'];
+          },
+          {
+            foreignKeyName: 'capture_action_links_capture_id_workspace_id_fkey';
+            columns: ['capture_id', 'workspace_id'];
+            isOneToOne: false;
+            referencedRelation: 'captures';
+            referencedColumns: ['id', 'workspace_id'];
+          },
+          {
+            foreignKeyName: 'capture_action_links_workspace_id_fkey';
+            columns: ['workspace_id'];
+            isOneToOne: false;
+            referencedRelation: 'workspaces';
+            referencedColumns: ['id'];
+          },
+        ];
+      };
       capture_note_links: {
         Row: {
           capture_id: string;
@@ -1750,6 +1793,7 @@ export type Database = {
           archived_at: string | null;
           body_markdown: string;
           created_at: string;
+          favorited_at: string | null;
           id: string;
           parent_note_id: string | null;
           purge_after: string | null;
@@ -1766,6 +1810,7 @@ export type Database = {
           archived_at?: string | null;
           body_markdown?: string;
           created_at?: string;
+          favorited_at?: string | null;
           id?: string;
           parent_note_id?: string | null;
           purge_after?: string | null;
@@ -1782,6 +1827,7 @@ export type Database = {
           archived_at?: string | null;
           body_markdown?: string;
           created_at?: string;
+          favorited_at?: string | null;
           id?: string;
           parent_note_id?: string | null;
           purge_after?: string | null;
@@ -2680,6 +2726,15 @@ export type Database = {
         };
         Returns: Json;
       };
+      dispatch_trusted_operation_capture_action_base: {
+        Args: {
+          p_idempotency_key: string;
+          p_input: Json;
+          p_operation_id: string;
+          p_surface: string;
+        };
+        Returns: Json;
+      };
       dispatch_trusted_operation_capture_proposal_base: {
         Args: {
           p_idempotency_key: string;
@@ -2749,6 +2804,24 @@ export type Database = {
       };
       execute_assistant_proposal_conversation_base: {
         Args: { p_proposal_id: string };
+        Returns: Json;
+      };
+      execute_capture_action_filing_operation: {
+        Args: {
+          p_idempotency_key: string;
+          p_input: Json;
+          p_operation_id: string;
+          p_surface: string;
+        };
+        Returns: Json;
+      };
+      execute_capture_action_filing_undo: {
+        Args: {
+          p_idempotency_key: string;
+          p_input: Json;
+          p_operation_id: string;
+          p_surface: string;
+        };
         Returns: Json;
       };
       execute_capture_filing_undo: {
@@ -2932,6 +3005,15 @@ export type Database = {
         Returns: Json;
       };
       execute_operation_undo_base: {
+        Args: {
+          p_idempotency_key: string;
+          p_input: Json;
+          p_operation_id: string;
+          p_surface: string;
+        };
+        Returns: Json;
+      };
+      execute_operation_undo_capture_action_base: {
         Args: {
           p_idempotency_key: string;
           p_input: Json;

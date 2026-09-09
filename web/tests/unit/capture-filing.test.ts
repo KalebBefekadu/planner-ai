@@ -39,33 +39,56 @@ describe('filing a Capture into a Note', () => {
 describe('filing a Capture into an Action', () => {
   it('keeps the full thought in the description when the title cannot hold it', () => {
     const raw = `${'word '.repeat(400)}end`;
-    const plan = planCaptureAction(raw, '2026-03-11', 1);
-    expect(plan.create.title.length).toBeLessThanOrEqual(ACTION_TITLE_LIMIT);
+    const plan = planCaptureAction('11111111-1111-4111-8111-111111111111', raw, '2026-03-11', 1);
+    expect(plan.title.length).toBeLessThanOrEqual(ACTION_TITLE_LIMIT);
     expect(plan.descriptionMarkdown).toBe(raw);
   });
 
   it('does not repeat a short thought in both the title and the description', () => {
-    const plan = planCaptureAction('book the venue deposit', '2026-03-11', 1);
-    expect(plan.create.title).toBe('book the venue deposit');
+    const plan = planCaptureAction(
+      '11111111-1111-4111-8111-111111111111',
+      'book the venue deposit',
+      '2026-03-11',
+      1
+    );
+    expect(plan.title).toBe('book the venue deposit');
     expect(plan.descriptionMarkdown).toBeNull();
   });
 
   it('files into the week the person is living in, not the server week', () => {
     // Wednesday 11 March 2026 in a Monday-start workspace.
-    const monday = planCaptureAction('ship the beta', '2026-03-11', 1);
-    expect(monday.create.startsOn).toBe('2026-03-09');
-    expect(monday.create.endsOn).toBe('2026-03-15');
+    const monday = planCaptureAction(
+      '11111111-1111-4111-8111-111111111111',
+      'ship the beta',
+      '2026-03-11',
+      1
+    );
+    expect(monday.startsOn).toBe('2026-03-09');
+    expect(monday.endsOn).toBe('2026-03-15');
 
     // The same day in a Sunday-start workspace belongs to a different week.
-    const sunday = planCaptureAction('ship the beta', '2026-03-11', 0);
-    expect(sunday.create.startsOn).toBe('2026-03-08');
-    expect(sunday.create.endsOn).toBe('2026-03-14');
+    const sunday = planCaptureAction(
+      '11111111-1111-4111-8111-111111111111',
+      'ship the beta',
+      '2026-03-11',
+      0
+    );
+    expect(sunday.startsOn).toBe('2026-03-08');
+    expect(sunday.endsOn).toBe('2026-03-14');
   });
 
-  it('leaves the day and the Goal undecided, because those are the person to decide', () => {
-    const plan = planCaptureAction('ship the beta', '2026-03-11', 1);
-    expect(plan.create.scheduledOn).toBeNull();
-    expect(plan.create.goalId).toBeNull();
+  it('carries the Capture, so the Action and its origin are written together', () => {
+    // The Operation this plan feeds writes the Action and the link back to the
+    // Capture in one transaction. If the plan could lose the Capture, an Action
+    // with no recorded origin would become possible again -- which is the whole
+    // defect this filing path exists to close.
+    const plan = planCaptureAction(
+      '11111111-1111-4111-8111-111111111111',
+      'ship the beta',
+      '2026-03-11',
+      1
+    );
+    expect(plan.captureId).toBe('11111111-1111-4111-8111-111111111111');
   });
 });
 
