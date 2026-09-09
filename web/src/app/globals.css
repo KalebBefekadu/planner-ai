@@ -7577,3 +7577,90 @@ button:disabled {
   flex-wrap: wrap;
   gap: 0.5rem;
 }
+
+/* Quick capture in the shell.
+
+   Sits where the "Capture a thought" link used to, and keeps that link's
+   restraint: it is a way to put something down, not a second editor. Two rows
+   by default, growable by the person, so a long thought is possible without
+   the sidebar being dominated by an empty box the rest of the time. */
+.shell-quick-capture {
+  display: grid;
+  gap: 6px;
+  margin: 3px 10px 8px;
+  padding: 8px 9px;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: color-mix(in srgb, var(--surface) 62%, transparent);
+}
+
+.shell-quick-capture-label {
+  color: var(--brand-strong);
+  font-size: var(--fs-label);
+  font-weight: 750;
+}
+
+.shell-quick-capture-field {
+  width: 100%;
+  min-height: 46px;
+  padding: 6px 7px;
+  border: 1px solid var(--line);
+  border-radius: 5px;
+  background: var(--surface);
+  color: var(--foreground);
+  font: inherit;
+  font-size: var(--fs-label);
+  resize: vertical;
+}
+
+.shell-quick-capture-field::placeholder {
+  /* A full-strength token rather than an opacity: placeholder text is the
+     lowest-contrast text on the surface, so it is where a faded colour first
+     stops being readable. */
+  color: var(--muted);
+}
+
+.shell-quick-capture-actions {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.shell-quick-capture-save {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 5px 10px;
+  font-size: var(--fs-label);
+}
+
+.shell-quick-capture-inbox {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  color: var(--muted);
+  font-size: var(--fs-label);
+}
+
+.shell-quick-capture-inbox:hover {
+  color: var(--foreground);
+}
+
+/* Reserves no space when empty, so the sidebar does not shift as a capture is
+   saved -- movement under the cursor is how a second capture gets misclicked. */
+.shell-quick-capture-status:empty {
+  display: none;
+}
+
+.shell-quick-capture-status {
+  margin: 0;
+  color: var(--success);
+  font-size: var(--fs-label);
+}
+
+.shell-quick-capture-error {
+  margin: 0;
+  color: var(--danger);
+  font-size: var(--fs-label);
+}
