@@ -7027,6 +7027,9 @@ button:disabled {
 @media (max-width: 640px) {
   .note-import-history ul {
     max-height: 140px;
+  }
+}
+
 /* UI-02: the Account section and the "Related settings" footer. Both reuse the
    existing tokens and the .settings-section rhythm rather than introducing a
    second settings look. */
