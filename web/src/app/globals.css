@@ -1331,6 +1331,18 @@ button:disabled {
   color: var(--muted);
   font-size: var(--fs-label);
 }
+.plan-item-source {
+  display: grid;
+  gap: 3px;
+  margin-top: 7px;
+  border-left: 2px solid var(--border);
+  padding-left: 9px;
+}
+.plan-item-source q {
+  color: var(--muted);
+  font-size: var(--fs-label);
+  font-style: italic;
+}
 .goal-progress {
   display: grid;
   width: min(280px, 100%);
@@ -6945,6 +6957,15 @@ button:disabled {
   gap: 6px;
   padding: 6px 12px;
   font-size: var(--fs-label);
+}
+.capture-state {
+  justify-self: start;
+  border-radius: 999px;
+  border: 1px solid var(--border);
+  padding: 1px 8px;
+  color: var(--muted);
+  font-size: var(--fs-label);
+  font-weight: 600;
 }
 .capture-filing-status {
   display: flex;

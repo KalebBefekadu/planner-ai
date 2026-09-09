@@ -556,6 +556,12 @@ export function DumpUI({
                       minute: '2-digit',
                     }).format(new Date(transcript.created_at))}
                   </time>
+                  {/* A Capture that has already become a Note or an Action is
+                      not waiting for anything. Saying so is what makes the
+                      inbox state worth trusting. */}
+                  {transcript.state === 'reviewed' ? (
+                    <span className="capture-state">Filed</span>
+                  ) : null}
                   <p>{transcript.raw_text}</p>
                   <CaptureFilingControls captureId={transcript.id} />
                   {captureProposalsEnabled ? (

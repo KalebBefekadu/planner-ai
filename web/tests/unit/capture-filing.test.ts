@@ -9,6 +9,7 @@ import {
   planCaptureAction,
   planCaptureNote,
 } from '@/lib/capture-filing';
+import { operationDefinitions, undoableOperationIds } from '@/lib/operations';
 
 // A Capture is the words a person actually recorded. Filing it into a Note or
 // an Action is the first moment those words are copied anywhere, so these tests
@@ -110,5 +111,39 @@ describe('retrying a filing', () => {
     const key = captureFilingKey('11111111-1111-4111-8111-111111111111', 'action');
     expect(key.length).toBeGreaterThanOrEqual(8);
     expect(key.length).toBeLessThanOrEqual(200);
+  });
+});
+
+// An Action filed from a Capture used to keep no route back to it, so the
+// inbox said the Capture was untouched and the Action had lost its origin.
+describe('the provenance an Action keeps back to its Capture', () => {
+  const captureId = '11111111-1111-4111-8111-111111111111';
+  const actionId = '22222222-2222-4222-8222-222222222222';
+  const definition = operationDefinitions['capture.file-to-action.v1'];
+
+  it('is a versioned, reversible Operation like every other durable write', () => {
+    expect(definition.reversible).toBe(true);
+    expect(definition.exposure).toContain('ui');
+    expect(undoableOperationIds).toContain('capture.file-to-action.v1');
+  });
+
+  it('accepts the two identifiers and nothing else, so no field can ride along', () => {
+    expect(definition.input.safeParse({ captureId, actionId }).success).toBe(true);
+    expect(definition.input.safeParse({ captureId, actionId, state: 'reviewed' }).success).toBe(
+      false
+    );
+  });
+
+  it('can only report the Capture as reviewed, which is what empties the inbox', () => {
+    expect(definition.output.safeParse({ captureId, actionId, state: 'reviewed' }).success).toBe(
+      true
+    );
+    expect(definition.output.safeParse({ captureId, actionId, state: 'new' }).success).toBe(false);
+  });
+
+  it('links under its own key, so a retry of the link cannot replay the Action', () => {
+    expect(captureFilingKey(captureId, 'action-link')).not.toBe(
+      captureFilingKey(captureId, 'action')
+    );
   });
 });

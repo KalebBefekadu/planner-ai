@@ -328,6 +328,16 @@ export async function fileCaptureAsActionAction(captureId: string): Promise<Capt
         { idempotencyKey: captureFilingKey(parsed.data, 'action-source'), surface: 'ui' }
       );
     }
+    // The provenance link is its own Operation for the same reason the Note
+    // path splits them: an Action created but not yet linked is recoverable by
+    // retrying, and the link Operation writes the link and moves the Capture to
+    // 'reviewed' in one transaction so the inbox can never disagree with it.
+    await executeOperation(
+      supabase,
+      'capture.file-to-action.v1',
+      { captureId: parsed.data, actionId: String(action.id) },
+      { idempotencyKey: captureFilingKey(parsed.data, 'action-link'), surface: 'ui' }
+    );
     refreshQueue();
     // Every planner surface renders this Action, and they are listed in one
     // place precisely so a new caller cannot cover fewer of them than it looks.

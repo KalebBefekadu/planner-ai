@@ -37,6 +37,12 @@ export type GoalView = {
   yearly_id?: string;
   quarterly_id?: string;
   monthly_id?: string;
+  /**
+   * The Capture this Action was filed from, when it came from one. A Capture is
+   * the words a person actually recorded, so this is the route back to what was
+   * said before anything interpreted it.
+   */
+  source_capture?: { id: string; raw_text: string; created_at: string } | null;
   /** Bounds of the Planning Horizon this item belongs to, when it has one. */
   horizon_starts_on?: string | null;
   horizon_ends_on?: string | null;
@@ -270,6 +276,49 @@ export async function saveVision(content: string) {
   revalidatePlanner();
 }
 
+/**
+ * The Capture each of these Actions was filed from, keyed by Action id.
+ *
+ * Provenance is read here rather than joined into the Actions query because the
+ * link is its own record: an Action without one is the normal case, and a
+ * failure to read the links must not cost the person their plan.
+ */
+async function readActionSourceCaptures(
+  supabase: Awaited<ReturnType<typeof requireWorkspaceId>>['supabase'],
+  workspaceId: string,
+  actionIds: string[]
+): Promise<Map<string, { id: string; raw_text: string; created_at: string }>> {
+  const provenance = new Map<string, { id: string; raw_text: string; created_at: string }>();
+  if (!actionIds.length) return provenance;
+  const { data: links } = await supabase
+    .from('capture_action_links')
+    .select('action_id,capture_id')
+    .eq('workspace_id', workspaceId)
+    .in('action_id', actionIds);
+  if (!links?.length) return provenance;
+  const { data: captures } = await supabase
+    .from('captures')
+    .select('id,raw_text,created_at')
+    .eq('workspace_id', workspaceId)
+    .is('trashed_at', null)
+    .in('id', [...new Set(links.map((link) => link.capture_id as string))]);
+  const byCaptureId = new Map(
+    (captures ?? []).map((capture) => [
+      capture.id as string,
+      {
+        id: capture.id as string,
+        raw_text: capture.raw_text as string,
+        created_at: capture.created_at as string,
+      },
+    ])
+  );
+  for (const link of links) {
+    const capture = byCaptureId.get(link.capture_id as string);
+    if (capture) provenance.set(link.action_id as string, capture);
+  }
+  return provenance;
+}
+
 export async function getGoalsHierarchy(): Promise<GoalsData | null> {
   const vision = await getActiveVision();
   if (!vision) return null;
@@ -296,6 +345,11 @@ export async function getGoalsHierarchy(): Promise<GoalsData | null> {
     const localDate = dateInTimezone(timezone);
     const goals = (goalsResult.data ?? []) as unknown as CanonicalGoal[];
     const actions = (actionsResult.data ?? []) as unknown as CanonicalAction[];
+    const sourceCaptures = await readActionSourceCaptures(
+      supabase,
+      workspaceId,
+      actions.map((action) => action.id)
+    );
     const mapGoal = (goal: CanonicalGoal): GoalView => ({
       id: goal.id,
       content: goal.title,
@@ -320,6 +374,7 @@ export async function getGoalsHierarchy(): Promise<GoalsData | null> {
       status: toGoalStatus(action.status),
       version: action.version,
       description: action.description_markdown,
+      source_capture: sourceCaptures.get(action.id) ?? null,
       scheduled_on: action.scheduled_on,
       parent_action_id: action.parent_action_id,
       quarterly_id: action.goal_id ?? undefined,

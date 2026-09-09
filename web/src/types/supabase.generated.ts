@@ -679,6 +679,49 @@ export type Database = {
         };
         Relationships: [];
       };
+      capture_action_links: {
+        Row: {
+          action_id: string;
+          capture_id: string;
+          created_at: string;
+          workspace_id: string;
+        };
+        Insert: {
+          action_id: string;
+          capture_id: string;
+          created_at?: string;
+          workspace_id: string;
+        };
+        Update: {
+          action_id?: string;
+          capture_id?: string;
+          created_at?: string;
+          workspace_id?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: 'capture_action_links_action_id_workspace_id_fkey';
+            columns: ['action_id', 'workspace_id'];
+            isOneToOne: false;
+            referencedRelation: 'actions';
+            referencedColumns: ['id', 'workspace_id'];
+          },
+          {
+            foreignKeyName: 'capture_action_links_capture_id_workspace_id_fkey';
+            columns: ['capture_id', 'workspace_id'];
+            isOneToOne: false;
+            referencedRelation: 'captures';
+            referencedColumns: ['id', 'workspace_id'];
+          },
+          {
+            foreignKeyName: 'capture_action_links_workspace_id_fkey';
+            columns: ['workspace_id'];
+            isOneToOne: false;
+            referencedRelation: 'workspaces';
+            referencedColumns: ['id'];
+          },
+        ];
+      };
       capture_note_links: {
         Row: {
           capture_id: string;

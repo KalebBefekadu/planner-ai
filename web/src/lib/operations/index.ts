@@ -218,6 +218,9 @@ const noteLinkOutput = z
 const captureFileOutput = z
   .object({ captureId: id, noteId: id, state: z.literal('reviewed') })
   .strict();
+const captureFileActionOutput = z
+  .object({ captureId: id, actionId: id, state: z.literal('reviewed') })
+  .strict();
 const noteImportOutput = z
   .object({
     jobId: id,
@@ -855,6 +858,14 @@ export const operationDefinitions = {
     input: z.object({ captureId: id, noteId: id }).strict(),
     output: captureFileOutput,
   },
+  'capture.file-to-action.v1': {
+    summary: 'Link one immutable Capture to the Action filed from it and mark it reviewed.',
+    risk: 'low',
+    exposure: ['ui', 'chat', 'mcp'],
+    reversible: true,
+    input: z.object({ captureId: id, actionId: id }).strict(),
+    output: captureFileActionOutput,
+  },
   'review.complete-weekly.v1': {
     summary: 'Complete Weekly Review with an explicit decision for every unfinished Action.',
     risk: 'medium',
@@ -1031,6 +1042,7 @@ export const undoableOperationIds = [
   'daily-focus.set.v1',
   'capture.create.v1',
   'capture.file-to-note.v1',
+  'capture.file-to-action.v1',
   'note.create.v1',
   'note.update.v1',
   'note.move.v1',

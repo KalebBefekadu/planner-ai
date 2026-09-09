@@ -28,6 +28,7 @@ const exportTables = [
   ['note_goal_links', '*'],
   ['note_action_links', '*'],
   ['capture_note_links', '*'],
+  ['capture_action_links', '*'],
   ['conversations', '*'],
   ['conversation_messages', '*'],
   ['ai_proposals', '*'],

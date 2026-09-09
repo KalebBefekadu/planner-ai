@@ -409,6 +409,15 @@ export function PlannerWorkspace({
               </time>
             ) : null}
           </div>
+          {item.source_capture ? (
+            /* The point of keeping a Capture verbatim is being able to go back
+               to what was actually said, so the words are shown here rather
+               than a bare "filed from a Capture" label. */
+            <p className="plan-item-source">
+              <span>From Capture</span>
+              <q>{item.source_capture.raw_text}</q>
+            </p>
+          ) : null}
           {(type === 'yearly' || type === 'quarterly') && item.target_value ? (
             <div className="goal-progress">
               <span>
