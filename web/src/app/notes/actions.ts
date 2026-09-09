@@ -336,6 +336,30 @@ export async function getNoteKnowledgeContext(noteId: string): Promise<NoteKnowl
   };
 }
 
+/* The version a conflict is actually against.
+ *
+ * When a save is refused the page still holds the render it started from, and
+ * `router.refresh()` is a request, not a fact: it may not have landed by the
+ * time someone reads the comparison and chooses. Resolving from those props
+ * therefore compared the draft against the version that was already stale --
+ * and wrote back with its version number, which the server refused a second
+ * time, leaving the panel up and the person with no way out of it.
+ *
+ * The stored side is read here instead, once, at the moment of the conflict,
+ * so the comparison and the write that follows it are both against the version
+ * that caused the refusal. */
+export async function getStoredNote(id: string): Promise<NoteView | null> {
+  const { supabase, workspaceId } = await notesClient();
+  const { data, error } = await supabase
+    .from('notes')
+    .select('*')
+    .eq('workspace_id', workspaceId)
+    .eq('id', id)
+    .maybeSingle();
+  if (error) throw new Error('Unable to load this Note.');
+  return data ? mapNote(data as Record<string, unknown>) : null;
+}
+
 export async function createNote(parentNoteId: string | null = null) {
   const { supabase } = await notesClient();
   const note = await executeOperation(

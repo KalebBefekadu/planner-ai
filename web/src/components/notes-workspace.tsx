@@ -57,6 +57,7 @@ import {
   linkNoteGoal,
   linkNote,
   fileNoteUnder,
+  getStoredNote,
   moveNoteToNewParent,
   moveNoteWithinParent,
   restoreNoteRevision,
@@ -203,10 +204,23 @@ export function NotesWorkspace({
   const [saveState, setSaveState] = useState<'saved' | 'unsaved' | 'saving' | 'error'>('saved');
   const [dismissedDraftFor, setDismissedDraftFor] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
-  /* The refused draft, held so the two versions can be compared. Separate from
-     `body`/`title`, which stay exactly as typed -- the editor is never quietly
-     rewritten out from under someone. */
-  const [conflict, setConflict] = useState<{ title: string; bodyMarkdown: string } | null>(null);
+  /* Both sides of a refused save, held so the two versions can be compared.
+     Separate from `body`/`title`, which stay exactly as typed -- the editor is
+     never quietly rewritten out from under someone.
+
+     The stored side is captured here rather than read from `notes` when the
+     panel renders. `router.refresh()` is a request for a new render, not a
+     fact: the props can still describe the version the draft was written
+     against when someone reads the comparison and chooses. That showed a
+     person their own pre-conflict text as "the saved version", and then wrote
+     back with its version number, which the server refused a second time --
+     so the panel stayed up and taking the stored version could not complete
+     at all. Capturing the stored side once, at the conflict, makes what is
+     compared and what is written the same version that caused the refusal. */
+  const [conflict, setConflict] = useState<{
+    mine: { title: string; bodyMarkdown: string };
+    theirs: { title: string; bodyMarkdown: string; version: number };
+  } | null>(null);
   const [tagText, setTagText] = useState(knowledge?.tags.join(', ') ?? '');
   const [targetNoteId, setTargetNoteId] = useState('');
   const [filingParentId, setFilingParentId] = useState('');
@@ -384,17 +398,14 @@ export function NotesWorkspace({
    * made rather than leaving a gap where someone's writing used to be. */
   async function resolveConflict(side: ConflictSide) {
     if (!conflict || !selected) return;
-    const chosen = resolveWith(side, conflict, {
-      title: selected.title,
-      bodyMarkdown: selected.bodyMarkdown,
-    });
+    const chosen = resolveWith(side, conflict.mine, conflict.theirs);
     setError(null);
     try {
       const saved = await updateNote({
         id: selected.id,
         title: chosen.title.trim() || 'Untitled',
         bodyMarkdown: chosen.bodyMarkdown,
-        expectedVersion: selected.version,
+        expectedVersion: conflict.theirs.version,
       });
       versionRef.current = saved.version;
       setTitle(saved.title);
@@ -407,6 +418,18 @@ export function NotesWorkspace({
       setSaveState('saved');
       router.refresh();
     } catch (caught) {
+      /* Someone saved again while this comparison was on screen. The decision
+         cannot be applied to a version that no longer exists, and reporting a
+         dead end would strand the draft in a panel with no working way out --
+         so the comparison is rebuilt against what is stored now and the choice
+         is offered again. */
+      if (operationFailureCode(caught) === 'version_conflict') {
+        const restated = await captureConflict(selected.id, conflict.mine);
+        if (restated) {
+          setError('This Note changed again while you were choosing. Here is what it holds now.');
+          return;
+        }
+      }
       setError(errorMessage(caught));
     }
   }
@@ -490,6 +513,31 @@ export function NotesWorkspace({
   );
   const voice = useVoiceTranscription({ onTranscript: insertTranscript });
 
+  /* Read the version the server actually holds and put both sides on screen.
+     Returns whether the comparison could be built: a Note that has since been
+     archived or deleted has no stored side to offer, and saying so honestly is
+     better than showing a comparison against nothing. */
+  const captureConflict = useCallback(
+    async (noteId: string, mine: { title: string; bodyMarkdown: string }) => {
+      try {
+        const stored = await getStoredNote(noteId);
+        if (!stored) return false;
+        setConflict({
+          mine,
+          theirs: {
+            title: stored.title,
+            bodyMarkdown: stored.bodyMarkdown,
+            version: stored.version,
+          },
+        });
+        return true;
+      } catch {
+        return false;
+      }
+    },
+    []
+  );
+
   // The Note being saved is passed in rather than read from the closure. The
   // save that matters most is the one for the Note a person has just left, and
   // by then activeNoteId already names a different Note.
@@ -531,11 +579,18 @@ export function NotesWorkspace({
                from: the person is now holding two versions of their own
                writing, and the only advice the copy can give -- refresh -- is
                the action that discards theirs. Keep the refused draft and show
-               the comparison instead. `router.refresh()` brings the stored
-               version into `notes` without touching the editor. */
+               the comparison instead. The stored side is read directly, so
+               the panel is built from the version that caused the refusal
+               rather than from whatever render the page happens to hold;
+               `router.refresh()` then brings the rest of the page up to date
+               without touching the editor. */
             if (operationFailureCode(caught) === 'version_conflict') {
-              setConflict({ title: nextDraft.title, bodyMarkdown: nextDraft.bodyMarkdown });
+              const captured = await captureConflict(noteId, nextDraft);
               setSaveState('error');
+              if (!captured) {
+                setError(errorMessage(caught));
+                return;
+              }
               router.refresh();
               return;
             }
@@ -550,7 +605,7 @@ export function NotesWorkspace({
         saveInFlightRef.current = false;
       }
     },
-    [router]
+    [captureConflict, router]
   );
 
   useEffect(() => {
@@ -1028,10 +1083,7 @@ export function NotesWorkspace({
             </div>
             {conflict && selected
               ? (() => {
-                  const comparison = describeNoteConflict(conflict, {
-                    title: selected.title,
-                    bodyMarkdown: selected.bodyMarkdown,
-                  });
+                  const comparison = describeNoteConflict(conflict.mine, conflict.theirs);
                   return (
                     <section className="note-conflict" role="alert" aria-label="Version conflict">
                       <p className="note-conflict-summary">{conflictSummary(comparison)}</p>
@@ -1041,9 +1093,9 @@ export function NotesWorkspace({
                       {comparison.titleDiffers ? (
                         <dl className="note-conflict-titles">
                           <dt>Your title</dt>
-                          <dd>{conflict.title || 'Untitled'}</dd>
+                          <dd>{conflict.mine.title || 'Untitled'}</dd>
                           <dt>Saved title</dt>
-                          <dd>{selected.title || 'Untitled'}</dd>
+                          <dd>{conflict.theirs.title || 'Untitled'}</dd>
                         </dl>
                       ) : null}
                       {comparison.bodyDiffers ? (

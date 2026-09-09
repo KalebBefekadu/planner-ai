@@ -1,6 +1,13 @@
 import AxeBuilder from '@axe-core/playwright';
 
-import { test, expect, goTo, signIn, waitForHydration } from './support/workspace';
+import {
+  test,
+  expect,
+  goTo,
+  replaceFieldValue,
+  signIn,
+  waitForHydration,
+} from './support/workspace';
 
 /* The conflict surface only exists while a conflict does, so the ordinary axe
    sweep never reaches it -- it walks routes, and this is a state. A new screen
@@ -18,8 +25,8 @@ async function createNote(page: import('@playwright/test').Page, title: string, 
   const before = page.url();
   await page.getByRole('button', { name: 'New root note' }).click();
   await expect(page).toHaveURL((url) => url.href !== before && /\/notes\?note=/.test(url.href));
-  await page.getByRole('textbox', { name: 'Note title' }).fill(title);
-  await page.getByRole('textbox', { name: 'Note body, Markdown' }).fill(body);
+  await replaceFieldValue(page.getByRole('textbox', { name: 'Note title' }), title);
+  await replaceFieldValue(page.getByRole('textbox', { name: 'Note body, Markdown' }), body);
   await expect(page.getByRole('status')).toHaveText('Saved');
   const id = new URL(page.url()).searchParams.get('note');
   expect(id).toBeTruthy();
@@ -40,7 +47,7 @@ async function saveElsewhere(
     await signIn(other, email);
     await other.goto(`/notes?note=${noteId}`);
     await waitForHydration(other);
-    await other.getByRole('textbox', { name: 'Note body, Markdown' }).fill(body);
+    await replaceFieldValue(other.getByRole('textbox', { name: 'Note body, Markdown' }), body);
     await expect(other.getByRole('status')).toHaveText('Saved');
   } finally {
     await context.close();
@@ -61,7 +68,10 @@ test('a Note saved somewhere else can be compared and resolved without losing ei
   await saveElsewhere(browser, workspace.email, noteId, 'One\nTwo changed elsewhere\nThree');
 
   // Now this person keeps writing, against a version that no longer exists.
-  await page.getByRole('textbox', { name: 'Note body, Markdown' }).fill('One\nTwo mine\nThree');
+  await replaceFieldValue(
+    page.getByRole('textbox', { name: 'Note body, Markdown' }),
+    'One\nTwo mine\nThree'
+  );
 
   const conflict = page.getByRole('alert', { name: 'Version conflict' });
   await expect(conflict).toBeVisible({ timeout: 20_000 });
@@ -110,7 +120,7 @@ test('taking the stored version replaces the editor instead of asking for a refr
 
   await saveElsewhere(browser, workspace.email, noteId, 'Their line');
 
-  await page.getByRole('textbox', { name: 'Note body, Markdown' }).fill('My line');
+  await replaceFieldValue(page.getByRole('textbox', { name: 'Note body, Markdown' }), 'My line');
   const conflict = page.getByRole('alert', { name: 'Version conflict' });
   await expect(conflict).toBeVisible({ timeout: 20_000 });
 

@@ -1,6 +1,6 @@
 import path from 'node:path';
 
-import { test as base, expect, type Page } from '@playwright/test';
+import { test as base, expect, type Locator, type Page } from '@playwright/test';
 import { createClient, type SupabaseClient } from '@supabase/supabase-js';
 
 // Playwright hands each fixture a callback that is conventionally named `use`.
@@ -112,6 +112,33 @@ export async function waitForHydration(page: Page) {
     undefined,
     { timeout: 30_000 }
   );
+}
+
+/**
+ * Replace what a field holds, and prove the replacement took.
+ *
+ * `fill` is two steps inside the page: select what is there, then insert over
+ * the selection. A React render landing between them collapses the selection,
+ * and the new text is inserted beside the old rather than over it -- so a field
+ * that held "Original line" and was filled with "Their line" ends up holding
+ * "Their lineOriginal line", with no separator to make it look like anything
+ * but a defect. The editor then autosaves that, and every later assertion is
+ * measuring a value nobody typed. It reads as a product bug in whatever the
+ * test was actually about, which is the worst possible failure for a test to
+ * produce.
+ *
+ * Filling until the field agrees removes the race rather than waiting it out,
+ * and the assertion means a fill that still slips fails where it happened
+ * instead of somewhere downstream.
+ */
+export async function replaceFieldValue(field: Locator, value: string) {
+  await expect(field).toBeVisible();
+  await expect
+    .poll(async () => {
+      if ((await field.inputValue()) !== value) await field.fill(value);
+      return field.inputValue();
+    })
+    .toBe(value);
 }
 
 /**
