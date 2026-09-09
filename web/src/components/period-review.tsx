@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useTransition } from 'react';
+import { useRef, useState, useTransition } from 'react';
 import { CalendarRange, CheckCircle2, Flag, ListChecks, Target } from 'lucide-react';
 import { completePeriodReview, type PeriodReviewData } from '@/app/review/actions';
 import { CoachingCue } from '@/components/coaching-cue';
@@ -27,18 +27,23 @@ export function PeriodReview({ data }: { data: PeriodReviewData }) {
   const [completed, setCompleted] = useState(data.completedReview);
   const [error, setError] = useState<string | null>(null);
   const [isPending, startTransition] = useTransition();
+  const submissionIntent = useRef<string | null>(null);
   const title = data.kind === 'month' ? 'Monthly Review' : 'Quarterly Review';
 
   function completeReview() {
     setError(null);
     startTransition(async () => {
       try {
-        const result = await completePeriodReview({
-          kind: data.kind === 'month' ? 'monthly' : 'quarterly',
-          startsOn: data.startsOn,
-          endsOn: data.endsOn,
-          reflectionMarkdown: reflection,
-        });
+        submissionIntent.current ??= crypto.randomUUID();
+        const result = await completePeriodReview(
+          {
+            kind: data.kind === 'month' ? 'monthly' : 'quarterly',
+            startsOn: data.startsOn,
+            endsOn: data.endsOn,
+            reflectionMarkdown: reflection,
+          },
+          submissionIntent.current
+        );
         setCompleted({
           id: result.reviewId,
           reflectionMarkdown: reflection.trim(),

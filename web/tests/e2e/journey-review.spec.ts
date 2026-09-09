@@ -101,19 +101,11 @@ test('submitting the same week twice does not record a second review', async ({ 
   await page.getByRole('button', { name: 'Complete weekly review' }).click();
   await expect(page.getByRole('status')).toContainText('Review completed');
 
-  // A second submission of the same week is a retry, not a second review. One
-  // completed review per week is a database invariant, so a fresh idempotency
-  // key would have hit the unique index and surfaced as an unexplained
-  // failure instead of replaying the result.
+  // Reopening a completed period shows the saved record, not an editable
+  // form whose changed input could be mistaken for another saved review.
   await page.reload();
-  await page
-    .getByRole('combobox', { name: 'Decision for Something to carry' })
-    .selectOption('left_overdue');
-  await page
-    .getByRole('combobox', { name: `Decision for ${onboardingSeed.action}` })
-    .selectOption('left_overdue');
-  await page.getByRole('button', { name: 'Complete weekly review' }).click();
-  await expect(page.getByRole('status')).toContainText('Review completed');
+  await expect(page.getByRole('region', { name: 'Completed weekly review' })).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Complete weekly review' })).toHaveCount(0);
 
   await page.reload();
   const history = page.getByRole('complementary', { name: 'Past reviews' });
