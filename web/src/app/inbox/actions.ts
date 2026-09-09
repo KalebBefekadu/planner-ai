@@ -3,7 +3,16 @@
 import { randomUUID } from 'node:crypto';
 import { revalidatePath } from 'next/cache';
 import { z } from 'zod';
+import {
+  CaptureFilingInputError,
+  captureFilingKey,
+  planCaptureAction,
+  planCaptureNote,
+  type CaptureFilingTarget,
+} from '@/lib/capture-filing';
 import { validateCaptureProposalItem } from '@/lib/capture-proposals';
+import { dateInTimezone } from '@/lib/date';
+import { revalidatePlannerAndRecords } from '@/lib/planner-revalidation';
 import { executeOperation } from '@/lib/operations';
 import { createClient } from '@/lib/supabase/server';
 
@@ -217,4 +226,120 @@ export async function dismissCaptureProposalBatchAction(id: string, expectedVers
 
 export async function applyCaptureProposalBatchAction(id: string, expectedVersion: number) {
   return decideBatch('capture-proposal.apply.v1', id, expectedVersion);
+}
+
+export type CaptureFilingResult =
+  | { ok: true; target: CaptureFilingTarget }
+  | { ok: false; error: string };
+
+async function readCaptureText(
+  supabase: Awaited<ReturnType<typeof authenticatedClient>>,
+  id: string
+) {
+  const { data, error } = await supabase
+    .from('captures')
+    .select('raw_text')
+    .eq('id', id)
+    .is('archived_at', null)
+    .is('trashed_at', null)
+    .single();
+  if (error || !data) throw new Error('That Capture is no longer available.');
+  // Read the words from the row rather than accepting them from the page. The
+  // Capture is immutable server-side, so this is the only copy that is
+  // guaranteed to be the one the person actually recorded.
+  return String(data.raw_text);
+}
+
+async function workspaceClock(supabase: Awaited<ReturnType<typeof authenticatedClient>>) {
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  const { data, error } = await supabase
+    .from('workspaces')
+    .select('timezone,week_starts_on')
+    .eq('owner_user_id', user?.id ?? '')
+    .single();
+  if (error || !data) throw new Error('Unable to load your Workspace.');
+  return {
+    localDate: dateInTimezone(String(data.timezone)),
+    weekStartsOn: Number(data.week_starts_on),
+  };
+}
+
+export async function fileCaptureAsNoteAction(captureId: string): Promise<CaptureFilingResult> {
+  const parsed = z.uuid().safeParse(captureId);
+  if (!parsed.success) return { ok: false, error: 'That Capture is no longer available.' };
+  try {
+    const supabase = await authenticatedClient();
+    const rawText = await readCaptureText(supabase, parsed.data);
+    const plan = planCaptureNote(rawText);
+    const note = await executeOperation(supabase, 'note.create.v1', plan, {
+      idempotencyKey: captureFilingKey(parsed.data, 'note'),
+      surface: 'ui',
+    });
+    // The link is a second Operation so that a Note created but not yet linked
+    // is recoverable by retrying rather than orphaned.
+    await executeOperation(
+      supabase,
+      'capture.file-to-note.v1',
+      { captureId: parsed.data, noteId: String(note.id) },
+      { idempotencyKey: captureFilingKey(parsed.data, 'note-link'), surface: 'ui' }
+    );
+    refreshQueue();
+    revalidatePath('/notes');
+    return { ok: true, target: 'note' };
+  } catch (caught) {
+    return {
+      ok: false,
+      error:
+        caught instanceof CaptureFilingInputError
+          ? caught.message
+          : 'Nothing was filed. Your Capture is unchanged -- try again.',
+    };
+  }
+}
+
+export async function fileCaptureAsActionAction(captureId: string): Promise<CaptureFilingResult> {
+  const parsed = z.uuid().safeParse(captureId);
+  if (!parsed.success) return { ok: false, error: 'That Capture is no longer available.' };
+  try {
+    const supabase = await authenticatedClient();
+    const rawText = await readCaptureText(supabase, parsed.data);
+    const { localDate, weekStartsOn } = await workspaceClock(supabase);
+    const plan = planCaptureAction(rawText, localDate, weekStartsOn);
+    const action = await executeOperation(supabase, 'action.create.v1', plan.create, {
+      idempotencyKey: captureFilingKey(parsed.data, 'action'),
+      surface: 'ui',
+    });
+    if (plan.descriptionMarkdown !== null) {
+      // action.create.v1 carries no description field, so the full thought is
+      // written in a follow-up edit. Its key is derived too: on a retry this
+      // replays instead of colliding with the version the first edit produced.
+      await executeOperation(
+        supabase,
+        'action.update.v1',
+        {
+          id: String(action.id),
+          expectedVersion: Number(action.version),
+          title: plan.create.title,
+          descriptionMarkdown: plan.descriptionMarkdown,
+          scheduledOn: null,
+        },
+        { idempotencyKey: captureFilingKey(parsed.data, 'action-source'), surface: 'ui' }
+      );
+    }
+    refreshQueue();
+    // Every planner surface renders this Action, and they are listed in one
+    // place precisely so a new caller cannot cover fewer of them than it looks.
+    revalidatePlannerAndRecords();
+    return { ok: true, target: 'action' };
+  } catch (caught) {
+    return {
+      ok: false,
+      error:
+        caught instanceof CaptureFilingInputError
+          ? caught.message
+          : 'Nothing was filed. Your Capture is unchanged -- try again.',
+    };
+  }
 }
