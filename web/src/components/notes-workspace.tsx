@@ -190,6 +190,9 @@ export function NotesWorkspace({
   const [title, setTitle] = useState(selected?.title ?? '');
   const [body, setBody] = useState(selected?.bodyMarkdown ?? '');
   const versionRef = useRef(selected?.version ?? 1);
+  // The durable mutation currently in flight, if any. Only whether one is
+  // running matters, not what it returns.
+  const pendingWorkRef = useRef<Promise<unknown> | null>(null);
   const [saveState, setSaveState] = useState<'saved' | 'unsaved' | 'saving' | 'error'>('saved');
   const [dismissedDraftFor, setDismissedDraftFor] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -274,12 +277,21 @@ export function NotesWorkspace({
 
   function applyMove(move: () => Promise<NoteView | null>) {
     startTransition(async () => {
-      try {
+      // Held so that leaving the page can wait for it. A move is a durable
+      // Operation; losing it to a navigation started a moment later is losing
+      // work the person believes they did.
+      const work = (async () => {
         const moved = await move();
         if (moved) versionRef.current = moved.version;
+      })();
+      pendingWorkRef.current = work;
+      try {
+        await work;
         router.refresh();
       } catch (caught) {
         setError(errorMessage(caught));
+      } finally {
+        if (pendingWorkRef.current === work) pendingWorkRef.current = null;
       }
     });
   }
@@ -732,7 +744,23 @@ export function NotesWorkspace({
             </button>
           </div>
         </div>
-        <form className="notes-search">
+        {/* Searching submits this form, which is a document load, and a document
+            load aborts every request still in flight. A move started a moment
+            earlier -- 'Make child of the note above', say -- then never reached
+            the server: the Note stayed where it was and nothing said so. Under
+            load that swallowed the move about half the time, and a person
+            filing a Note and immediately searching would see the same silent
+            no-op. Durable work finishes before the page is torn down. */}
+        <form
+          className="notes-search"
+          onSubmit={(event) => {
+            const pending = pendingWorkRef.current;
+            if (!pending) return;
+            event.preventDefault();
+            const form = event.currentTarget;
+            void pending.finally(() => form.requestSubmit());
+          }}
+        >
           <Search size={15} aria-hidden="true" />
           <input
             name="q"
