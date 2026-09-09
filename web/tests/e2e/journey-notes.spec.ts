@@ -19,6 +19,21 @@ function treeNote(page: import('@playwright/test').Page, title: string) {
   });
 }
 
+// A search result or favourite carries where it is filed, so its accessible
+// name is the title followed by the path. That is the point of the row: the
+// name alone does not identify a Note, because titles are not unique.
+function locatedNote(
+  page: import('@playwright/test').Page,
+  listName: string,
+  title: string,
+  ancestors: string[] = []
+) {
+  return page.getByRole('navigation', { name: listName }).getByRole('button', {
+    name: [title, ...(ancestors.length ? [ancestors.join(' / ')] : [])].join(' '),
+    exact: true,
+  });
+}
+
 // Open a Note and wait until the editor is actually showing it. Clicking a tree
 // item starts a navigation, so an assertion made straight afterwards can still
 // be reading the Note that was open before.
@@ -757,12 +772,12 @@ test('search finds a nested Note whose ancestors do not match', async ({ workspa
   await search.fill('verification');
   await search.press('Enter');
 
-  await expect(treeNote(page, 'Buried finding')).toBeVisible();
+  await expect(locatedNote(page, 'Notes', 'Buried finding', ['Quarterly container'])).toBeVisible();
   await expect(treeNote(page, 'Quarterly container')).toHaveCount(0);
 
   // Opening a result keeps the search in place, so a list of results stays a
   // list rather than collapsing back to the whole tree on the first click.
-  await treeNote(page, 'Buried finding').click();
+  await locatedNote(page, 'Notes', 'Buried finding', ['Quarterly container']).click();
   await expect(page.getByRole('textbox', { name: 'Note title' })).toHaveValue('Buried finding');
   await expect(search).toHaveValue('verification');
 
@@ -771,4 +786,88 @@ test('search finds a nested Note whose ancestors do not match', async ({ workspa
   await search.fill('nothingmatchesthisquery');
   await search.press('Enter');
   await expect(page.getByText('No Notes match this search.')).toBeVisible();
+});
+
+// An explicit acceptance criterion of #123: a result has to identify the Note it
+// will open. Titles repeat -- "Notes" under two different projects is the normal
+// case, not a contrived one -- and results are drawn flat, away from the
+// hierarchy that would otherwise tell them apart. Two identical buttons make
+// choosing the right page guesswork, and the cost of guessing wrong is writing
+// into the wrong page.
+test('two Notes with the same title are told apart by where they are filed', async ({
+  workspace,
+}) => {
+  const { page } = workspace;
+
+  await goTo(page, '/notes');
+  await createRootNote(page, 'Orion', 'The first project.');
+  await createRootNote(page, 'Notes', 'Retrieval rewrite decisions.');
+  await openNote(page, 'Notes');
+  await page.getByRole('button', { name: 'Make child of the note above' }).click();
+  await expect(treeNote(page, 'Notes')).toBeVisible();
+
+  await createRootNote(page, 'Vega', 'The second project.');
+  await createRootNote(page, 'Notes', 'Retrieval rewrite decisions.');
+  await openNote(page, 'Notes');
+  await page.getByRole('button', { name: 'Make child of the note above' }).click();
+
+  const search = page.getByRole('textbox', { name: 'Search notes' });
+  await search.fill('retrieval');
+  await search.press('Enter');
+
+  // Both matches are listed, and each one names the project it belongs to.
+  await expect(locatedNote(page, 'Notes', 'Notes', ['Orion'])).toBeVisible();
+  await expect(locatedNote(page, 'Notes', 'Notes', ['Vega'])).toBeVisible();
+
+  // Choosing by path opens that Note and not its namesake, which is the whole
+  // reason the path is shown.
+  await locatedNote(page, 'Notes', 'Notes', ['Vega']).click();
+  await expect(page.getByRole('textbox', { name: 'Note title' })).toHaveValue('Notes');
+  await expect(page.getByRole('navigation', { name: 'Note location' })).toContainText('Vega');
+});
+
+// Favourites are the pages someone returns to daily. Held in the page they
+// would be lost on the next reload and absent on every other device, so this
+// test is about the mark surviving the round trip, not about the star lighting
+// up.
+test('a favourite Note stays reachable without the tree and survives reload', async ({
+  workspace,
+}) => {
+  const { page } = workspace;
+
+  await goTo(page, '/notes');
+  await createRootNote(page, 'Standing agenda', 'The page opened every morning.');
+  await createRootNote(page, 'Buried context', 'Filed away and rarely opened.');
+
+  // Nothing is a favourite until someone says so, so the list is not offered.
+  await expect(page.getByRole('navigation', { name: 'Favorite notes' })).toHaveCount(0);
+
+  await openNote(page, 'Standing agenda');
+  await page.getByRole('button', { name: 'Add to favorites' }).click();
+
+  const favorites = page.getByRole('navigation', { name: 'Favorite notes' });
+  await expect(favorites.getByRole('button', { name: 'Standing agenda' })).toBeVisible();
+  await expect(favorites.getByRole('button', { name: 'Buried context' })).toHaveCount(0);
+
+  // The mark is a persisted Operation, not a client-side flag.
+  await goTo(page, '/');
+  await goTo(page, '/notes');
+  await expect(favorites.getByRole('button', { name: 'Standing agenda' })).toBeVisible();
+
+  // A favourite is reachable while a search has narrowed the tree to something
+  // else entirely -- which is exactly when someone needs a way back.
+  const search = page.getByRole('textbox', { name: 'Search notes' });
+  await search.fill('buried');
+  await search.press('Enter');
+  await expect(treeNote(page, 'Standing agenda')).toHaveCount(0);
+  await expect(favorites.getByRole('button', { name: 'Standing agenda' })).toBeVisible();
+  await favorites.getByRole('button', { name: 'Standing agenda' }).click();
+  await expect(page.getByRole('textbox', { name: 'Note title' })).toHaveValue('Standing agenda');
+
+  // And taking a favourite back has to stick just as firmly as marking it.
+  await page.getByRole('button', { name: 'Remove from favorites' }).click();
+  await expect(page.getByRole('navigation', { name: 'Favorite notes' })).toHaveCount(0);
+  await goTo(page, '/');
+  await goTo(page, '/notes');
+  await expect(page.getByRole('navigation', { name: 'Favorite notes' })).toHaveCount(0);
 });

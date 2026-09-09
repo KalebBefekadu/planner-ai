@@ -1,6 +1,7 @@
 'use client';
 
 import {
+  Fragment,
   type KeyboardEvent,
   useCallback,
   useEffect,
@@ -37,6 +38,7 @@ import {
   RotateCcw,
   Search,
   ShieldOff,
+  Star,
   Table2,
   Tags,
   Target,
@@ -58,6 +60,7 @@ import {
   moveNoteToNewParent,
   moveNoteWithinParent,
   restoreNoteRevision,
+  setNoteFavorite,
   setNoteTags,
   setNoteAiExcluded,
   unlinkNote,
@@ -68,6 +71,7 @@ import {
   type NoteView,
 } from '@/app/notes/actions';
 import { nextParentMove, nextSiblingMove, parentCandidateIds } from '@/lib/notes/sibling-order';
+import { noteLocationLabel, notePath, orderFavorites } from '@/lib/notes/note-paths';
 import { RichMarkdownEditor } from '@/components/rich-markdown-editor';
 import { useVoiceTranscription } from '@/lib/use-voice-transcription';
 import { extractPlannerMarkdownHeadings } from '@/lib/markdown/contract';
@@ -151,6 +155,7 @@ function restorableUntil(purgeAfter: string | null) {
 
 export function NotesWorkspace({
   notes,
+  favorites,
   selectedId,
   query,
   knowledge,
@@ -159,6 +164,7 @@ export function NotesWorkspace({
   onRequestImport,
 }: {
   notes: NoteView[];
+  favorites: NoteView[];
   selectedId: string | null;
   query: string;
   knowledge: NoteKnowledgeContext | null;
@@ -216,6 +222,19 @@ export function NotesWorkspace({
     dismissedDraftFor !== activeNoteId
       ? storedDraft
       : null;
+  // Favourites arrive already ordered by the server, but the ordering rule is
+  // shared with the tests and applied here too so a stale or reordered payload
+  // cannot quietly change what a person sees.
+  const favoriteNotes = useMemo(() => orderFavorites(favorites), [favorites]);
+  const isFavorite = favoriteNotes.some((note) => note.id === selectedId);
+  // The breadcrumb is the whole ancestor chain, not just the immediate parent.
+  // A Note three levels down used to report the same one-step location as a
+  // Note one level down, which is no location at all in a deep tree, and the
+  // trail was plain text so there was nothing to click on the way back up.
+  const breadcrumbTrail = useMemo(
+    () => (selectedId ? notePath(notes, selectedId).slice(0, -1) : []),
+    [notes, selectedId]
+  );
   const outline = useMemo(() => extractPlannerMarkdownHeadings(body), [body]);
   const richEditable = useMemo(() => plannerMarkdownSupportsRichEditing(body), [body]);
   const activeEditorMode = editorMode === 'rich' && !richEditable ? 'source' : editorMode;
@@ -281,26 +300,59 @@ export function NotesWorkspace({
   // dropped -- the deeper a Note was filed, the less findable it became, which
   // is the opposite of what search is for. While a query is active the sidebar
   // shows the matches themselves, flat and in tree order.
+  //
+  // Each result carries where it is filed. Two Notes both called "Notes" were
+  // two identical buttons: the list gave a person no way to tell which one they
+  // were about to open, and opening the wrong one is how notes get written into
+  // the wrong page. Titles are not unique and were never meant to be, so the
+  // path is what makes a result identifiable. The ancestors that supply it are
+  // fetched alongside the matches; they are not results themselves, and listing
+  // them would answer a question nobody asked.
   function renderSearchResults() {
-    const results = [...notes].sort((first, second) => first.sortKey - second.sortKey);
+    const results = notes
+      .filter((note) => note.matchesQuery !== false)
+      .sort((first, second) => first.sortKey - second.sortKey);
     if (!results.length) return null;
     return (
       <ul className="note-tree-level">
         {results.map((note) => (
-          <li key={note.id}>{renderNoteButton(note)}</li>
+          <li key={note.id}>{renderNoteButton(note, noteLocationLabel(notes, note.id))}</li>
         ))}
       </ul>
     );
   }
 
-  function renderNoteButton(note: NoteView) {
+  function toggleFavorite() {
+    if (!selected) return;
+    const favorite = !isFavorite;
+    startTransition(async () => {
+      try {
+        const saved = await setNoteFavorite(selected.id, favorite, versionRef.current);
+        versionRef.current = saved.version;
+        router.refresh();
+      } catch (caught) {
+        setError(errorMessage(caught));
+      }
+    });
+  }
+
+  // A flat result list drops the one thing that told two identically titled
+  // pages apart, so whatever ancestor chain is in hand is shown underneath the
+  // title: "Notes" under Acme and "Notes" under Globex are distinguishable
+  // before the click rather than after it.
+  function renderNoteButton(note: NoteView, locationLabel?: string) {
     return (
       <button
         className={`note-tree-item${note.id === selected?.id ? ' note-tree-item-active' : ''}`}
         type="button"
         onClick={() => openNoteFromTree(note.id)}
       >
-        <span>{note.title}</span>
+        <span>
+          {note.title}
+          {locationLabel ? (
+            <small className="note-tree-item-location">{locationLabel}</small>
+          ) : null}
+        </span>
         {note.aiExcluded ? <ShieldOff size={13} aria-label="Excluded from AI" /> : null}
       </button>
     );
@@ -678,6 +730,16 @@ export function NotesWorkspace({
             aria-label="Search notes"
           />
         </form>
+        {favoriteNotes.length ? (
+          <nav className="note-favorites" aria-label="Favorite notes">
+            <h2 className="note-favorites-heading">Favorites</h2>
+            <ul className="note-tree-level">
+              {favoriteNotes.map((note) => (
+                <li key={note.id}>{renderNoteButton(note)}</li>
+              ))}
+            </ul>
+          </nav>
+        ) : null}
         <nav className="note-tree" aria-label="Notes">
           {notes.length ? (
             query ? (
@@ -708,12 +770,18 @@ export function NotesWorkspace({
                   <span>Workspace</span>
                   <ChevronRight size={13} aria-hidden="true" />
                   <span>Notes</span>
-                  {selected.parentNoteId ? (
-                    <>
+                  {breadcrumbTrail.map((ancestor) => (
+                    <Fragment key={ancestor.id}>
                       <ChevronRight size={13} aria-hidden="true" />
-                      <span>{noteName(selected.parentNoteId)}</span>
-                    </>
-                  ) : null}
+                      <button
+                        className="note-breadcrumb-link"
+                        type="button"
+                        onClick={() => openNoteFromTree(ancestor.id)}
+                      >
+                        {ancestor.title}
+                      </button>
+                    </Fragment>
+                  ))}
                 </nav>
                 <input
                   className="note-title-input"
@@ -745,6 +813,17 @@ export function NotesWorkspace({
                         ? 'Unsaved changes'
                         : 'Saved'}
                 </span>
+                <button
+                  className="icon-button"
+                  type="button"
+                  title={isFavorite ? 'Remove from favorites' : 'Add to favorites'}
+                  aria-label={isFavorite ? 'Remove from favorites' : 'Add to favorites'}
+                  aria-pressed={isFavorite}
+                  disabled={isPending}
+                  onClick={toggleFavorite}
+                >
+                  <Star size={16} fill={isFavorite ? 'currentColor' : 'none'} />
+                </button>
                 <label className="ai-exclusion-toggle">
                   <input
                     type="checkbox"

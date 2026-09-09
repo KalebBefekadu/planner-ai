@@ -13,8 +13,19 @@ export type NoteView = {
   bodyMarkdown: string;
   sortKey: number;
   aiExcluded: boolean;
+  // The instant this Note was marked a favourite, or null when it is not one.
+  // The instant rather than a flag, because the favourites list has an order a
+  // person builds up, and Undo restores the exact prior instant rather than
+  // guessing one.
+  favoritedAt: string | null;
   version: number;
   updatedAt: string;
+  /**
+   * Whether this Note is a search result, as opposed to an ancestor carried
+   * alongside one so the result can say where it is filed. Undefined when no
+   * search is running, because then every Note is simply itself.
+   */
+  matchesQuery?: boolean;
 };
 
 export type NoteKnowledgeContext = {
@@ -85,6 +96,7 @@ function mapNote(note: Record<string, unknown>): NoteView {
     bodyMarkdown: note.body_markdown as string,
     sortKey: Number(note.sort_key),
     aiExcluded: Boolean(note.ai_excluded),
+    favoritedAt: (note.favorited_at as string | null) ?? null,
     version: Number(note.version),
     updatedAt: note.updated_at as string,
   };
@@ -108,6 +120,64 @@ export async function getNotes(query?: string) {
   }
   const { data, error } = await request;
   if (error) throw new Error('Unable to load Notes.');
+  const matches = (data ?? []).map((note) => mapNote(note as Record<string, unknown>));
+  if (!normalizedQuery) return matches;
+
+  // A result is identified by where it is filed, so the Notes that say where
+  // that is have to come back with it. Without them a match filed two levels
+  // down has no path to show and, once opened, no ancestors to name -- which is
+  // precisely the case a search is for.
+  //
+  // The chain is walked a level at a time rather than a Note at a time, so a
+  // deep vault costs one round trip per level of depth rather than one per
+  // ancestor.
+  const byId = new Map(matches.map((note) => [note.id, note]));
+  let wanted = [
+    ...new Set(
+      matches
+        .map((note) => note.parentNoteId)
+        .filter((parentId): parentId is string => parentId !== null && !byId.has(parentId))
+    ),
+  ];
+  while (wanted.length) {
+    const { data: parents, error: parentError } = await supabase
+      .from('notes')
+      .select('*')
+      .eq('workspace_id', workspaceId)
+      .in('id', wanted);
+    if (parentError) throw new Error('Unable to load Notes.');
+    if (!parents?.length) break;
+    const next = new Set<string>();
+    for (const row of parents) {
+      const mapped = mapNote(row as Record<string, unknown>);
+      byId.set(mapped.id, mapped);
+      if (mapped.parentNoteId && !byId.has(mapped.parentNoteId)) next.add(mapped.parentNoteId);
+    }
+    wanted = [...next];
+  }
+
+  // Ancestors travel with the results but are not results themselves; marking
+  // them keeps the decision about what to render with the caller.
+  const matchIds = new Set(matches.map((match) => match.id));
+  return [...byId.values()].map((note) => ({ ...note, matchesQuery: matchIds.has(note.id) }));
+}
+
+// Favourites are read on their own rather than filtered out of the tree query.
+// The sidebar tree narrows to matches while a search is running, and pulling
+// favourites from that same list made a person's pinned pages disappear the
+// moment they typed -- exactly when a shortcut out of the results is most
+// useful. This read is bounded by the number of favourites, not the vault.
+export async function getFavoriteNotes(): Promise<NoteView[]> {
+  const { supabase, workspaceId } = await notesClient();
+  const { data, error } = await supabase
+    .from('notes')
+    .select('*')
+    .eq('workspace_id', workspaceId)
+    .is('archived_at', null)
+    .is('trashed_at', null)
+    .not('favorited_at', 'is', null)
+    .order('favorited_at');
+  if (error) throw new Error('Unable to load your favourite Notes.');
   return (data ?? []).map((note) => mapNote(note as Record<string, unknown>));
 }
 
@@ -309,6 +379,22 @@ export async function setNoteAiExcluded(id: string, aiExcluded: boolean, expecte
       aiExcluded,
       expectedVersion,
     },
+    { idempotencyKey: randomUUID(), surface: 'ui' }
+  );
+  revalidatePath('/notes');
+  return mapNote(note);
+}
+
+// Marking a favourite goes through the same versioned Operation as every other
+// change to a Note, so it survives a version conflict, is recorded in Activity,
+// and can be undone. Holding it in the page instead would have lost it on the
+// next reload and on every other device.
+export async function setNoteFavorite(id: string, favorite: boolean, expectedVersion: number) {
+  const { supabase } = await notesClient();
+  const note = await executeOperation(
+    supabase,
+    'note.favorite.v1',
+    { id, favorite, expectedVersion },
     { idempotencyKey: randomUUID(), surface: 'ui' }
   );
   revalidatePath('/notes');

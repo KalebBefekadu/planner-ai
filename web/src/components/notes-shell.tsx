@@ -23,6 +23,7 @@ import type { InspectorView } from '@/components/notes-workspace';
  */
 export function NotesShell({
   notes,
+  favorites,
   selectedId,
   activeKey,
   query,
@@ -30,6 +31,7 @@ export function NotesShell({
   initialImportOpen = false,
 }: {
   notes: NoteView[];
+  favorites: NoteView[];
   selectedId: string | null;
   activeKey: string;
   query: string;
@@ -52,6 +54,7 @@ export function NotesShell({
       <NotesWorkspace
         key={activeKey}
         notes={notes}
+        favorites={favorites}
         selectedId={selectedId}
         query={query}
         knowledge={knowledge}

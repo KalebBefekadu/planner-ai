@@ -167,6 +167,7 @@ const noteOutput = z
     body_markdown: z.string(),
     sort_key: z.union([z.number(), z.string()]),
     ai_excluded: z.boolean(),
+    favorited_at: timestamp.nullable(),
     version,
     created_at: timestamp,
     updated_at: timestamp,
@@ -703,6 +704,14 @@ export const operationDefinitions = {
     input: z.object({ id, aiExcluded: z.boolean(), expectedVersion: version }).strict(),
     output: noteOutput,
   },
+  'note.favorite.v1': {
+    summary: 'Mark or unmark one Note as a favourite.',
+    risk: 'low',
+    exposure: ['ui', 'chat', 'mcp'],
+    reversible: true,
+    input: z.object({ id, favorite: z.boolean(), expectedVersion: version }).strict(),
+    output: noteOutput,
+  },
   'note.import-preview.v1': {
     summary:
       'Stage a bounded Notes import and report hierarchy, duplicates, and unsupported items.',
@@ -1068,6 +1077,7 @@ export const undoableOperationIds = [
   'note.move.v1',
   'note.archive.v1',
   'note.ai-exclusion.v1',
+  'note.favorite.v1',
   'note.import-preview.v1',
   'note.import-commit.v1',
   'note.tags.set.v1',

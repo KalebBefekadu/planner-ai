@@ -3,6 +3,10 @@ export type WorkspaceSearchResult = {
   kind: 'page' | 'goal' | 'action' | 'capture';
   title: string;
   excerpt: string;
+  // Where the result lives, when that is what tells it apart from another
+  // result with the same title. Empty for kinds that have no location, and for
+  // pages that sit at the root.
+  context: string;
   href: string;
   updatedAt: string;
 };
@@ -11,6 +15,7 @@ type SearchItem = {
   id: string;
   title: string;
   body?: string | null;
+  context?: string;
   updatedAt: string;
 };
 
@@ -54,6 +59,7 @@ export function buildWorkspaceSearchResults(
         kind: 'page',
         title: item.title,
         excerpt: excerpt(item.body ?? item.title, normalizedQuery),
+        context: item.context ?? '',
         href: `/notes?note=${encodeURIComponent(item.id)}`,
         updatedAt: item.updatedAt,
       })
@@ -66,6 +72,7 @@ export function buildWorkspaceSearchResults(
         kind: 'goal',
         title: item.title,
         excerpt: excerpt(item.body ?? 'Planner Goal', normalizedQuery),
+        context: '',
         href: '/planner',
         updatedAt: item.updatedAt,
       })
@@ -78,6 +85,7 @@ export function buildWorkspaceSearchResults(
         kind: 'action',
         title: item.title,
         excerpt: excerpt(item.body ?? 'Planner Action', normalizedQuery),
+        context: '',
         href: '/planner',
         updatedAt: item.updatedAt,
       })
@@ -90,6 +98,7 @@ export function buildWorkspaceSearchResults(
         kind: 'capture',
         title: excerpt(item.rawText, normalizedQuery),
         excerpt: 'Capture inbox',
+        context: '',
         href: '/inbox',
         updatedAt: item.createdAt,
       })

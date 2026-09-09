@@ -2241,6 +2241,56 @@ button:disabled {
   color: var(--brand-strong);
   font-weight: 700;
 }
+/* A search result carries its location under its title so two pages with the
+   same name can be told apart before they are opened. The title line keeps the
+   single-line clip; the location gets its own line beneath it. */
+.note-tree-item-location {
+  display: block;
+  overflow: hidden;
+  color: var(--muted);
+  font-size: var(--fs-label);
+  font-weight: 400;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.note-tree-item-active .note-tree-item-location {
+  color: inherit;
+}
+.note-favorites {
+  display: grid;
+  gap: 4px;
+  padding-bottom: 10px;
+  margin-bottom: 4px;
+  border-bottom: 1px solid var(--line);
+}
+.note-favorites-heading {
+  margin: 0;
+  padding-inline: 10px;
+  color: var(--muted);
+  font-size: var(--fs-label);
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+/* Each step of the breadcrumb is a way back up the tree, so it is a real
+   control rather than styled text. It keeps the surrounding trail's colour
+   until it is hovered or focused. */
+.note-breadcrumb-link {
+  overflow: hidden;
+  max-width: 18ch;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.note-breadcrumb-link:hover,
+.note-breadcrumb-link:focus-visible {
+  color: var(--ink);
+  text-decoration: underline;
+}
 .note-editor-pane {
   display: grid;
   min-width: 0;
@@ -5552,6 +5602,9 @@ button:disabled {
 .workspace-search-result-kind {
   color: var(--muted);
   font-size: var(--fs-label);
+}
+.workspace-search-result-context {
+  font-weight: 700;
 }
 .workspace-search-result-kind {
   text-transform: capitalize;
