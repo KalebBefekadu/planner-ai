@@ -401,6 +401,7 @@ export function AssistantDock({ className }: { className?: string }) {
                     type="button"
                     disabled={pending}
                     onClick={dismissProposal}
+                    aria-busy={pending}
                   >
                     <X size={15} />
                     Dismiss
@@ -410,9 +411,10 @@ export function AssistantDock({ className }: { className?: string }) {
                     type="button"
                     disabled={pending}
                     onClick={approveProposal}
+                    aria-busy={pending}
                   >
                     <Check size={15} />
-                    Approve
+                    {pending ? 'Approving…' : 'Approve'}
                   </button>
                 </div>
               </section>
@@ -425,8 +427,9 @@ export function AssistantDock({ className }: { className?: string }) {
                   type="button"
                   onClick={undoLastOperation}
                   disabled={pending}
+                  aria-busy={pending}
                 >
-                  <RotateCcw size={14} /> Undo
+                  <RotateCcw size={14} /> {pending ? 'Undoing…' : 'Undo'}
                 </button>
               </section>
             ) : null}
