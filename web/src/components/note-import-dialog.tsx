@@ -99,6 +99,18 @@ export function NoteImportDialog({
     }
   }
 
+  // The per-item report is the reconciliation surface: it is how the owner
+  // decides whether a migration lost anything. Re-reading the job after a
+  // batch is what makes each row describe the committed record rather than
+  // the preview that was taken before any Note existed.
+  async function reloadReport(jobId: string) {
+    const response = await fetch(`/api/note-import?jobId=${encodeURIComponent(jobId)}`, {
+      cache: 'no-store',
+    });
+    if (!response.ok) return null;
+    return (await response.json()) as ImportPreview | null;
+  }
+
   async function commit() {
     if (!preview || preview.job.status === 'completed') return;
     setBusy(true);
@@ -111,7 +123,16 @@ export function NoteImportDialog({
           throw new Error('Import could not make progress. No Notes were duplicated.');
         }
         current = { ...current, ...next };
-        setPreview((value) => (value ? { ...value, job: current } : value));
+        const committed = await reloadReport(current.id).catch(() => null);
+        if (committed) {
+          current = committed.job;
+          setPreview(committed);
+        } else {
+          // The commit itself succeeded; only the re-read failed. Keep the
+          // counts truthful rather than discarding them.
+          const job = current;
+          setPreview((value) => (value ? { ...value, job } : value));
+        }
       }
       if (current.status !== 'completed') throw new Error('Import paused before completion.');
       onCompleted?.();

@@ -87,11 +87,19 @@ async function readJob(
   };
 }
 
-export async function GET() {
+export async function GET(request: Request) {
   const context = await importContext();
   if ('error' in context) return context.error;
+  // A committed job is no longer in 'preview' or 'committing', so the report
+  // can only be re-read by naming the job. readJob stays scoped to the
+  // caller's workspace, so an unknown or foreign id reads as no job at all.
+  const jobIdParam = new URL(request.url).searchParams.get('jobId');
+  const requestedJobId =
+    jobIdParam && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(jobIdParam)
+      ? jobIdParam
+      : undefined;
   try {
-    return NextResponse.json(await readJob(context), {
+    return NextResponse.json(await readJob(context, requestedJobId), {
       headers: { 'Cache-Control': 'private, no-store' },
     });
   } catch {
