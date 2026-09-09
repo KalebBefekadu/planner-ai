@@ -321,6 +321,14 @@ export function NoteImportDialog({
   // and the way back from that is undo, not a decision not to start.
   const cancelable = Boolean(job) && resumable && job!.committedCount === 0;
   const historyEntries = history?.entries ?? [];
+  // An item that will be created but still carries a reason is one whose
+  // meaning changed on the way in: a CSV row turned into a Note, or a page
+  // whose internal links could not all be carried across. The summary counts
+  // what will be created, duplicated and skipped, but says nothing about what
+  // will be altered in the process. Naming that count before the owner commits
+  // is what makes the preview a decision rather than a formality.
+  const changedCount =
+    preview?.items.filter((item) => item.disposition === 'create' && item.reason).length ?? 0;
 
   return (
     <div className="dialog-backdrop" role="presentation" onMouseDown={onClose}>
@@ -420,6 +428,14 @@ export function NoteImportDialog({
                 <span>Unsupported</span>
               </div>
             </div>
+            {changedCount ? (
+              <p className="status-message" role="status">
+                {changedCount === 1
+                  ? '1 of these items changes on import.'
+                  : `${changedCount} of these items change on import.`}{' '}
+                Each one says what changed below, and nothing is altered without a reason.
+              </p>
+            ) : null}
             <div className="note-import-list" aria-label="Import preview">
               {preview.items.map((item) => (
                 <div key={item.id} className="note-import-row">

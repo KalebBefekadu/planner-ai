@@ -85,10 +85,40 @@ function decodeText(bytes: Buffer) {
   return text.replace(/^\uFEFF/, '');
 }
 
+/**
+ * Notion appends the page's own 32-character hexadecimal ID to every exported
+ * file and folder name, so a page the owner called "Weekly Review" arrives as
+ * "Weekly Review 5f2c...c81a". That ID is Notion's internal bookkeeping, not
+ * part of the title anyone wrote, and carrying it into the workspace makes an
+ * imported hierarchy read as a dump of another product's internals.
+ *
+ * Stripping is deliberately narrow, because a title is the owner's text and
+ * damaging one is worse than leaving a suffix on:
+ * - exactly 32 hexadecimal characters, no more and no fewer, so a shorter hex
+ *   run (a commit prefix, say) is left alone and a longer one is not truncated
+ *   to 32;
+ * - preceded by a single space, which is the separator Notion uses; a title
+ *   that runs the hex straight on to a word is not a Notion export name;
+ * - only at the very end of the name;
+ * - and never when it would leave nothing behind, so a page whose whole
+ *   exported name is the ID keeps a title rather than becoming blank.
+ *
+ * It is applied only to titles derived from a path. A title taken from the
+ * document's own `# heading` is text the owner wrote inside the page and is
+ * never rewritten.
+ */
+const NOTION_ID_SUFFIX = / [0-9a-f]{32}$/i;
+
+export function stripNotionIdSuffix(title: string) {
+  const stripped = title.replace(NOTION_ID_SUFFIX, '').trim();
+  return stripped || title;
+}
+
 function titleFrom(pathname: string, body: string) {
   const heading = body.match(/^#\s+(.+)$/m)?.[1]?.trim();
-  const fallback = path.posix.basename(pathname, path.posix.extname(pathname));
-  return (heading || fallback || 'Imported Note').slice(0, 300);
+  if (heading) return heading.slice(0, 300);
+  const fallback = stripNotionIdSuffix(path.posix.basename(pathname, path.posix.extname(pathname)));
+  return (fallback || 'Imported Note').slice(0, 300);
 }
 
 function markdownCell(value: unknown) {
@@ -163,7 +193,7 @@ function addFolders(files: ImportSourceFile[], candidates: NoteImportCandidate[]
       : null;
     candidates.push({
       sourcePath: folder,
-      title: path.posix.basename(withoutSlash).slice(0, 300),
+      title: stripNotionIdSuffix(path.posix.basename(withoutSlash)).slice(0, 300),
       bodyMarkdown: '',
       parentSourcePath: parent,
       unsupportedReason: null,
