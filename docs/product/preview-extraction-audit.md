@@ -107,8 +107,9 @@ rename is optional and, if done, must move `NOTE_COVERS` in the same commit.
 | Canvas view, "Add canvas item" | `NOT PORTED — FUTURE` | `page.tsx:1957 CanvasView` → FUT-02 / [#142](https://github.com/KalebBefekadu/planner-ai/issues/142) |
 | Share dialog | `NOT PORTED — FUTURE` | `states.tsx:413 ShareState` → FUT-04 / [#144](https://github.com/KalebBefekadu/planner-ai/issues/144) |
 
-None of the four FUT tickets yet carries the visual reference for the screen it inherits. That is
-the single hardest precondition on deletion.
+Increment 1 closed this. Desktop and mobile references plus written specifications for all four
+screens now live in [`preview-reference/`](preview-reference/README.md), and FUT-01, FUT-02 and
+FUT-04 point at them.
 
 ### 2.4 Planner
 
