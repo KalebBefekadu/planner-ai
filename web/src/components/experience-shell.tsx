@@ -3,6 +3,8 @@
 import { useEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react';
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
+
+import { ShellQuickCapture } from '@/components/shell-quick-capture';
 import {
   Bell,
   CalendarDays,
@@ -10,13 +12,11 @@ import {
   Cloud,
   FileText,
   Home,
-  Inbox,
   Menu,
   PanelLeftClose,
   PanelLeftOpen,
   Search,
   Settings2,
-  Sparkles,
   X,
 } from 'lucide-react';
 import AuthButton from '@/components/auth-button';
@@ -187,24 +187,13 @@ export function ExperienceShell({
         })}
       </nav>
 
-      {navigation.area === 'workspace' ? (
-        <Link
-          className="experience-quick-action"
-          href="/inbox"
-          onClick={() => setMobileMenuOpen(false)}
-        >
-          <Inbox size={15} aria-hidden="true" />
-          Capture a thought
-        </Link>
-      ) : navigation.area === 'planner' ? (
-        <Link
-          className="experience-quick-action"
-          href="/inbox"
-          onClick={() => setMobileMenuOpen(false)}
-        >
-          <Sparkles size={15} aria-hidden="true" />
-          Capture an action
-        </Link>
+      {/* A composer rather than a link. The thought arrives while someone is
+          in the middle of something else, and navigating to /inbox to write it
+          down is the interruption Capture exists to avoid. */}
+      {navigation.area === 'workspace' || navigation.area === 'planner' ? (
+        <ShellQuickCapture
+          label={navigation.area === 'workspace' ? 'Capture a thought' : 'Capture an action'}
+        />
       ) : null}
 
       {/* Named "menu" rather than "sections": on /settings the in-page tab bar
