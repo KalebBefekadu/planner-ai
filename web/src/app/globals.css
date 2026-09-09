@@ -5744,9 +5744,23 @@ button:disabled {
     justify-content: center;
     padding: 0;
   }
-  .experience-main {
+  /* The bottom navigation is fixed, so the last thing on a page has to be
+     allowed to sit above it. This is written as its own reservation, derived
+     from the bar rather than guessed at, and scoped through .experience-shell
+     on purpose: .experience-main and .app-main are both single-class rules and
+     the same element carries both, so a plain .experience-main rule loses to
+     whichever of them the stylesheet happens to declare last. It did lose --
+     .app-main's `padding: 32px 18px` reset the reservation to nothing, and the
+     control that submits a monthly or quarterly review ended up underneath the
+     bar, visible and untappable. */
+  .experience-shell .experience-main {
     min-height: calc(100vh - 96px);
-    padding: 28px 18px 92px;
+    padding: 28px 18px var(--mobile-nav-clearance);
+  }
+  .experience-shell {
+    /* The bar's own min-height, its safe-area padding, and a gap so the last
+       control is not flush against it. */
+    --mobile-nav-clearance: calc(58px + max(5px, env(safe-area-inset-bottom)) + 24px);
   }
   .experience-mobile-bottom-nav {
     position: fixed;
