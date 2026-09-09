@@ -13,6 +13,10 @@ export type NoteView = {
   bodyMarkdown: string;
   sortKey: number;
   aiExcluded: boolean;
+  // When the Note was favourited, or null if it is not. The timestamp is the
+  // ordering of the favourites list, so it is carried rather than reduced to a
+  // boolean on the way to the client.
+  favoritedAt: string | null;
   version: number;
   updatedAt: string;
 };
@@ -85,6 +89,7 @@ function mapNote(note: Record<string, unknown>): NoteView {
     bodyMarkdown: note.body_markdown as string,
     sortKey: Number(note.sort_key),
     aiExcluded: Boolean(note.ai_excluded),
+    favoritedAt: (note.favorited_at as string | null) ?? null,
     version: Number(note.version),
     updatedAt: note.updated_at as string,
   };
@@ -108,6 +113,25 @@ export async function getNotes(query?: string) {
   }
   const { data, error } = await request;
   if (error) throw new Error('Unable to load Notes.');
+  return (data ?? []).map((note) => mapNote(note as Record<string, unknown>));
+}
+
+// Favourites are read on their own rather than filtered out of the tree query.
+// The sidebar tree narrows to matches while a search is running, and pulling
+// favourites from that same list made a person's pinned pages disappear the
+// moment they typed -- exactly when a shortcut out of the results is most
+// useful. This read is bounded by the number of favourites, not the vault.
+export async function getFavoriteNotes() {
+  const { supabase, workspaceId } = await notesClient();
+  const { data, error } = await supabase
+    .from('notes')
+    .select('*')
+    .eq('workspace_id', workspaceId)
+    .not('favorited_at', 'is', null)
+    .is('archived_at', null)
+    .is('trashed_at', null)
+    .order('favorited_at');
+  if (error) throw new Error('Unable to load your favourite Notes.');
   return (data ?? []).map((note) => mapNote(note as Record<string, unknown>));
 }
 
@@ -309,6 +333,22 @@ export async function setNoteAiExcluded(id: string, aiExcluded: boolean, expecte
       aiExcluded,
       expectedVersion,
     },
+    { idempotencyKey: randomUUID(), surface: 'ui' }
+  );
+  revalidatePath('/notes');
+  return mapNote(note);
+}
+
+// A favourite is durable, owner-scoped state, so it goes through the same
+// versioned Operation path as every other Note change rather than a direct
+// table write: the expected version keeps a star from landing on a Note that
+// has moved on underneath the person pressing it.
+export async function setNoteFavorite(id: string, favorited: boolean, expectedVersion: number) {
+  const { supabase } = await notesClient();
+  const note = await executeOperation(
+    supabase,
+    'note.favorite.v1',
+    { id, favorited, expectedVersion },
     { idempotencyKey: randomUUID(), surface: 'ui' }
   );
   revalidatePath('/notes');
