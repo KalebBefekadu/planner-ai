@@ -156,6 +156,7 @@ test('a Note link becomes a navigable backlink from the related Note', async ({ 
   await createRootNote(page, targetTitle, 'Evidence and open questions.');
 
   await page.getByRole('button', { name: sourceTitle, exact: true }).click();
+  await page.getByRole('button', { name: 'Links', exact: true }).click();
   const noteSelector = page.getByRole('combobox', { name: 'Note to link' });
   await noteSelector.selectOption({ label: targetTitle });
   await page.getByRole('button', { name: 'Add link' }).click();
@@ -163,11 +164,17 @@ test('a Note link becomes a navigable backlink from the related Note', async ({ 
   await expect(page.getByRole('button', { name: `related ${targetTitle}` })).toBeVisible();
   await page.getByRole('button', { name: `related ${targetTitle}` }).click();
 
+  // Following the link must land on the related Note with its connections still
+  // on screen. The workspace is remounted per Note, so an inspector pane held
+  // inside it reset to Properties on arrival and hid the backlink that was the
+  // whole reason for the journey -- the reader had to rediscover the tab at
+  // every hop.
   await expect(page.getByRole('textbox', { name: 'Note title' })).toHaveValue(targetTitle);
   const backlink = page.getByRole('button', { name: `backlink · related ${sourceTitle}` });
   await expect(backlink).toBeVisible();
   await backlink.click();
   await expect(page.getByRole('textbox', { name: 'Note title' })).toHaveValue(sourceTitle);
+  await expect(page.getByRole('button', { name: `related ${targetTitle}` })).toBeVisible();
 });
 
 // Sibling order is a decision a person makes about their own material. Until
@@ -652,4 +659,44 @@ test('unsupported Markdown survives a round trip through the editor', async ({ w
 
   await page.reload();
   await expect(page.getByRole('textbox', { name: 'Note body, Markdown' })).toHaveValue(awkward);
+});
+
+// The Notes list draws the hierarchy from the roots downwards, which is right
+// while browsing and wrong while searching: a match nested under a Note that
+// does not itself match has no rendered ancestor to hang from, so it was
+// filtered into the list and then never drawn. Searching for a phrase that only
+// appears deep in a tree returned an apparently empty sidebar. Search has to be
+// able to reach the material that is hardest to find by hand, which is exactly
+// the material that is nested.
+test('search finds a nested Note whose ancestors do not match', async ({ workspace }) => {
+  const { page } = workspace;
+
+  await goTo(page, '/notes');
+  await createRootNote(page, 'Quarterly container', 'Nothing distinctive here.');
+  await createRootNote(page, 'Buried finding', 'The onboarding funnel leaks at verification.');
+
+  // Put the second Note underneath the first so the match is a child of a
+  // Note that the query will not match.
+  await openNote(page, 'Buried finding');
+  await page.getByRole('button', { name: 'Make child of the note above' }).click();
+  await expect(treeNote(page, 'Buried finding')).toBeVisible();
+
+  const search = page.getByRole('textbox', { name: 'Search notes' });
+  await search.fill('verification');
+  await search.press('Enter');
+
+  await expect(treeNote(page, 'Buried finding')).toBeVisible();
+  await expect(treeNote(page, 'Quarterly container')).toHaveCount(0);
+
+  // Opening a result keeps the search in place, so a list of results stays a
+  // list rather than collapsing back to the whole tree on the first click.
+  await treeNote(page, 'Buried finding').click();
+  await expect(page.getByRole('textbox', { name: 'Note title' })).toHaveValue('Buried finding');
+  await expect(search).toHaveValue('verification');
+
+  // A query that matches nothing has to say so. An empty tree that looks the
+  // same as a workspace with no Notes at all reads as data loss.
+  await search.fill('nothingmatchesthisquery');
+  await search.press('Enter');
+  await expect(page.getByText('No Notes match this search.')).toBeVisible();
 });

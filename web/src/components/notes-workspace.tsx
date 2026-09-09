@@ -107,17 +107,23 @@ export function NoteMarkdownPreview({ markdown }: { markdown: string }) {
   );
 }
 
+export type InspectorView = 'properties' | 'links' | 'history';
+
 export function NotesWorkspace({
   notes,
   selectedId,
   query,
   knowledge,
+  inspectorView,
+  onInspectorViewChange,
   onRequestImport,
 }: {
   notes: NoteView[];
   selectedId: string | null;
   query: string;
   knowledge: NoteKnowledgeContext | null;
+  inspectorView: InspectorView;
+  onInspectorViewChange: (view: InspectorView) => void;
   onRequestImport: () => void;
 }) {
   const router = useRouter();
@@ -138,9 +144,6 @@ export function NotesWorkspace({
   const [relationType, setRelationType] =
     useState<NoteKnowledgeContext['links'][number]['relationType']>('related');
   const [editorMode, setEditorMode] = useState<'source' | 'rich' | 'preview'>('source');
-  const [inspectorView, setInspectorView] = useState<'properties' | 'links' | 'history'>(
-    'properties'
-  );
   const [richEditor, setRichEditor] = useState<Editor | null>(null);
   const [isUploadingAttachment, setIsUploadingAttachment] = useState(false);
   const [recentlyRemovedAttachment, setRecentlyRemovedAttachment] = useState<{
@@ -236,6 +239,46 @@ export function NotesWorkspace({
   // indentation outright so the hierarchy vanished on a phone. Real nesting
   // carries the structure to assistive technology and to a narrow screen, and
   // it cannot fall out of step with where a Note actually sits.
+  // A search result is not a place in the hierarchy, it is an answer. The tree
+  // is drawn from the roots downwards, so a match nested under a Note that does
+  // not itself match had no rendered ancestor to hang from and was silently
+  // dropped -- the deeper a Note was filed, the less findable it became, which
+  // is the opposite of what search is for. While a query is active the sidebar
+  // shows the matches themselves, flat and in tree order.
+  function renderSearchResults() {
+    const results = [...notes].sort((first, second) => first.sortKey - second.sortKey);
+    if (!results.length) return null;
+    return (
+      <ul className="note-tree-level">
+        {results.map((note) => (
+          <li key={note.id}>{renderNoteButton(note)}</li>
+        ))}
+      </ul>
+    );
+  }
+
+  function renderNoteButton(note: NoteView) {
+    return (
+      <button
+        className={`note-tree-item${note.id === selected?.id ? ' note-tree-item-active' : ''}`}
+        type="button"
+        onClick={() => openNoteFromTree(note.id)}
+      >
+        <span>{note.title}</span>
+        {note.aiExcluded ? <ShieldOff size={13} aria-label="Excluded from AI" /> : null}
+      </button>
+    );
+  }
+
+  // Opening a result must not discard the query that produced it. Dropping it
+  // returned the sidebar to the whole tree on the first click, so a person
+  // reading through several matches had to retype the search each time.
+  function openNoteFromTree(noteId: string) {
+    const search = new URLSearchParams({ note: noteId });
+    if (query) search.set('q', query);
+    router.push(`/notes?${search.toString()}`);
+  }
+
   function renderNoteLevel(parentNoteId: string | null) {
     const level = notes
       .filter((note) => note.parentNoteId === parentNoteId)
@@ -245,14 +288,7 @@ export function NotesWorkspace({
       <ul className="note-tree-level">
         {level.map((note) => (
           <li key={note.id}>
-            <button
-              className={`note-tree-item${note.id === selected?.id ? ' note-tree-item-active' : ''}`}
-              type="button"
-              onClick={() => router.push(`/notes?note=${note.id}`)}
-            >
-              <span>{note.title}</span>
-              {note.aiExcluded ? <ShieldOff size={13} aria-label="Excluded from AI" /> : null}
-            </button>
+            {renderNoteButton(note)}
             {renderNoteLevel(note.id)}
           </li>
         ))}
@@ -556,6 +592,10 @@ export function NotesWorkspace({
     const allowed = new Set(parentCandidateIds(tree, selected.id));
     return notes.filter((note) => allowed.has(note.id) && note.id !== selected.parentNoteId);
   }, [notes, selected]);
+  const connectionCount =
+    (knowledge?.links.length ?? 0) +
+    (knowledge?.goalLinks.length ?? 0) +
+    (knowledge?.actionLinks.length ?? 0);
   const noteName = (id: string) => notes.find((note) => note.id === id)?.title ?? 'Missing Note';
 
   return (
@@ -602,11 +642,20 @@ export function NotesWorkspace({
         </form>
         <nav className="note-tree" aria-label="Notes">
           {notes.length ? (
-            renderNoteLevel(null)
+            query ? (
+              renderSearchResults()
+            ) : (
+              renderNoteLevel(null)
+            )
           ) : (
             <div className="note-tree-empty">
               <NotebookPen size={17} aria-hidden="true" />
-              <p>Your pages will appear here.</p>
+              {/*
+               * A search that found nothing and a workspace that holds nothing
+               * look identical unless they are told apart, and the second
+               * message reads as data loss when the first one is true.
+               */}
+              <p>{query ? 'No Notes match this search.' : 'Your pages will appear here.'}</p>
             </div>
           )}
         </nav>
@@ -1001,9 +1050,20 @@ export function NotesWorkspace({
                       key={view}
                       type="button"
                       aria-pressed={inspectorView === view}
-                      onClick={() => setInspectorView(view)}
+                      onClick={() => onInspectorViewChange(view)}
                     >
                       {view[0].toUpperCase() + view.slice(1)}
+                      {/*
+                       * Nothing outside this pane says a Note has connections,
+                       * so a backlink someone else created was invisible unless
+                       * they thought to look. The count is decoration over the
+                       * label, which stays the button's accessible name.
+                       */}
+                      {view === 'links' && connectionCount ? (
+                        <span className="note-inspector-tab-count" aria-hidden="true">
+                          {connectionCount}
+                        </span>
+                      ) : null}
                     </button>
                   ))}
                 </nav>
