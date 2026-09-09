@@ -169,6 +169,10 @@ export function experienceNavigationForPath(
         ...(canonical
           ? [
               {
+                label: 'Personal',
+                items: [{ label: 'Account', href: '/settings/account', match: 'prefix' as const }],
+              },
+              {
                 label: 'Workspace',
                 items: [
                   { label: 'Preferences', href: '/settings/preferences', match: 'prefix' as const },
@@ -262,12 +266,29 @@ export function experienceCommands(canonical: boolean): ExperienceCommand[] {
       : []),
     { label: 'Capture inbox', detail: 'Workspace', href: '/inbox' },
     { label: 'Search workspace', detail: 'Search', href: '/search' },
+    ...(canonical ? [{ label: 'Account', detail: 'Settings', href: '/settings/account' }] : []),
+    ...(canonical ? [{ label: 'Notifications', detail: 'Settings', href: '/notifications' }] : []),
     {
       label: 'Settings',
       detail: 'Account and workspace',
       href: canonical ? '/settings/preferences' : '/settings/security',
     },
   ];
+}
+
+/* The palette filters on the visible label and the visible group, which is what
+   someone types: "plan" should reach "This week" under Planner. Keeping the
+   match here rather than inside the shell means the result set is a pure
+   function that a test can name, instead of something only a screenshot sees. */
+export function filterExperienceCommands(
+  commands: ExperienceCommand[],
+  query: string
+): ExperienceCommand[] {
+  const needle = query.trim().toLowerCase();
+  if (!needle) return commands;
+  return commands.filter((command) =>
+    `${command.label} ${command.detail}`.toLowerCase().includes(needle)
+  );
 }
 
 export function isExperienceNavItemActive(pathname: string, item: ExperienceNavItem) {

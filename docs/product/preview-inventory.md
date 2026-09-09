@@ -101,8 +101,8 @@ The four rows above are the reason UI-03 cannot simply delete `/preview`. Each F
 | Notifications, "Filter notifications" | keep | `/notifications`, `notifications-center.tsx` | UI-02 / [#131](https://github.com/KalebBefekadu/planner-ai/issues/131) | visual |
 | Settings: preferences, ai, memory, data, security | keep | `/settings/*`, `settings-tabs.tsx` | UI-02 / [#131](https://github.com/KalebBefekadu/planner-ai/issues/131) | visual |
 | Settings: integrations | keep | `/settings/mcp`, `mcp-token-manager.tsx` | MCP-01 / [#135](https://github.com/KalebBefekadu/planner-ai/issues/135) | behavior — `mcp-token-lifecycle.spec.ts` |
-| Settings: account | extract | no dedicated route; account controls are split across security and data | UI-02 / [#131](https://github.com/KalebBefekadu/planner-ai/issues/131) | open — decide whether the section is created or the divergence is accepted |
-| "Related settings" cross-links | extract | `settings-tabs.tsx` | UI-02 / [#131](https://github.com/KalebBefekadu/planner-ai/issues/131) | open |
+| Settings: account | keep | `/settings/account`, `account-summary.tsx` | UI-02 / [#131](https://github.com/KalebBefekadu/planner-ai/issues/131) | behavior — `settings-sections.test.ts` ("account section"). The section was created. It reports the real record — address, Workspace name, time zone, join date — and links each changeable fact to the section that already owns changing it, rather than becoming a second place to edit. Preview's editable name and photo are an accepted divergence: a first-release Workspace has one owner and no profile record to edit. |
+| "Related settings" cross-links | keep | `settings-tabs.tsx`, `src/app/settings/layout.tsx` | UI-02 / [#131](https://github.com/KalebBefekadu/planner-ai/issues/131) | behavior — `settings-sections.test.ts` ("related settings cross-links"). Ported with intent rather than shape: the tab bar already links everywhere, so each cross-link carries the reason the two sections belong together. |
 
 ## Perimeter and onboarding
 
@@ -139,4 +139,4 @@ Every row above has a disposition and an owning ticket, which satisfies UI-01. R
 3. Every `extract` row is ported or downgraded to an accepted divergence.
 4. Desktop and mobile references are captured for empty, populated, error and dark states using fixture data only.
 
-Nine `open` rows remain. They are the real content of WS-02, WS-03, WS-04 and UI-02, and none of them is blocked by this inventory.
+Seven `open` rows remain. They are the real content of WS-02, WS-03, WS-04 and UI-02, and none of them is blocked by this inventory.
