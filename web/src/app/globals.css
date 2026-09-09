@@ -7177,3 +7177,9 @@ button:disabled {
     width: 100%;
   }
 }
+
+/* ON-01: the wizard tells a returning person their work was kept. Styled as a
+   quiet confirmation rather than an alert -- nothing went wrong. */
+.onboarding-resumed {
+  border-left: 3px solid var(--accent, currentColor);
+}

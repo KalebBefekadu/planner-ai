@@ -1,6 +1,6 @@
 'use client';
 
-import { useMemo, useState, useTransition } from 'react';
+import { useEffect, useMemo, useState, useSyncExternalStore, useTransition } from 'react';
 import {
   ArrowLeft,
   ArrowRight,
@@ -15,6 +15,12 @@ import { useRouter } from 'next/navigation';
 import { AsyncStatus } from '@/components/async-status';
 import { completeGuidedOnboarding, type WorkspacePreferences } from '@/app/onboarding/actions';
 import { actionFailureMessage } from '@/lib/operations/failure-message';
+import {
+  draftHasWrittenWork,
+  draftStorageKey,
+  parseDraft,
+  type OnboardingDraft,
+} from '@/app/onboarding/draft';
 
 const days = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
 const steps = ['Rhythm', 'Direction', 'First moves'];
@@ -39,20 +45,141 @@ function errorMessage(error: unknown) {
   return actionFailureMessage(error, 'Workspace setup could not be completed.');
 }
 
-export function OnboardingWizard({ initial }: { initial: WorkspacePreferences }) {
+/* Reading `localStorage` is reading an external store, and the server has no
+   such store. `useSyncExternalStore` is the one hook that models that honestly:
+   it renders the server's answer (no draft) during SSR and hydration, then
+   re-renders with the browser's answer once hydration finishes. Restoring in an
+   effect instead would set state during a cascading second render, and would
+   race the first keystroke of anyone who started typing immediately.
+
+   A draft is read once and never watched. `subscribe` is therefore a no-op:
+   this wizard is the only writer, and re-reading on its own writes would fight
+   the fields the person is typing into. */
+function subscribe() {
+  return () => {};
+}
+
+function readStoredDraft(storageKey: string) {
+  try {
+    return window.localStorage.getItem(storageKey);
+  } catch {
+    // Private browsing and locked-down profiles throw on access rather than
+    // returning null. Treat that as "no draft" and start cleanly.
+    return null;
+  }
+}
+
+export function OnboardingWizard({
+  initial,
+  ownerId,
+}: {
+  initial: WorkspacePreferences;
+  ownerId: string;
+}) {
+  const storageKey = draftStorageKey(ownerId);
+  const fallback: OnboardingDraft = {
+    step: 0,
+    timezone: initial.timezone,
+    weekStartsOn: initial.weekStartsOn,
+    weeklyReviewDay: initial.weeklyReviewDay,
+    coachingIntensity: initial.coachingIntensity,
+    aiEnabled: initial.aiEnabled,
+    visionText: '',
+    goalTitle: '',
+    actionTitle: '',
+    captureText: '',
+  };
+  /* Three states, not two. `undefined` means "the browser has not answered
+     yet", which is what the server renders and what hydration replays; `null`
+     means the browser answered and there is no draft. Collapsing those two into
+     one was a real data-loss bug: the pre-hydration render would persist its
+     own empty fields over the draft the person came back for, so resuming
+     destroyed exactly the work it was meant to protect. */
+  const storedRaw = useSyncExternalStore(
+    subscribe,
+    () => readStoredDraft(storageKey),
+    () => undefined
+  );
+
+  /* The fields below are seeded from whichever draft this render knows about,
+     so the form is remounted once the browser's answer replaces the server's.
+     Keying on the presence of a draft -- not on its contents -- means the
+     remount happens at most once, and never while someone is typing. A person
+     who starts typing before hydration is on the `fresh` key either way, so
+     their keystrokes are not thrown away by that transition. */
+  return (
+    <WizardForm
+      key={storedRaw ? 'resumed' : 'fresh'}
+      initial={initial}
+      storageKey={storageKey}
+      persist={storedRaw !== undefined}
+      restored={parseDraft(storedRaw ?? null, fallback)}
+    />
+  );
+}
+
+function WizardForm({
+  initial,
+  storageKey,
+  persist,
+  restored,
+}: {
+  initial: WorkspacePreferences;
+  storageKey: string;
+  persist: boolean;
+  restored: OnboardingDraft;
+}) {
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
-  const [step, setStep] = useState(0);
-  const [timezone, setTimezone] = useState(initial.timezone);
-  const [weekStartsOn, setWeekStartsOn] = useState(initial.weekStartsOn);
-  const [weeklyReviewDay, setWeeklyReviewDay] = useState(initial.weeklyReviewDay);
-  const [coachingIntensity, setCoachingIntensity] = useState(initial.coachingIntensity);
-  const [aiEnabled, setAiEnabled] = useState(initial.aiEnabled);
-  const [visionText, setVisionText] = useState('');
-  const [goalTitle, setGoalTitle] = useState('');
-  const [actionTitle, setActionTitle] = useState('');
-  const [captureText, setCaptureText] = useState('');
+  const [step, setStep] = useState(restored.step);
+  const [timezone, setTimezone] = useState(restored.timezone);
+  const [weekStartsOn, setWeekStartsOn] = useState(restored.weekStartsOn);
+  const [weeklyReviewDay, setWeeklyReviewDay] = useState(restored.weeklyReviewDay);
+  const [coachingIntensity, setCoachingIntensity] = useState(restored.coachingIntensity);
+  const [aiEnabled, setAiEnabled] = useState(restored.aiEnabled);
+  const [visionText, setVisionText] = useState(restored.visionText);
+  const [goalTitle, setGoalTitle] = useState(restored.goalTitle);
+  const [actionTitle, setActionTitle] = useState(restored.actionTitle);
+  const [captureText, setCaptureText] = useState(restored.captureText);
   const [error, setError] = useState<string | null>(null);
+  // Announced once per resumed session, from the draft this form was seeded
+  // with, so it does not reappear after the person edits the restored text.
+  const resumed = draftHasWrittenWork(restored);
+
+  const draft: OnboardingDraft = {
+    step,
+    timezone,
+    weekStartsOn,
+    weeklyReviewDay,
+    coachingIntensity,
+    aiEnabled,
+    visionText,
+    goalTitle,
+    actionTitle,
+    captureText,
+  };
+
+  function clearDraft() {
+    try {
+      window.localStorage.removeItem(storageKey);
+    } catch {
+      // A browser with storage denied still completes setup; it just cannot resume.
+    }
+  }
+
+  const serialized = JSON.stringify(draft);
+  useEffect(() => {
+    // Never write before the stored draft has been read back, or this effect
+    // overwrites it with the empty fields of the pre-hydration render.
+    if (!persist) return;
+    try {
+      window.localStorage.setItem(storageKey, serialized);
+    } catch {
+      // Storage can be full or denied. Losing the ability to resume is not a
+      // reason to interrupt someone in the middle of setup.
+    }
+  }, [persist, storageKey, serialized]);
+
   const timezones = useMemo(() => {
     const supported =
       typeof Intl.supportedValuesOf === 'function' ? Intl.supportedValuesOf('timeZone') : [];
@@ -75,6 +202,10 @@ export function OnboardingWizard({ initial }: { initial: WorkspacePreferences })
           actionTitle: optional(actionTitle),
           captureText: captureText.trim() ? captureText : null,
         });
+        // The draft has been committed through the Operation, so the scratch
+        // copy must go: otherwise a later visit to /onboarding, or the next
+        // person to use this device, would meet stale half-finished text.
+        clearDraft();
         router.push(destination);
         router.refresh();
       } catch (caught) {
@@ -267,6 +398,12 @@ export function OnboardingWizard({ initial }: { initial: WorkspacePreferences })
             />
           </label>
         </div>
+      ) : null}
+
+      {resumed ? (
+        <p className="status-message onboarding-resumed" role="status">
+          We kept what you had already written. Pick up where you left off.
+        </p>
       ) : null}
 
       <AsyncStatus message={isPending ? 'Creating your workspace. This takes a moment.' : ''} />
