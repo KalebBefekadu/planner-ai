@@ -5,7 +5,7 @@ import { createClient } from '@/lib/supabase/server';
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 
-const exportTables = [
+export const exportTables = [
   ['planning_horizons', '*'],
   ['visions', '*'],
   ['goals', '*'],
