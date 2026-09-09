@@ -46,6 +46,7 @@ The existing Next.js App Router application remains the only product shell. It o
 - Server Actions are thin UI adapters; they do not contain domain business logic.
 - Route Handlers are used for protocol-shaped needs such as internal Operation HTTP, OAuth callbacks, streaming, and uploads.
 - Browser code receives no service-role, database, provider, or integration secrets.
+- Vercel Functions reject a request body over 4.5 MB at the platform edge, before any handler runs, and the response is not this application's JSON. Any route that accepts an upload must advertise and enforce a bound under that ceiling rather than an application limit the deployment cannot honour. Notes import derives every one of its size bounds and user-facing messages from `web/src/lib/notes/import-limits.ts`, whose upload bound is 4 MB — the platform ceiling minus headroom for multipart framing. A larger migration is imported in batches, and the dialog says so.
 
 ### 2. Operation service: the product authority
 

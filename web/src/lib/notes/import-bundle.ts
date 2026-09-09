@@ -2,13 +2,13 @@ import path from 'node:path';
 import { parse as parseCsv } from 'csv-parse/sync';
 import yauzl from 'yauzl';
 
-export const IMPORT_LIMITS = {
-  archiveBytes: 25 * 1024 * 1024,
-  expandedBytes: 10 * 1024 * 1024,
-  fileBytes: 200 * 1024,
-  candidates: 500,
-  totalCharacters: 5_000_000,
-} as const;
+export {
+  IMPORT_LIMITS,
+  IMPORT_TOO_LARGE_MESSAGE,
+  IMPORT_UPLOAD_LIMIT_LABEL,
+  formatImportBytes,
+} from './import-limits';
+import { IMPORT_LIMITS, IMPORT_UPLOAD_LIMIT_LABEL, formatImportBytes } from './import-limits';
 
 export type ImportSourceFile = {
   path: string;
@@ -307,7 +307,9 @@ function readEntry(zip: yauzl.ZipFile, entry: yauzl.Entry) {
 }
 
 export async function filesFromZip(buffer: Buffer) {
-  if (buffer.byteLength > IMPORT_LIMITS.archiveBytes) throw new Error('ZIP exceeds 25 MB.');
+  if (buffer.byteLength > IMPORT_LIMITS.archiveBytes) {
+    throw new Error(`ZIP exceeds ${IMPORT_UPLOAD_LIMIT_LABEL}.`);
+  }
   const zip = await openZip(buffer);
   const files: ImportSourceFile[] = [];
   let expandedBytes = 0;
@@ -326,7 +328,9 @@ export async function filesFromZip(buffer: Buffer) {
         }
         expandedBytes += entry.uncompressedSize;
         if (expandedBytes > IMPORT_LIMITS.expandedBytes) {
-          throw new Error('ZIP expands beyond the 10 MB safety limit.');
+          throw new Error(
+            `ZIP expands beyond the ${formatImportBytes(IMPORT_LIMITS.expandedBytes)} safety limit.`
+          );
         }
         if (files.length >= IMPORT_LIMITS.candidates) {
           throw new Error('ZIP contains too many files.');
