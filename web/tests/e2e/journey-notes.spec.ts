@@ -548,3 +548,108 @@ test('a supported attachment is retained in quarantine instead of becoming an un
   await page.getByRole('button', { name: 'Restore attachment research.md' }).click();
   await expect(page.getByText('research.md', { exact: true })).toBeVisible();
 });
+
+// WS-01: the writing has to be safe. Autosave waits 800ms after the last
+// keystroke, and everything below is about what happens inside that window --
+// the moment where the words exist in one place only.
+
+test('typing and immediately opening another Note does not lose the last edit', async ({
+  workspace,
+}) => {
+  const { page } = workspace;
+  await goTo(page, '/notes');
+  await createRootNote(page, 'First note', 'Original body.');
+  await createRootNote(page, 'Second note', 'Somewhere else to go.');
+
+  await treeNote(page, 'First note').click();
+  const bodyEditor = page.getByRole('textbox', { name: 'Note body, Markdown' });
+  await expect(bodyEditor).toHaveValue('Original body.');
+
+  // Type and leave immediately. The debounce timer is cancelled by the
+  // navigation, and cancelling the timer used to mean cancelling the edit.
+  await bodyEditor.fill('Original body. Plus the sentence that must survive.');
+  await treeNote(page, 'Second note').click();
+  await expect(page.getByRole('textbox', { name: 'Note title' })).toHaveValue('Second note');
+
+  await treeNote(page, 'First note').click();
+  await expect(page.getByRole('textbox', { name: 'Note body, Markdown' })).toHaveValue(
+    'Original body. Plus the sentence that must survive.'
+  );
+
+  // And it is on the server, not just in this tab.
+  await page.reload();
+  await expect(page.getByRole('textbox', { name: 'Note body, Markdown' })).toHaveValue(
+    'Original body. Plus the sentence that must survive.'
+  );
+});
+
+test('an edit in flight is never written to the Note that was opened next', async ({
+  workspace,
+}) => {
+  const { page } = workspace;
+  await goTo(page, '/notes');
+  await createRootNote(page, 'Source note', 'Belongs to the source.');
+  await createRootNote(page, 'Destination note', 'Belongs to the destination.');
+
+  await treeNote(page, 'Source note').click();
+  // Wait for the Note to actually be open. Typing into an editor that is
+  // still showing the previous Note puts the words in the wrong place before
+  // autosave has had any say in it.
+  const sourceBody = page.getByRole('textbox', { name: 'Note body, Markdown' });
+  await expect(sourceBody).toHaveValue('Belongs to the source.');
+  await sourceBody.fill('Belongs to the source. Edited just before leaving.');
+  await treeNote(page, 'Destination note').click();
+  await expect(page.getByRole('textbox', { name: 'Note title' })).toHaveValue('Destination note');
+
+  // The flushed save carries the Note it was typed into, not whichever Note
+  // happens to be open when it lands.
+  await expect(page.getByRole('textbox', { name: 'Note body, Markdown' })).toHaveValue(
+    'Belongs to the destination.'
+  );
+  await page.reload();
+  await treeNote(page, 'Destination note').click();
+  await expect(page.getByRole('textbox', { name: 'Note body, Markdown' })).toHaveValue(
+    'Belongs to the destination.'
+  );
+});
+
+test('the editor says unsaved while it still is', async ({ workspace }) => {
+  const { page } = workspace;
+  await goTo(page, '/notes');
+  await createRootNote(page, 'Status note', 'Saved content.');
+
+  await page.getByRole('textbox', { name: 'Note body, Markdown' }).fill('Saved content. More.');
+  // Before this there were only three states, and a Note with unwritten
+  // changes claimed "Saved" for the whole debounce window.
+  await expect(page.getByRole('status')).toHaveText('Unsaved changes');
+  await expect(page.getByRole('status')).toHaveText('Saved', { timeout: 5_000 });
+});
+
+test('unsupported Markdown survives a round trip through the editor', async ({ workspace }) => {
+  const { page } = workspace;
+  await goTo(page, '/notes');
+  await createRootNote(page, 'Awkward syntax', 'Placeholder while the Note is created.');
+
+  // A footnote, a table and an HTML comment: syntax the rich editor does not
+  // model. Source editing must not quietly normalise it away.
+  const awkward = [
+    '# Heading',
+    '',
+    'Body with a footnote.[^1]',
+    '',
+    '[^1]: The footnote text.',
+    '',
+    '| Column | Other |',
+    '| --- | --- |',
+    '| a | b |',
+    '',
+    '<!-- a comment the editor does not understand -->',
+  ].join('\n');
+  await page.getByRole('textbox', { name: 'Note body, Markdown' }).fill(awkward);
+  // Scoped to the save indicator: content outside the rich subset raises its
+  // own status notice, so an unscoped status lookup is ambiguous here.
+  await expect(page.locator('.save-state')).toHaveText('Saved', { timeout: 10_000 });
+
+  await page.reload();
+  await expect(page.getByRole('textbox', { name: 'Note body, Markdown' })).toHaveValue(awkward);
+});

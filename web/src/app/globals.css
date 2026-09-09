@@ -2311,6 +2311,27 @@ button:disabled {
   opacity: 0.4;
   cursor: not-allowed;
 }
+.note-draft-recovery {
+  display: grid;
+  gap: 10px;
+  border: 1px solid var(--line);
+  border-left: 3px solid var(--brand);
+  border-radius: 8px;
+  padding: 14px 16px;
+  background: var(--surface-muted);
+}
+.note-draft-recovery-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+.note-draft-recovery small {
+  color: var(--muted);
+  font-size: var(--fs-label);
+}
+.save-state-unsaved {
+  color: var(--muted);
+}
 .save-state {
   color: var(--muted);
   font-size: var(--fs-label);
