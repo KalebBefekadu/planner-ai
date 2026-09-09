@@ -29,7 +29,12 @@ export type NoteConflict = {
   bodyDiffers: boolean;
   /** Line-by-line comparison of the body. Empty when the bodies agree. */
   lines: ConflictLine[];
-  /** How many lines exist only on one side. The headline number. */
+  /** The headline number: how many lines of the Note differ.
+   *
+   * The larger of the two sides, not their sum. A line someone edited appears
+   * once on each side of the comparison, and reporting that as "2 lines" tells
+   * a person two lines moved when one did. Taking the larger side counts an
+   * edit as one line and still counts three added lines as three. */
   changedLineCount: number;
 };
 
@@ -104,7 +109,10 @@ export function describeNoteConflict(mine: ConflictVersion, theirs: ConflictVers
     titleDiffers: mine.title !== theirs.title,
     bodyDiffers,
     lines,
-    changedLineCount: lines.filter((line) => line.kind !== 'same').length,
+    changedLineCount: Math.max(
+      lines.filter((line) => line.kind === 'mine').length,
+      lines.filter((line) => line.kind === 'theirs').length
+    ),
   };
 }
 
@@ -144,7 +152,10 @@ export function conflictSummary(conflict: NoteConflict): string {
   if (conflict.titleDiffers) parts.push('the title');
   if (conflict.changedLineCount === 1) parts.push('1 line');
   else if (conflict.changedLineCount > 1) parts.push(`${conflict.changedLineCount} lines`);
-  return `This Note was saved somewhere else while you were writing. ${
-    parts.length === 2 ? `${parts[0]} and ${parts[1]} differ` : `${parts[0]} differs`
-  }.`;
+  // One subject takes "differs", two take "differ", and so does a plural count
+  // of lines. Getting this wrong is small, but it appears on a screen someone
+  // reads carefully while deciding what to do with their own writing.
+  const subject = parts.length === 2 ? `${parts[0]} and ${parts[1]}` : parts[0];
+  const verb = parts.length === 2 || conflict.changedLineCount > 1 ? 'differ' : 'differs';
+  return `This Note was saved somewhere else while you were writing. ${subject} ${verb}.`;
 }
