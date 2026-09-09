@@ -57,7 +57,9 @@ describe('describing what differs', () => {
     );
     const shared = conflict.lines.filter((line) => line.kind === 'same').map((line) => line.text);
     expect(shared).toEqual(['B', 'C', 'D']);
-    expect(conflict.changedLineCount).toBe(2);
+    // One line moved, so one line differs -- not two, which is what counting
+    // both sides of the same change would report.
+    expect(conflict.changedLineCount).toBe(1);
   });
 
   it('notices a title change even when the body is untouched', () => {
@@ -111,6 +113,20 @@ describe('what the person is told', () => {
   it('does not claim a change when both versions are identical', () => {
     const summary = conflictSummary(describeNoteConflict(mine, { ...mine }));
     expect(summary).toContain('identical');
+  });
+
+  it('counts an edited line once, not once per side', () => {
+    const summary = conflictSummary(
+      describeNoteConflict(mine, { title: mine.title, bodyMarkdown: 'One\nTwo changed\nThree' })
+    );
+    expect(summary).toContain('1 line differs');
+  });
+
+  it('agrees its verb with a plural count', () => {
+    const summary = conflictSummary(
+      describeNoteConflict(mine, { title: mine.title, bodyMarkdown: 'One\nTwo\nThree\nFour\nFive' })
+    );
+    expect(summary).toContain('2 lines differ.');
   });
 
   it('counts one differing line in the singular', () => {
