@@ -4,7 +4,8 @@ import { revalidatePlannerAndRecords } from '@/lib/planner-revalidation';
 import { periodBounds } from '@/lib/planning-period';
 import type { CoachingIntensity } from '@/lib/coaching';
 import { dateInTimezone } from '@/lib/date';
-import { executeOperation } from '@/lib/operations';
+import { executeOperation, OperationFailure } from '@/lib/operations';
+import { reviewSubmissionKey } from '@/lib/reviews/submission';
 import { currentLongReviewPeriod, type LongReviewPeriod } from '@/lib/reviews/periods';
 import { parsePersistedReviewProposal, type ResolvedReviewProposal } from '@/lib/review-proposals';
 import { createClient } from '@/lib/supabase/server';
@@ -25,6 +26,7 @@ export type WeeklyReviewData = {
   timezone: string;
   coachingIntensity: CoachingIntensity;
   actions: WeeklyReviewAction[];
+  completedReview: { id: string; reflectionMarkdown: string } | null;
   recentReviews: Array<{
     id: string;
     completedAt: string;
@@ -187,7 +189,9 @@ export async function getWeeklyReviewData(): Promise<WeeklyReviewData> {
         .order('scheduled_on'),
       supabase
         .from('reviews')
-        .select('id,completed_at,reflection_markdown,review_action_items(priority)')
+        .select(
+          'id,completed_at,reflection_markdown,review_action_items(priority),planning_horizons(starts_on)'
+        )
         .eq('workspace_id', workspaceId)
         .eq('kind', 'weekly')
         .eq('status', 'completed')
@@ -233,6 +237,13 @@ export async function getWeeklyReviewData(): Promise<WeeklyReviewData> {
     endsOn,
     timezone,
     coachingIntensity,
+    completedReview: (() => {
+      const review = reviewsResult.data?.find((row) => {
+        const horizon = row.planning_horizons as unknown as { starts_on: string } | null;
+        return horizon?.starts_on === startsOn;
+      });
+      return review ? { id: review.id, reflectionMarkdown: review.reflection_markdown } : null;
+    })(),
     actions: actionRows.map((action) => {
       const horizon = action.planning_horizons as unknown as { starts_on: string };
       const goal = action.goals as unknown as { title: string } | null;
@@ -261,22 +272,21 @@ export async function getWeeklyReviewData(): Promise<WeeklyReviewData> {
   };
 }
 
-export async function completeWeeklyReview(input: {
-  startsOn: string;
-  endsOn: string;
-  reflectionMarkdown: string;
-  decisions: WeeklyReviewDecision[];
-}) {
+export async function completeWeeklyReview(
+  input: {
+    startsOn: string;
+    endsOn: string;
+    reflectionMarkdown: string;
+    decisions: WeeklyReviewDecision[];
+  },
+  intentId: string
+) {
   const { supabase } = await reviewClient();
-  // One completed weekly review per week is a database invariant, so a second
-  // submission with a fresh key does not create a second review -- it hits the
-  // unique index and fails. Keying on the week instead makes the retry replay
-  // the recorded result, which is what a person clicking twice, or clicking
-  // again after a dropped connection, actually means.
   const result = await executeOperation(supabase, 'review.complete-weekly.v1', input, {
-    idempotencyKey: `weekly-review:${input.startsOn}`,
+    idempotencyKey: reviewSubmissionKey(intentId, input),
     surface: 'ui',
   });
+  await assertReviewExists(supabase, result.reviewId);
   revalidatePlannerAndRecords();
   return result;
 }
@@ -395,19 +405,39 @@ export async function getPeriodReviewData(kind: LongReviewPeriod): Promise<Perio
   };
 }
 
-export async function completePeriodReview(input: {
-  kind: 'monthly' | 'quarterly';
-  startsOn: string;
-  endsOn: string;
-  reflectionMarkdown: string;
-}) {
+export async function completePeriodReview(
+  input: {
+    kind: 'monthly' | 'quarterly';
+    startsOn: string;
+    endsOn: string;
+    reflectionMarkdown: string;
+  },
+  intentId: string
+) {
   const { supabase } = await reviewClient();
-  // Same invariant as the weekly review: one completed review per period, so
-  // the key is the period rather than a fresh id.
   const result = await executeOperation(supabase, 'review.complete-period.v1', input, {
-    idempotencyKey: `${input.kind}-review:${input.startsOn}`,
+    idempotencyKey: reviewSubmissionKey(intentId, input),
     surface: 'ui',
   });
+  await assertReviewExists(supabase, result.reviewId);
   revalidatePlannerAndRecords();
   return result;
+}
+
+async function assertReviewExists(
+  supabase: Awaited<ReturnType<typeof createClient>>,
+  reviewId: string
+) {
+  // An old tab may retry an intent that another tab has already undone.
+  const { data, error } = await supabase
+    .from('reviews')
+    .select('id')
+    .eq('id', reviewId)
+    .eq('status', 'completed')
+    .maybeSingle();
+  if (error || !data)
+    throw new OperationFailure(
+      'review_not_completed',
+      'This review is no longer completed. Reload before submitting a new review.'
+    );
 }

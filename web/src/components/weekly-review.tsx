@@ -1,6 +1,6 @@
 'use client';
 
-import { useMemo, useState, useTransition } from 'react';
+import { useMemo, useRef, useState, useTransition } from 'react';
 import Link from 'next/link';
 import { AlertCircle, CalendarRange, CheckCircle2, Flag, History } from 'lucide-react';
 import {
@@ -35,6 +35,7 @@ function errorMessage(error: unknown) {
 
 export function WeeklyReview({ data }: { data: WeeklyReviewData }) {
   const [isPending, startTransition] = useTransition();
+  const submissionIntent = useRef<string | null>(null);
   const [reflection, setReflection] = useState('');
   const [notice, setNotice] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -82,14 +83,18 @@ export function WeeklyReview({ data }: { data: WeeklyReviewData }) {
     setNotice(null);
     startTransition(async () => {
       try {
-        const result = await completeWeeklyReview({
-          startsOn: data.startsOn,
-          endsOn: data.endsOn,
-          reflectionMarkdown: reflection,
-          decisions: Object.values(decisions).filter(
-            (decision): decision is WeeklyReviewDecision => decision.resolution !== 'unset'
-          ),
-        });
+        submissionIntent.current ??= crypto.randomUUID();
+        const result = await completeWeeklyReview(
+          {
+            startsOn: data.startsOn,
+            endsOn: data.endsOn,
+            reflectionMarkdown: reflection,
+            decisions: Object.values(decisions).filter(
+              (decision): decision is WeeklyReviewDecision => decision.resolution !== 'unset'
+            ),
+          },
+          submissionIntent.current
+        );
         setNotice(
           `Review completed. ${result.resolvedCount} actions resolved and ${result.priorityCount} priorities committed.`
         );
@@ -172,129 +177,141 @@ export function WeeklyReview({ data }: { data: WeeklyReviewData }) {
       ) : null}
 
       <div className="review-layout">
-        <section className="review-workspace" aria-labelledby="unfinished-heading">
-          <div className="section-heading">
-            <div>
-              <p className="eyebrow">No silent rollover</p>
-              <h2 id="unfinished-heading">Unfinished actions</h2>
-            </div>
-            <span className="review-count">{data.actions.length}</span>
-          </div>
-
-          {data.actions.length ? (
-            <div className="review-action-list">
-              {data.actions.map((action) => {
-                const decision = decisions[action.id];
-                const canPrioritize = !['done', 'dropped'].includes(decision.resolution);
-                return (
-                  <article className="review-action-row" key={action.id}>
-                    <div className="review-action-copy">
-                      <strong>{action.title}</strong>
-                      <span>
-                        {action.goalTitle ?? 'Unlinked action'} · {action.status.replace('_', ' ')}
-                      </span>
-                    </div>
-                    <select
-                      value={decision.resolution}
-                      aria-label={`Decision for ${action.title}`}
-                      onChange={(event) => {
-                        const resolution = event.target.value as DraftResolution;
-                        updateDecision(action.id, {
-                          resolution,
-                          priority: ['done', 'dropped'].includes(resolution)
-                            ? false
-                            : decision.priority,
-                        });
-                      }}
-                    >
-                      <option value="unset">Decide what happens</option>
-                      {Object.entries(resolutionLabels).map(([value, label]) => (
-                        <option key={value} value={value}>
-                          {label}
-                        </option>
-                      ))}
-                    </select>
-                    {['blocked', 'dropped'].includes(decision.resolution) ? (
-                      <input
-                        className="review-reason"
-                        value={decision.reason ?? ''}
-                        onChange={(event) =>
-                          updateDecision(action.id, { reason: event.target.value || null })
-                        }
-                        placeholder={
-                          decision.resolution === 'blocked'
-                            ? 'What is blocking it?'
-                            : 'Why drop it?'
-                        }
-                        aria-label={`Reason for ${action.title}`}
-                        maxLength={500}
-                      />
-                    ) : null}
-                    <label
-                      className={`review-priority${canPrioritize ? '' : ' review-priority-disabled'}`}
-                    >
-                      <input
-                        type="checkbox"
-                        checked={decision.priority}
-                        disabled={!canPrioritize || (!decision.priority && priorityCount >= 5)}
-                        onChange={(event) =>
-                          updateDecision(action.id, { priority: event.target.checked })
-                        }
-                      />
-                      <Flag size={14} aria-hidden="true" />
-                      Priority
-                    </label>
-                  </article>
-                );
-              })}
-            </div>
-          ) : (
-            <div className="review-clear-state">
-              <CheckCircle2 size={22} aria-hidden="true" />
+        {data.completedReview ? (
+          <section className="review-workspace" aria-label="Completed weekly review">
+            <h2>Week reviewed</h2>
+            <p>{data.completedReview.reflectionMarkdown || 'No reflection recorded.'}</p>
+            <Link href="/planner">Plan next week</Link>
+            <p>
+              <Link href="/activity">View Activity</Link>
+            </p>
+          </section>
+        ) : (
+          <section className="review-workspace" aria-labelledby="unfinished-heading">
+            <div className="section-heading">
               <div>
-                <h3>Nothing unresolved</h3>
-                <p>You can still record a reflection and close the week.</p>
+                <p className="eyebrow">No silent rollover</p>
+                <h2 id="unfinished-heading">Unfinished actions</h2>
               </div>
+              <span className="review-count">{data.actions.length}</span>
             </div>
-          )}
 
-          <div className="review-reflection">
-            <label htmlFor="weekly-reflection">What should you remember from this week?</label>
-            <textarea
-              id="weekly-reflection"
-              value={reflection}
-              onChange={(event) => setReflection(event.target.value)}
-              placeholder="Wins, friction, lessons, and one adjustment for next week..."
-              maxLength={50_000}
-            />
-          </div>
-          <div className="review-commit">
-            <div>
-              <Flag size={15} aria-hidden="true" />
-              <span>{priorityCount} of 5 priorities selected</span>
+            {data.actions.length ? (
+              <div className="review-action-list">
+                {data.actions.map((action) => {
+                  const decision = decisions[action.id];
+                  const canPrioritize = !['done', 'dropped'].includes(decision.resolution);
+                  return (
+                    <article className="review-action-row" key={action.id}>
+                      <div className="review-action-copy">
+                        <strong>{action.title}</strong>
+                        <span>
+                          {action.goalTitle ?? 'Unlinked action'} ·{' '}
+                          {action.status.replace('_', ' ')}
+                        </span>
+                      </div>
+                      <select
+                        value={decision.resolution}
+                        aria-label={`Decision for ${action.title}`}
+                        onChange={(event) => {
+                          const resolution = event.target.value as DraftResolution;
+                          updateDecision(action.id, {
+                            resolution,
+                            priority: ['done', 'dropped'].includes(resolution)
+                              ? false
+                              : decision.priority,
+                          });
+                        }}
+                      >
+                        <option value="unset">Decide what happens</option>
+                        {Object.entries(resolutionLabels).map(([value, label]) => (
+                          <option key={value} value={value}>
+                            {label}
+                          </option>
+                        ))}
+                      </select>
+                      {['blocked', 'dropped'].includes(decision.resolution) ? (
+                        <input
+                          className="review-reason"
+                          value={decision.reason ?? ''}
+                          onChange={(event) =>
+                            updateDecision(action.id, { reason: event.target.value || null })
+                          }
+                          placeholder={
+                            decision.resolution === 'blocked'
+                              ? 'What is blocking it?'
+                              : 'Why drop it?'
+                          }
+                          aria-label={`Reason for ${action.title}`}
+                          maxLength={500}
+                        />
+                      ) : null}
+                      <label
+                        className={`review-priority${canPrioritize ? '' : ' review-priority-disabled'}`}
+                      >
+                        <input
+                          type="checkbox"
+                          checked={decision.priority}
+                          disabled={!canPrioritize || (!decision.priority && priorityCount >= 5)}
+                          onChange={(event) =>
+                            updateDecision(action.id, { priority: event.target.checked })
+                          }
+                        />
+                        <Flag size={14} aria-hidden="true" />
+                        Priority
+                      </label>
+                    </article>
+                  );
+                })}
+              </div>
+            ) : (
+              <div className="review-clear-state">
+                <CheckCircle2 size={22} aria-hidden="true" />
+                <div>
+                  <h3>Nothing unresolved</h3>
+                  <p>You can still record a reflection and close the week.</p>
+                </div>
+              </div>
+            )}
+
+            <div className="review-reflection">
+              <label htmlFor="weekly-reflection">What should you remember from this week?</label>
+              <textarea
+                id="weekly-reflection"
+                value={reflection}
+                onChange={(event) => setReflection(event.target.value)}
+                placeholder="Wins, friction, lessons, and one adjustment for next week..."
+                maxLength={50_000}
+              />
             </div>
-            <button
-              className="btn-primary"
-              type="button"
-              onClick={completeReview}
-              disabled={isPending || !decisionsValid || Boolean(notice)}
-            >
-              {isPending ? 'Completing...' : 'Complete weekly review'}
-            </button>
-          </div>
-          {undecidedCount ? (
-            <p className="review-validation" role="alert">
-              <AlertCircle size={14} aria-hidden="true" /> {undecidedCount}{' '}
-              {undecidedCount === 1 ? 'Action still needs' : 'Actions still need'} a decision before
-              the week can close.
-            </p>
-          ) : missingReason ? (
-            <p className="review-validation" role="alert">
-              <AlertCircle size={14} aria-hidden="true" /> Add a reason for each blocked or dropped
-              Action.
-            </p>
-          ) : null}
-        </section>
+            <div className="review-commit">
+              <div>
+                <Flag size={15} aria-hidden="true" />
+                <span>{priorityCount} of 5 priorities selected</span>
+              </div>
+              <button
+                className="btn-primary"
+                type="button"
+                onClick={completeReview}
+                disabled={isPending || !decisionsValid || Boolean(notice)}
+              >
+                {isPending ? 'Completing...' : 'Complete weekly review'}
+              </button>
+            </div>
+            {undecidedCount ? (
+              <p className="review-validation" role="alert">
+                <AlertCircle size={14} aria-hidden="true" /> {undecidedCount}{' '}
+                {undecidedCount === 1 ? 'Action still needs' : 'Actions still need'} a decision
+                before the week can close.
+              </p>
+            ) : missingReason ? (
+              <p className="review-validation" role="alert">
+                <AlertCircle size={14} aria-hidden="true" /> Add a reason for each blocked or
+                dropped Action.
+              </p>
+            ) : null}
+          </section>
+        )}
 
         <aside className="review-history" aria-labelledby="review-history-heading">
           <div className="section-heading">
