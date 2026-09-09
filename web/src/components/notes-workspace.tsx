@@ -68,6 +68,7 @@ import {
   type NoteView,
 } from '@/app/notes/actions';
 import { nextParentMove, nextSiblingMove, parentCandidateIds } from '@/lib/notes/sibling-order';
+import { NoteAppearanceHeader } from '@/components/note-appearance-header';
 import { RichMarkdownEditor } from '@/components/rich-markdown-editor';
 import { useVoiceTranscription } from '@/lib/use-voice-transcription';
 import { extractPlannerMarkdownHeadings } from '@/lib/markdown/contract';
@@ -702,6 +703,21 @@ export function NotesWorkspace({
       <section className="note-editor-pane">
         {selected ? (
           <>
+            {/* WS-03: the accepted /preview document header. It owns its own
+                controls and its own saves, so the editor below is unchanged. */}
+            <NoteAppearanceHeader
+              // Keyed by Note so switching pages starts from that page's own
+              // stored appearance instead of carrying a draft across.
+              key={selected.id}
+              noteId={selected.id}
+              appearance={selected.appearance}
+              versionRef={versionRef}
+              onSaved={(version) => {
+                versionRef.current = version;
+                router.refresh();
+              }}
+              onError={setError}
+            />
             <div className="note-editor-header">
               <div className="note-title-group">
                 <nav className="note-editor-breadcrumb" aria-label="Note location">

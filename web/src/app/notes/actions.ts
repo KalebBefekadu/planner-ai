@@ -2,6 +2,11 @@
 
 import { randomUUID } from 'node:crypto';
 import { revalidatePath } from 'next/cache';
+import {
+  normalizeNoteAppearance,
+  type NoteAppearance,
+  type NoteCoverKey,
+} from '@/lib/notes/appearance';
 import { nextParentMove, nextSiblingMove, placeUnderParent } from '@/lib/notes/sibling-order';
 import { executeOperation } from '@/lib/operations';
 import { createClient } from '@/lib/supabase/server';
@@ -13,6 +18,7 @@ export type NoteView = {
   bodyMarkdown: string;
   sortKey: number;
   aiExcluded: boolean;
+  appearance: NoteAppearance;
   version: number;
   updatedAt: string;
 };
@@ -85,6 +91,11 @@ function mapNote(note: Record<string, unknown>): NoteView {
     bodyMarkdown: note.body_markdown as string,
     sortKey: Number(note.sort_key),
     aiExcluded: Boolean(note.ai_excluded),
+    appearance: normalizeNoteAppearance({
+      iconEmoji: note.icon_emoji,
+      coverKey: note.cover_key,
+      coverPosition: note.cover_position,
+    }),
     version: Number(note.version),
     updatedAt: note.updated_at as string,
   };
@@ -295,6 +306,36 @@ export async function updateNote(input: {
     idempotencyKey: randomUUID(),
     surface: 'ui',
   });
+  revalidatePath('/notes');
+  return mapNote(note);
+}
+
+/* Appearance is normalized here as well as in the operation's schema. The
+ * component sends what the picker produced, and the reset control sends three
+ * nulls; normalizing on the way in means an icon that arrived with stray
+ * whitespace, or a position left behind by a cover that has just been removed,
+ * is corrected before it becomes a durable value rather than after. */
+export async function setNoteAppearance(input: {
+  id: string;
+  iconEmoji: string | null;
+  coverKey: NoteCoverKey | null;
+  coverPosition: number;
+  expectedVersion: number;
+}) {
+  const { supabase } = await notesClient();
+  const appearance = normalizeNoteAppearance(input);
+  const note = await executeOperation(
+    supabase,
+    'note.appearance.v1',
+    {
+      id: input.id,
+      iconEmoji: appearance.iconEmoji,
+      coverKey: appearance.coverKey,
+      coverPosition: appearance.coverPosition,
+      expectedVersion: input.expectedVersion,
+    },
+    { idempotencyKey: randomUUID(), surface: 'ui' }
+  );
   revalidatePath('/notes');
   return mapNote(note);
 }
