@@ -40,3 +40,37 @@ export const IMPORT_TOO_LARGE_MESSAGE =
   `This selection is over the ${IMPORT_UPLOAD_LIMIT_LABEL} upload limit. ` +
   `Import it in smaller batches — one top-level folder, or one ZIP under ${IMPORT_UPLOAD_LIMIT_LABEL}, at a time. ` +
   `Nothing was imported and your selection is unchanged.`;
+
+/**
+ * The commit runs in batches so no single request has to create every Note at
+ * once. 50 is the ceiling the Operation contract and the database function
+ * both enforce on one batch, so it is the largest batch the commit can ask for.
+ */
+export const IMPORT_COMMIT_BATCH_SIZE = 50;
+
+/**
+ * How many batches the commit loop will run before it stops.
+ *
+ * This used to be the literal 12 in the import dialog, unconnected to anything:
+ * a ceiling of 600 items next to a candidate limit of 500. The two numbers
+ * meant different things, lived in different files, and nothing kept them in
+ * step. Raising IMPORT_LIMITS.candidates past 600 -- the obvious change the
+ * first time a real export turns out to be bigger than expected -- would have
+ * stranded imports partway through, under a message that read like a pause.
+ *
+ * Derived from the candidate limit so raising one raises the other. The extra
+ * batch is a runaway guard: the loop already refuses to continue when a batch
+ * commits nothing, and this bounds it even if the database somehow reports
+ * progress forever.
+ */
+export const IMPORT_COMMIT_BATCH_CEILING =
+  Math.ceil(IMPORT_LIMITS.candidates / IMPORT_COMMIT_BATCH_SIZE) + 1;
+
+/**
+ * Shown when the loop hits that ceiling. It says a limit was reached, not that
+ * something paused, because nothing here resumes on its own.
+ */
+export const IMPORT_BATCH_CEILING_MESSAGE =
+  `This import stopped at Planner AI's limit of ${IMPORT_COMMIT_BATCH_CEILING} batches ` +
+  `of ${IMPORT_COMMIT_BATCH_SIZE} Notes. The Notes already imported are saved, and nothing ` +
+  `was duplicated. Reopen this import to continue the rest.`;

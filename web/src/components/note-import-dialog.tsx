@@ -1,9 +1,12 @@
 'use client';
 
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { Archive, Check, FileStack, FolderOpen, History, Loader2, X } from 'lucide-react';
+import { Archive, Ban, Check, FileStack, FolderOpen, History, Loader2, X } from 'lucide-react';
 import { commitNoteImport } from '@/app/notes/actions';
 import {
+  IMPORT_BATCH_CEILING_MESSAGE,
+  IMPORT_COMMIT_BATCH_CEILING,
+  IMPORT_COMMIT_BATCH_SIZE,
   IMPORT_LIMITS,
   IMPORT_TOO_LARGE_MESSAGE,
   IMPORT_UPLOAD_LIMIT_LABEL,
@@ -244,8 +247,12 @@ export function NoteImportDialog({
     setError(null);
     try {
       let current = job;
-      for (let batch = 0; current.status !== 'completed' && batch < 12; batch += 1) {
-        const next = await commitNoteImport(current.id, 50);
+      for (
+        let batch = 0;
+        current.status !== 'completed' && batch < IMPORT_COMMIT_BATCH_CEILING;
+        batch += 1
+      ) {
+        const next = await commitNoteImport(current.id, IMPORT_COMMIT_BATCH_SIZE);
         if (next.status !== 'completed' && next.committedCount <= current.committedCount) {
           throw new Error('Import could not make progress. No Notes were duplicated.');
         }
@@ -261,8 +268,43 @@ export function NoteImportDialog({
           setPreview((value) => (value ? { ...value, job } : value));
         }
       }
-      if (current.status !== 'completed') throw new Error('Import paused before completion.');
+      if (current.status !== 'completed') throw new Error(IMPORT_BATCH_CEILING_MESSAGE);
       onCompleted?.();
+    } catch (caught) {
+      setError(messageFrom(caught));
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  // Closing the dialog says nothing about the import. Saying no is a decision,
+  // and it has to be the owner's to make rather than inferred from a dismissed
+  // window -- otherwise an abandoned preview comes back as the active job and
+  // presents itself as work still to do.
+  async function cancelImport() {
+    const job = preview?.job;
+    if (!job || busy) return;
+    setBusy(true);
+    setError(null);
+    try {
+      const response = await fetch(`/api/note-import?jobId=${encodeURIComponent(job.id)}`, {
+        method: 'DELETE',
+      });
+      const payload = (await response.json().catch(() => null)) as
+        | ImportReport
+        | { error?: string }
+        | null;
+      if (!response.ok) {
+        throw new Error(
+          payload && 'error' in payload && payload.error
+            ? payload.error
+            : 'This import could not be canceled.'
+        );
+      }
+      if (payload && 'job' in payload) {
+        setPreview(payload.job ? payload : null);
+        if (payload.history) setHistory(payload.history);
+      }
     } catch (caught) {
       setError(messageFrom(caught));
     } finally {
@@ -275,6 +317,9 @@ export function NoteImportDialog({
   const remaining = job ? job.createCount - job.committedCount : 0;
   const resumable = Boolean(job) && job!.status !== 'completed' && job!.status !== 'canceled';
   const partiallyCommitted = Boolean(job && job.committedCount > 0 && resumable);
+  // Cancelling is not undoing. Once a Note exists the workspace has changed,
+  // and the way back from that is undo, not a decision not to start.
+  const cancelable = Boolean(job) && resumable && job!.committedCount === 0;
   const historyEntries = history?.entries ?? [];
 
   return (
@@ -460,14 +505,26 @@ export function NoteImportDialog({
               <Check size={16} /> Done
             </button>
           ) : (
-            <button
-              className="btn-primary"
-              type="button"
-              onClick={() => void commit()}
-              disabled={!job || !remaining || busy}
-            >
-              {partiallyCommitted ? 'Resume' : 'Import'} {remaining || ''}
-            </button>
+            <>
+              {cancelable ? (
+                <button
+                  className="btn-secondary"
+                  type="button"
+                  onClick={() => void cancelImport()}
+                  disabled={busy}
+                >
+                  <Ban size={16} /> Don&rsquo;t import
+                </button>
+              ) : null}
+              <button
+                className="btn-primary"
+                type="button"
+                onClick={() => void commit()}
+                disabled={!job || !remaining || busy}
+              >
+                {partiallyCommitted ? 'Resume' : 'Import'} {remaining || ''}
+              </button>
+            </>
           )}
         </footer>
       </section>

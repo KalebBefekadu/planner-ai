@@ -9,6 +9,7 @@ export {
   formatImportBytes,
 } from './import-limits';
 import { IMPORT_LIMITS, IMPORT_UPLOAD_LIMIT_LABEL, formatImportBytes } from './import-limits';
+import { describeLinkOutcome, resolveInternalLinks } from './import-links';
 
 export type ImportSourceFile = {
   path: string;
@@ -170,6 +171,45 @@ function addFolders(files: ImportSourceFile[], candidates: NoteImportCandidate[]
   }
 }
 
+/**
+ * An exported workspace is a web of pages that link to each other by relative
+ * file path. Those paths mean nothing inside Planner AI, so the links are
+ * rewritten in place to name the item they point at, and the commit turns each
+ * one into the created Note's URL. Resolution is by path rather than by title,
+ * so two pages that share a title still link to the right one.
+ *
+ * Mutates the candidates: their bodies carry the rewritten links, and any item
+ * whose links changed or could not be followed gains a reason saying so before
+ * the owner agrees to the commit.
+ */
+function resolveCandidateLinks(candidates: NoteImportCandidate[]) {
+  const byPath = new Map<string, { sourcePath: string; importable: boolean }>();
+  for (const candidate of candidates) {
+    byPath.set(candidate.sourcePath, {
+      sourcePath: candidate.sourcePath,
+      importable: candidate.unsupportedReason === null,
+    });
+    // A CSV file is not itself a Note: its rows are. A link to the file names
+    // a database view that was not imported as a page, which is a different
+    // answer from "this export does not contain it".
+    const rowSeparator = candidate.sourcePath.lastIndexOf('#row-');
+    if (rowSeparator > 0) {
+      const filePath = candidate.sourcePath.slice(0, rowSeparator);
+      if (!byPath.has(filePath)) byPath.set(filePath, { sourcePath: filePath, importable: false });
+    }
+  }
+  for (const candidate of candidates) {
+    if (candidate.unsupportedReason !== null || !candidate.bodyMarkdown) continue;
+    const outcome = resolveInternalLinks(candidate.bodyMarkdown, candidate.sourcePath, byPath);
+    candidate.bodyMarkdown = outcome.bodyMarkdown;
+    const notice = describeLinkOutcome(outcome);
+    if (!notice) continue;
+    candidate.conversionNotice = candidate.conversionNotice
+      ? `${candidate.conversionNotice} ${notice}`.slice(0, 500)
+      : notice;
+  }
+}
+
 export function candidatesFromFiles(files: ImportSourceFile[]) {
   const normalized = files.map((file) => ({ ...file, path: safePath(file.path) }));
   const candidates: NoteImportCandidate[] = [];
@@ -216,6 +256,7 @@ export function candidatesFromFiles(files: ImportSourceFile[]) {
       });
     }
   }
+  resolveCandidateLinks(candidates);
   if (candidates.length > IMPORT_LIMITS.candidates) {
     throw new Error(`An import may contain at most ${IMPORT_LIMITS.candidates} Notes.`);
   }
