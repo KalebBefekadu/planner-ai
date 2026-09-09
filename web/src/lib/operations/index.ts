@@ -1157,6 +1157,18 @@ export class OperationFailure extends Error {
 
 const digestPrefix = /^([a-z0-9_]+): /;
 
+/* The stable code, for the few failures a surface has to react to rather than
+   merely report. The digest carries `<code>: <message>`, so the code has
+   always been there; reading it beats matching on the sentence, which is
+   copy that should be free to change. */
+export function operationFailureCode(error: unknown): string | null {
+  if (error instanceof OperationFailure) return error.code;
+  const digest = (error as { digest?: unknown } | null)?.digest;
+  if (typeof digest !== 'string') return null;
+  const match = digestPrefix.exec(digest);
+  return match ? match[1] : null;
+}
+
 // Reads the message back off whichever side of that boundary it survived on.
 export function operationFailureMessage(error: unknown): string | null {
   if (error instanceof OperationFailure) return error.message;

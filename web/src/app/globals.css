@@ -7480,3 +7480,100 @@ button:disabled {
 .capture-filing .capture-filing-filed {
   opacity: 0.72;
 }
+
+/* A version conflict, shown as a comparison rather than a sentence.
+
+   Colour is never the only signal: each line also carries a marker glyph and a
+   "Yours:"/"Saved:" prefix in the accessible name, so the two sides remain
+   distinguishable without colour vision and to a screen reader. Text uses the
+   full-strength foreground tokens rather than a tinted or faded variant --
+   this surface exists to be read closely, and a muted diff of someone's own
+   writing is the wrong place to save a few percent of contrast. */
+.note-conflict {
+  margin-top: 0.75rem;
+  padding: 0.9rem 1rem;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: var(--surface);
+}
+
+.note-conflict-summary {
+  margin: 0;
+  font-weight: 600;
+  color: var(--foreground);
+}
+
+.note-conflict-help {
+  margin: 0.25rem 0 0.75rem;
+  color: var(--muted);
+}
+
+.note-conflict-titles {
+  display: grid;
+  grid-template-columns: max-content 1fr;
+  gap: 0.15rem 0.75rem;
+  margin: 0 0 0.75rem;
+}
+
+.note-conflict-titles dt {
+  color: var(--muted);
+}
+
+.note-conflict-titles dd {
+  margin: 0;
+  color: var(--foreground);
+}
+
+.note-conflict-diff {
+  margin: 0 0 0.85rem;
+  padding: 0;
+  list-style: none;
+  max-height: 18rem;
+  overflow-y: auto;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 0.85rem;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+}
+
+.note-conflict-line {
+  display: flex;
+  gap: 0.5rem;
+  padding: 0.15rem 0.6rem;
+  white-space: pre-wrap;
+  word-break: break-word;
+  color: var(--foreground);
+}
+
+.note-conflict-marker {
+  flex: 0 0 1ch;
+  color: var(--muted);
+}
+
+/* The side label is read aloud but not shown: the marker and the background
+   already say it on screen, and repeating it in the line would push the actual
+   text off to the right. */
+.note-conflict-side {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+
+.note-conflict-line-mine {
+  background: var(--success-soft);
+}
+
+.note-conflict-line-theirs {
+  background: var(--danger-soft);
+}
+
+.note-conflict-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
