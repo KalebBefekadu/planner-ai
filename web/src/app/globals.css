@@ -6891,3 +6891,35 @@ button:disabled {
 .note-outline-depth-4 {
   padding-inline-start: 48px;
 }
+
+/* Direct filing controls on each Capture in the inbox history. The buttons wrap
+   rather than shrink so the labels stay readable on a narrow phone, where this
+   card is already the full width of the screen. */
+.capture-filing {
+  display: grid;
+  gap: 6px;
+  margin-top: 10px;
+}
+.capture-filing-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.capture-filing-button {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 12px;
+  font-size: var(--fs-label);
+}
+.capture-filing-status {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin: 0;
+  color: var(--muted);
+  font-size: var(--fs-label);
+}
+.capture-filing-error {
+  color: var(--danger);
+}
