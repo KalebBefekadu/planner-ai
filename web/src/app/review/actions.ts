@@ -155,57 +155,79 @@ async function reviewClient() {
 export async function getWeeklyReviewData(): Promise<WeeklyReviewData> {
   const { supabase, workspaceId, timezone, weekStartsOn, coachingIntensity } = await reviewClient();
   const { startsOn, endsOn } = currentWeek(timezone, weekStartsOn);
-  const [actionsResult, reviewsResult, proposalResult, jobResult] = await Promise.all([
-    supabase
-      .from('actions')
-      .select(
-        'id,title,status,version,scheduled_on,planning_horizons!inner(kind,starts_on),goals(title)'
-      )
-      .eq('workspace_id', workspaceId)
-      // Week-horizon Actions only, because review.complete-weekly.v1 validates
-      // that the decision set is exactly the week-horizon Actions and rejects
-      // anything else as review_action_set_changed. Work planned at a longer
-      // horizon but scheduled into these seven days is genuinely this week's
-      // unfinished work and is still missing from the review; widening the
-      // list needs the Operation to change first.
-      .eq('planning_horizons.kind', 'week')
-      .lte('planning_horizons.starts_on', endsOn)
-      .in('status', ['open', 'in_progress', 'blocked'])
-      .is('archived_at', null)
-      .is('trashed_at', null)
-      .order('scheduled_on'),
-    supabase
-      .from('reviews')
-      .select('id,completed_at,reflection_markdown,review_action_items(priority)')
-      .eq('workspace_id', workspaceId)
-      .eq('kind', 'weekly')
-      .eq('status', 'completed')
-      .order('completed_at', { ascending: false })
-      .limit(8),
-    supabase
-      .from('review_ai_proposals')
-      .select('id,payload,model_id,prompt_version,created_at')
-      .eq('workspace_id', workspaceId)
-      .eq('kind', 'weekly')
-      .eq('starts_on', startsOn)
-      .eq('status', 'active')
-      .order('created_at', { ascending: false })
-      .limit(1)
-      .maybeSingle(),
-    supabase
-      .from('ai_jobs')
-      .select('id,status,error_code,created_at')
-      .eq('operation', 'review_analysis')
-      .eq('source_review_kind', 'weekly')
-      .eq('source_starts_on', startsOn)
-      .order('created_at', { ascending: false })
-      .limit(1)
-      .maybeSingle(),
-  ]);
-  if (actionsResult.error || reviewsResult.error || proposalResult.error || jobResult.error) {
+  const unfinished =
+    'id,title,status,version,scheduled_on,planning_horizons!inner(kind,starts_on),goals(title)';
+  const [weekHorizonResult, scheduledIntoWeekResult, reviewsResult, proposalResult, jobResult] =
+    await Promise.all([
+      supabase
+        .from('actions')
+        .select(unfinished)
+        .eq('workspace_id', workspaceId)
+        .eq('planning_horizons.kind', 'week')
+        .lte('planning_horizons.starts_on', endsOn)
+        .in('status', ['open', 'in_progress', 'blocked'])
+        .is('archived_at', null)
+        .is('trashed_at', null)
+        .order('scheduled_on'),
+      // Work planned at a longer horizon and scheduled into these seven days
+      // is unfinished work of this week. This list and the Operation's own
+      // eligibility rule have to agree exactly -- the Operation rejects a
+      // decision set that is missing an eligible Action or names an
+      // ineligible one -- so the two predicates are deliberately identical.
+      supabase
+        .from('actions')
+        .select(unfinished)
+        .eq('workspace_id', workspaceId)
+        .neq('planning_horizons.kind', 'week')
+        .gte('scheduled_on', startsOn)
+        .lte('scheduled_on', endsOn)
+        .in('status', ['open', 'in_progress', 'blocked'])
+        .is('archived_at', null)
+        .is('trashed_at', null)
+        .order('scheduled_on'),
+      supabase
+        .from('reviews')
+        .select('id,completed_at,reflection_markdown,review_action_items(priority)')
+        .eq('workspace_id', workspaceId)
+        .eq('kind', 'weekly')
+        .eq('status', 'completed')
+        .order('completed_at', { ascending: false })
+        .limit(8),
+      supabase
+        .from('review_ai_proposals')
+        .select('id,payload,model_id,prompt_version,created_at')
+        .eq('workspace_id', workspaceId)
+        .eq('kind', 'weekly')
+        .eq('starts_on', startsOn)
+        .eq('status', 'active')
+        .order('created_at', { ascending: false })
+        .limit(1)
+        .maybeSingle(),
+      supabase
+        .from('ai_jobs')
+        .select('id,status,error_code,created_at')
+        .eq('operation', 'review_analysis')
+        .eq('source_review_kind', 'weekly')
+        .eq('source_starts_on', startsOn)
+        .order('created_at', { ascending: false })
+        .limit(1)
+        .maybeSingle(),
+    ]);
+  if (
+    weekHorizonResult.error ||
+    scheduledIntoWeekResult.error ||
+    reviewsResult.error ||
+    proposalResult.error ||
+    jobResult.error
+  ) {
     throw new Error('Unable to load Weekly Review.');
   }
-  const actionRows = actionsResult.data ?? [];
+  // Two reads, one list. An Action can only be asked about once, and a
+  // duplicate decision is rejected by the Operation as duplicate_review_action.
+  const actionRows = [
+    ...(weekHorizonResult.data ?? []),
+    ...(scheduledIntoWeekResult.data ?? []),
+  ].filter((row, index, rows) => rows.findIndex((other) => other.id === row.id) === index);
   return {
     startsOn,
     endsOn,
