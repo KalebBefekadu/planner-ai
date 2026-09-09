@@ -74,3 +74,16 @@ export const IMPORT_BATCH_CEILING_MESSAGE =
   `This import stopped at Planner AI's limit of ${IMPORT_COMMIT_BATCH_CEILING} batches ` +
   `of ${IMPORT_COMMIT_BATCH_SIZE} Notes. The Notes already imported are saved, and nothing ` +
   `was duplicated. Reopen this import to continue the rest.`;
+
+/**
+ * How long an import preview that was never committed or canceled is kept
+ * before the note-import-purge worker removes it.
+ *
+ * A preview holds the parsed contents of someone's export -- the staged Notes
+ * themselves, not a reference to them -- so an abandoned one is a copy of
+ * their writing sitting in the database indefinitely. WS-01 set the precedent
+ * for staged content in Planner AI: seven days, and a stated period rather
+ * than an implicit one, so that "we keep this for a while" is a promise with a
+ * number attached.
+ */
+export const IMPORT_PREVIEW_RETENTION_DAYS = 7;
