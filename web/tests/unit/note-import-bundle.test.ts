@@ -3,6 +3,7 @@ import {
   candidatesFromFiles,
   candidatesFromVaultOrFiles,
   CSV_ROW_CONVERSION_NOTICE,
+  stripNotionIdSuffix,
 } from '@/lib/notes/import-bundle';
 import { IMPORT_LINK_SCHEME, importLinkToken } from '@/lib/notes/import-links';
 
@@ -254,5 +255,64 @@ describe('Notes import internal links', () => {
     ]);
     expect(candidates[0].bodyMarkdown).toBe(body);
     expect(candidates[0].conversionNotice).toBeNull();
+  });
+});
+
+describe('Notion ID suffix in imported titles', () => {
+  const id = '5f2c8ab74e0d41d9b8e2a1c7d3406c81';
+
+  it('strips the exported ID from a page title', () => {
+    expect(stripNotionIdSuffix(`Weekly Review ${id}`)).toBe('Weekly Review');
+  });
+
+  it('leaves a shorter hexadecimal run alone', () => {
+    expect(stripNotionIdSuffix('Deploy 4e0d41d9b8e2')).toBe('Deploy 4e0d41d9b8e2');
+  });
+
+  it('does not truncate a longer hexadecimal run to thirty-two characters', () => {
+    expect(stripNotionIdSuffix(`Digest ab${id}`)).toBe(`Digest ab${id}`);
+  });
+
+  it('leaves a non-hexadecimal run of the same length alone', () => {
+    expect(stripNotionIdSuffix(`Notes ${'z'.repeat(32)}`)).toBe(`Notes ${'z'.repeat(32)}`);
+  });
+
+  it('requires the separating space, so a run joined to a word is kept', () => {
+    expect(stripNotionIdSuffix(`Review-${id}`)).toBe(`Review-${id}`);
+  });
+
+  it('only strips at the end of the title', () => {
+    expect(stripNotionIdSuffix(`Review ${id} draft`)).toBe(`Review ${id} draft`);
+  });
+
+  it('keeps the title when stripping would leave nothing behind', () => {
+    expect(stripNotionIdSuffix(` ${id}`)).toBe(` ${id}`);
+  });
+
+  it('keeps a title that is only the ID, because there is no separator', () => {
+    expect(stripNotionIdSuffix(id)).toBe(id);
+  });
+
+  it('accepts uppercase hexadecimal', () => {
+    expect(stripNotionIdSuffix(`Vision ${id.toUpperCase()}`)).toBe('Vision');
+  });
+
+  it('drops the ID from imported file and folder titles', () => {
+    const candidates = candidatesFromFiles([
+      {
+        path: `Projects ${id}/Weekly Review ${id}.md`,
+        bytes: Buffer.from('Body without heading.'),
+      },
+    ]);
+    expect(candidates.map((candidate) => candidate.title)).toEqual(['Projects', 'Weekly Review']);
+    // The source path is the export's own, and stays exact so links still resolve.
+    expect(candidates[1].sourcePath).toBe(`Projects ${id}/Weekly Review ${id}.md`);
+  });
+
+  it('never rewrites a title the owner wrote as a heading', () => {
+    const candidates = candidatesFromFiles([
+      { path: `Page ${id}.md`, bytes: Buffer.from(`# Commit ${id}\n\nBody.`) },
+    ]);
+    expect(candidates[0].title).toBe(`Commit ${id}`);
   });
 });
