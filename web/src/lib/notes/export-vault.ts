@@ -31,6 +31,25 @@ export type AttachmentExportResult =
   | { available: true; bytes: Buffer }
   | { available: false; reason: 'rejected' | 'missing' };
 
+export type ExportNoteTag = {
+  note_id: string;
+  name: string;
+};
+
+export type ExportNoteLink = {
+  source_note_id: string;
+  target_note_id: string;
+  relation_type: string;
+};
+
+// Tags and Note-to-Note links live in their own tables, so a vault that only
+// walks `notes` loses them entirely. They are carried alongside the Notes
+// rather than inside them so the manifest stays the single index of the vault.
+export type ExportRelations = {
+  tags?: ExportNoteTag[];
+  links?: ExportNoteLink[];
+};
+
 type AttachmentDownloader = (attachment: ExportAttachment) => Promise<AttachmentExportResult>;
 
 const createZipArchive = (
@@ -50,7 +69,7 @@ function safeFileStem(value: string) {
   );
 }
 
-function markdownNote(note: ExportNote) {
+function markdownNote(note: ExportNote, tags: string[]) {
   const frontmatter = [
     '---',
     'planner_ai_export: 1',
@@ -58,6 +77,10 @@ function markdownNote(note: ExportNote) {
     `planner_ai_parent_note_id: ${note.parent_note_id ?? ''}`,
     `planner_ai_sort_key: ${note.sort_key}`,
     `planner_ai_ai_excluded: ${note.ai_excluded}`,
+    // Tags are written into the file itself as well as the manifest so the
+    // owner still sees them when the vault is opened in a plain Markdown
+    // editor that knows nothing about Planner AI's manifest.
+    `planner_ai_tags: ${tags.join(', ')}`,
     `planner_ai_created_at: ${note.created_at}`,
     `planner_ai_updated_at: ${note.updated_at}`,
     '---',
@@ -83,7 +106,8 @@ function safeAttachmentName(value: string) {
 export async function zipNotes(
   notes: ExportNote[],
   attachments: ExportAttachment[],
-  downloadAttachment: AttachmentDownloader
+  downloadAttachment: AttachmentDownloader,
+  relations: ExportRelations = {}
 ) {
   const archive = createZipArchive('zip', { zlib: { level: 9 } });
   const output = new PassThrough();
@@ -100,6 +124,12 @@ export async function zipNotes(
   // a Note genuinely titled "Report 2" collides with the name generated for a
   // second Note titled "Report", which would drop one body from the archive.
   const takenPaths = new Set<string>();
+  const exportedIds = new Set(notes.map((note) => note.id));
+  const tagsByNote = new Map<string, string[]>();
+  for (const tag of relations.tags ?? []) {
+    if (!exportedIds.has(tag.note_id)) continue;
+    tagsByNote.set(tag.note_id, [...(tagsByNote.get(tag.note_id) ?? []), tag.name]);
+  }
   const manifest = notes.map((note) => {
     const stem = safeFileStem(note.title);
     let path = `Notes/${stem}.md`;
@@ -107,13 +137,18 @@ export async function zipNotes(
       path = `Notes/${stem} ${suffix}.md`;
     }
     takenPaths.add(path);
-    archive.append(markdownNote(note), { name: path });
+    const tags = [...(tagsByNote.get(note.id) ?? [])].sort();
+    archive.append(markdownNote(note, tags), { name: path });
     return {
       id: note.id,
       parentNoteId: note.parent_note_id,
       path,
       title: note.title,
       sortKey: note.sort_key,
+      aiExcluded: note.ai_excluded,
+      createdAt: note.created_at,
+      updatedAt: note.updated_at,
+      tags,
     };
   });
   const attachmentManifest = [] as Array<{
@@ -169,6 +204,18 @@ export async function zipNotes(
         notes: manifest,
         attachments: attachmentManifest,
         unavailableAttachments,
+        // A link whose target was not exported (trashed, archived) would
+        // describe a Note the vault cannot rebuild, so it is dropped rather
+        // than restored as a dangling edge.
+        links: (relations.links ?? [])
+          .filter(
+            (link) => exportedIds.has(link.source_note_id) && exportedIds.has(link.target_note_id)
+          )
+          .map((link) => ({
+            sourceNoteId: link.source_note_id,
+            targetNoteId: link.target_note_id,
+            relationType: link.relation_type,
+          })),
       },
       null,
       2

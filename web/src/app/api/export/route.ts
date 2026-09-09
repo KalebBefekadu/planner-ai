@@ -25,6 +25,10 @@ const exportTables = [
   ['tags', '*'],
   ['note_tags', '*'],
   ['note_links', '*'],
+  [
+    'note_attachments',
+    'id,workspace_id,note_id,object_key,original_name,media_type,byte_size,checksum_sha256,scan_state,created_at,removed_at',
+  ],
   ['note_goal_links', '*'],
   ['note_action_links', '*'],
   ['capture_note_links', '*'],
@@ -42,6 +46,7 @@ const exportTables = [
   ['operation_receipts', '*'],
   ['trash_batches', '*'],
   ['trash_batch_items', '*'],
+  ['trash_batch_focus_items', '*'],
   [
     'mcp_access_tokens',
     'id,workspace_id,owner_user_id,name,allowed_operations,expires_at,last_used_at,revoked_at,created_at',
