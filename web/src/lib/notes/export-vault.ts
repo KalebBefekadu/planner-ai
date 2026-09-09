@@ -52,6 +52,70 @@ export type ExportRelations = {
 
 type AttachmentDownloader = (attachment: ExportAttachment) => Promise<AttachmentExportResult>;
 
+// This vault is the Notes half of the Workspace. Planning data is exported by
+// the full Workspace export instead, which is a complete record but has no
+// importer, so nothing here should imply it can be put back.
+export const VAULT_SCOPE = {
+  included: [
+    'noteBodies',
+    'noteHierarchy',
+    'noteSortOrder',
+    'noteTags',
+    'aiExclusion',
+    'noteLinks',
+    'attachmentFiles',
+  ],
+  // Attachments travel as files but the importer does not re-attach them, so
+  // an owner who restores this vault gets the files beside the Notes, not on
+  // them.
+  restoredByImport: [
+    'noteBodies',
+    'noteHierarchy',
+    'noteSortOrder',
+    'noteTags',
+    'aiExclusion',
+    'noteLinks',
+  ],
+  excluded: [
+    'vision',
+    'goals',
+    'actions',
+    'actionTemplates',
+    'planningHorizons',
+    'actionScheduleHistory',
+    'reviews',
+    'dailyFocus',
+    'captures',
+    'chat',
+    'memory',
+    'activity',
+  ],
+  excludedAvailableFrom: 'full Workspace export (Settings, Data)',
+} as const;
+
+const VAULT_README = [
+  'Planner AI Markdown Notes vault',
+  '',
+  'This archive is the Notes half of a Planner AI Workspace. It carries Note',
+  'bodies as Markdown, plus their hierarchy, order, tags, AI Exclusion setting,',
+  'Note-to-Note links and attached files. Importing it into a Workspace rebuilds',
+  'all of that except the attachments, which are restored as files in this',
+  'archive rather than re-attached to the Notes.',
+  '',
+  'It does NOT contain your Vision, Goals, Actions, recurring Action templates,',
+  'Planning Horizons, schedule history, Reviews, daily focus, captures, chat,',
+  'Memory or Activity. Those are in the full Workspace export, offered on the',
+  'same screen in Settings under Data.',
+  '',
+  'The full Workspace export is a readable JSON record of everything, but',
+  'Planner AI cannot import it back. Keep it if you want a copy of your plan;',
+  'this vault is the only archive a Workspace can be rebuilt from.',
+  '',
+  'planner-ai-vault.json is the index of this archive. Its "scope" object says',
+  'the same thing in a form a program can read.',
+  '',
+].join('\n');
+
 const createZipArchive = (
   archiverModule as unknown as {
     default: (format: 'zip', options: { zlib: { level: number } }) => ZipArchive;
@@ -201,6 +265,11 @@ export async function zipNotes(
         format: 'planner-ai-notes-vault',
         schemaVersion: 1,
         exportedAt: new Date().toISOString(),
+        // An archive is read long after the screen that offered it is closed,
+        // so what it does and does not carry travels inside it. The keys are
+        // additive: readers of schema version 1 that predate them are
+        // unaffected, and the importer ignores manifest keys it does not know.
+        scope: VAULT_SCOPE,
         notes: manifest,
         attachments: attachmentManifest,
         unavailableAttachments,
@@ -222,6 +291,7 @@ export async function zipNotes(
     ),
     { name: 'planner-ai-vault.json' }
   );
+  archive.append(VAULT_README, { name: 'README.txt' });
   if (unavailableAttachments.length) {
     archive.append(
       [
