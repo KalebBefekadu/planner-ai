@@ -989,6 +989,19 @@ button:disabled {
 .planner-workspace-header {
   padding-top: 4px;
 }
+.review-complete-next {
+  display: grid;
+  gap: 6px;
+}
+.review-next-links {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 16px;
+}
+.review-next-links a {
+  font-weight: 700;
+  text-decoration: underline;
+}
 .planner-period-bar {
   display: flex;
   flex-wrap: wrap;
