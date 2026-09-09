@@ -172,6 +172,7 @@ const noteOutput = z
     icon_emoji: z.string().nullable().optional(),
     cover_key: z.string().nullable().optional(),
     cover_position: z.union([z.number(), z.string()]).optional(),
+    favorited_at: timestamp.nullable(),
     version,
     created_at: timestamp,
     updated_at: timestamp,
@@ -730,6 +731,12 @@ export const operationDefinitions = {
         expectedVersion: version,
       })
       .strict(),
+  'note.favorite.v1': {
+    summary: 'Mark or unmark one Note as a favourite.',
+    risk: 'low',
+    exposure: ['ui', 'chat', 'mcp'],
+    reversible: true,
+    input: z.object({ id, favorite: z.boolean(), expectedVersion: version }).strict(),
     output: noteOutput,
   },
   'note.import-preview.v1': {
@@ -1097,6 +1104,7 @@ export const undoableOperationIds = [
   'note.move.v1',
   'note.archive.v1',
   'note.ai-exclusion.v1',
+  'note.favorite.v1',
   'note.import-preview.v1',
   'note.import-commit.v1',
   'note.tags.set.v1',
