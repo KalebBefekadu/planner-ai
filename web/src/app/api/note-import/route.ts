@@ -5,6 +5,8 @@ import {
   candidatesFromVaultOrFiles,
   filesFromZip,
   IMPORT_LIMITS,
+  IMPORT_TOO_LARGE_MESSAGE,
+  formatImportBytes,
   type ImportSourceFile,
 } from '@/lib/notes/import-bundle';
 import { executeOperation } from '@/lib/operations';
@@ -13,7 +15,9 @@ import { createClient } from '@/lib/supabase/server';
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 
-const requestBytes = IMPORT_LIMITS.archiveBytes + 1024 * 1024;
+// The platform rejects anything past this before the handler runs, so the
+// handler must not advertise a ceiling above it.
+const requestBytes = IMPORT_LIMITS.requestBytes;
 
 function jsonError(message: string, status: number) {
   return NextResponse.json(
@@ -87,11 +91,19 @@ async function readJob(
   };
 }
 
-export async function GET() {
+export async function GET(request: Request) {
   const context = await importContext();
   if ('error' in context) return context.error;
+  // A committed job is no longer in 'preview' or 'committing', so the report
+  // can only be re-read by naming the job. readJob stays scoped to the
+  // caller's workspace, so an unknown or foreign id reads as no job at all.
+  const jobIdParam = new URL(request.url).searchParams.get('jobId');
+  const requestedJobId =
+    jobIdParam && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(jobIdParam)
+      ? jobIdParam
+      : undefined;
   try {
-    return NextResponse.json(await readJob(context), {
+    return NextResponse.json(await readJob(context, requestedJobId), {
       headers: { 'Cache-Control': 'private, no-store' },
     });
   } catch {
@@ -104,7 +116,7 @@ export async function POST(request: Request) {
   if ('error' in context) return context.error;
   const contentLength = Number(request.headers.get('content-length') ?? '0');
   if (!Number.isSafeInteger(contentLength) || contentLength < 0 || contentLength > requestBytes) {
-    return jsonError('Import upload exceeds 25 MB.', 413);
+    return jsonError(IMPORT_TOO_LARGE_MESSAGE, 413);
   }
   if (
     !(request.headers.get('content-type') ?? '').toLowerCase().startsWith('multipart/form-data')
@@ -122,7 +134,7 @@ export async function POST(request: Request) {
       .getAll('files')
       .filter((value): value is File => value instanceof File);
     if (!uploads.length || uploads.length > IMPORT_LIMITS.candidates) {
-      return jsonError('Choose between 1 and 500 files.', 400);
+      return jsonError(`Choose between 1 and ${IMPORT_LIMITS.candidates} files.`, 400);
     }
     const pathsValue = formData.get('paths');
     const paths = typeof pathsValue === 'string' ? (JSON.parse(pathsValue) as unknown) : null;
@@ -130,8 +142,10 @@ export async function POST(request: Request) {
       return jsonError('The selected file paths could not be read.', 400);
     }
     const totalBytes = uploads.reduce((total, file) => total + file.size, 0);
+    // Content-Length is a claim by the client. The parsed sizes are the fact,
+    // so the bound is enforced again here.
     if (totalBytes > IMPORT_LIMITS.archiveBytes) {
-      return jsonError('Import upload exceeds 25 MB.', 413);
+      return jsonError(IMPORT_TOO_LARGE_MESSAGE, 413);
     }
 
     const zipUpload = uploads.find(
@@ -145,7 +159,10 @@ export async function POST(request: Request) {
       sourceName = zipUpload.name;
     } else {
       if (totalBytes > IMPORT_LIMITS.expandedBytes) {
-        return jsonError('Selected files exceed the 10 MB text limit.', 413);
+        return jsonError(
+          `Selected files exceed the ${formatImportBytes(IMPORT_LIMITS.expandedBytes)} text limit.`,
+          413
+        );
       }
       sourceFiles = await Promise.all(
         uploads.map(async (file, index) => ({

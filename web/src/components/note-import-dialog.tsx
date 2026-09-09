@@ -3,6 +3,11 @@
 import { useEffect, useRef, useState } from 'react';
 import { Archive, Check, FileStack, FolderOpen, Loader2, X } from 'lucide-react';
 import { commitNoteImport } from '@/app/notes/actions';
+import {
+  IMPORT_LIMITS,
+  IMPORT_TOO_LARGE_MESSAGE,
+  IMPORT_UPLOAD_LIMIT_LABEL,
+} from '@/lib/notes/import-limits';
 import { actionFailureMessage } from '@/lib/operations/failure-message';
 
 type ImportItem = {
@@ -79,6 +84,21 @@ export function NoteImportDialog({
     setError(null);
     try {
       const selected = Array.from(files);
+      // The deployment rejects an oversized body at the edge, so the browser
+      // would get a response this dialog cannot read and the person would see
+      // a generic failure after waiting for a doomed upload. Checking the
+      // selection here turns that into an immediate, actionable answer, and
+      // the server still enforces the same bound for anything not sent by
+      // this dialog.
+      const selectedBytes = selected.reduce((total, file) => total + file.size, 0);
+      if (selectedBytes > IMPORT_LIMITS.archiveBytes) {
+        throw new Error(IMPORT_TOO_LARGE_MESSAGE);
+      }
+      if (selected.length > IMPORT_LIMITS.candidates) {
+        throw new Error(
+          `Choose at most ${IMPORT_LIMITS.candidates} files at a time. Nothing was imported.`
+        );
+      }
       const formData = new FormData();
       for (const file of selected) formData.append('files', file);
       formData.set(
@@ -87,7 +107,20 @@ export function NoteImportDialog({
       );
       formData.set('sourceType', sourceType);
       const response = await fetch('/api/note-import', { method: 'POST', body: formData });
-      const payload = (await response.json()) as ImportPreview | { error?: string };
+      // A body rejected by the hosting platform never reaches the route, and
+      // what comes back is not this application's JSON. Say what actually
+      // happened instead of letting the JSON parse fail into "Import failed".
+      const payload = (await response.json().catch(() => null)) as
+        | ImportPreview
+        | { error?: string }
+        | null;
+      if (!payload) {
+        throw new Error(
+          response.status === 413
+            ? IMPORT_TOO_LARGE_MESSAGE
+            : 'Planner AI could not read the import response. Nothing was imported.'
+        );
+      }
       if (!response.ok || !('job' in payload)) {
         throw new Error('error' in payload && payload.error ? payload.error : 'Import failed.');
       }
@@ -97,6 +130,18 @@ export function NoteImportDialog({
     } finally {
       setBusy(false);
     }
+  }
+
+  // The per-item report is the reconciliation surface: it is how the owner
+  // decides whether a migration lost anything. Re-reading the job after a
+  // batch is what makes each row describe the committed record rather than
+  // the preview that was taken before any Note existed.
+  async function reloadReport(jobId: string) {
+    const response = await fetch(`/api/note-import?jobId=${encodeURIComponent(jobId)}`, {
+      cache: 'no-store',
+    });
+    if (!response.ok) return null;
+    return (await response.json()) as ImportPreview | null;
   }
 
   async function commit() {
@@ -111,7 +156,16 @@ export function NoteImportDialog({
           throw new Error('Import could not make progress. No Notes were duplicated.');
         }
         current = { ...current, ...next };
-        setPreview((value) => (value ? { ...value, job: current } : value));
+        const committed = await reloadReport(current.id).catch(() => null);
+        if (committed) {
+          current = committed.job;
+          setPreview(committed);
+        } else {
+          // The commit itself succeeded; only the re-read failed. Keep the
+          // counts truthful rather than discarding them.
+          const job = current;
+          setPreview((value) => (value ? { ...value, job } : value));
+        }
       }
       if (current.status !== 'completed') throw new Error('Import paused before completion.');
       onCompleted?.();
@@ -245,7 +299,7 @@ export function NoteImportDialog({
               ? `${preview.job.committedCount} Notes imported`
               : preview
                 ? 'Preview only. Your Notes are unchanged.'
-                : 'ZIP, Markdown, text, and CSV'}
+                : `ZIP, Markdown, text, and CSV — up to ${IMPORT_UPLOAD_LIMIT_LABEL} per import`}
           </span>
           {preview?.job.status === 'completed' ? (
             <button className="btn-primary" type="button" onClick={onClose}>
