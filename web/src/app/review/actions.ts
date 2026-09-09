@@ -1,7 +1,7 @@
 'use server';
 
-import { randomUUID } from 'node:crypto';
 import { revalidatePlannerAndRecords } from '@/lib/planner-revalidation';
+import { periodBounds } from '@/lib/planning-period';
 import type { CoachingIntensity } from '@/lib/coaching';
 import { dateInTimezone } from '@/lib/date';
 import { executeOperation } from '@/lib/operations';
@@ -122,16 +122,12 @@ function ensureCanonical() {
   }
 }
 
-function currentWeek(timezone: string) {
-  const localDate = new Date(`${dateInTimezone(timezone)}T00:00:00Z`);
-  const day = localDate.getUTCDay();
-  localDate.setUTCDate(localDate.getUTCDate() + (day === 0 ? -6 : 1 - day));
-  const end = new Date(localDate);
-  end.setUTCDate(end.getUTCDate() + 6);
-  return {
-    startsOn: localDate.toISOString().slice(0, 10),
-    endsOn: end.toISOString().slice(0, 10),
-  };
+// The week under review is the person's week, not a hard-coded Monday one.
+// week_starts_on is a stored, editable preference, and reviewing the wrong
+// seven days is not a cosmetic error: it decides which unfinished work the
+// person is asked to resolve.
+function currentWeek(timezone: string, weekStartsOn: number) {
+  return periodBounds('week', dateInTimezone(timezone), weekStartsOn);
 }
 
 async function reviewClient() {
@@ -143,7 +139,7 @@ async function reviewClient() {
   if (!user) throw new Error('Please sign in to continue.');
   const { data: workspace, error } = await supabase
     .from('workspaces')
-    .select('id,timezone,coaching_intensity')
+    .select('id,timezone,week_starts_on,coaching_intensity')
     .eq('owner_user_id', user.id)
     .single();
   if (error || !workspace) throw new Error('Unable to load your workspace.');
@@ -151,13 +147,14 @@ async function reviewClient() {
     supabase,
     workspaceId: workspace.id as string,
     timezone: workspace.timezone as string,
+    weekStartsOn: Number(workspace.week_starts_on),
     coachingIntensity: workspace.coaching_intensity as CoachingIntensity,
   };
 }
 
 export async function getWeeklyReviewData(): Promise<WeeklyReviewData> {
-  const { supabase, workspaceId, timezone, coachingIntensity } = await reviewClient();
-  const { startsOn, endsOn } = currentWeek(timezone);
+  const { supabase, workspaceId, timezone, weekStartsOn, coachingIntensity } = await reviewClient();
+  const { startsOn, endsOn } = currentWeek(timezone, weekStartsOn);
   const [actionsResult, reviewsResult, proposalResult, jobResult] = await Promise.all([
     supabase
       .from('actions')
@@ -165,6 +162,12 @@ export async function getWeeklyReviewData(): Promise<WeeklyReviewData> {
         'id,title,status,version,scheduled_on,planning_horizons!inner(kind,starts_on),goals(title)'
       )
       .eq('workspace_id', workspaceId)
+      // Week-horizon Actions only, because review.complete-weekly.v1 validates
+      // that the decision set is exactly the week-horizon Actions and rejects
+      // anything else as review_action_set_changed. Work planned at a longer
+      // horizon but scheduled into these seven days is genuinely this week's
+      // unfinished work and is still missing from the review; widening the
+      // list needs the Operation to change first.
       .eq('planning_horizons.kind', 'week')
       .lte('planning_horizons.starts_on', endsOn)
       .in('status', ['open', 'in_progress', 'blocked'])
@@ -202,12 +205,13 @@ export async function getWeeklyReviewData(): Promise<WeeklyReviewData> {
   if (actionsResult.error || reviewsResult.error || proposalResult.error || jobResult.error) {
     throw new Error('Unable to load Weekly Review.');
   }
+  const actionRows = actionsResult.data ?? [];
   return {
     startsOn,
     endsOn,
     timezone,
     coachingIntensity,
-    actions: (actionsResult.data ?? []).map((action) => {
+    actions: actionRows.map((action) => {
       const horizon = action.planning_horizons as unknown as { starts_on: string };
       const goal = action.goals as unknown as { title: string } | null;
       return {
@@ -242,8 +246,13 @@ export async function completeWeeklyReview(input: {
   decisions: WeeklyReviewDecision[];
 }) {
   const { supabase } = await reviewClient();
+  // One completed weekly review per week is a database invariant, so a second
+  // submission with a fresh key does not create a second review -- it hits the
+  // unique index and fails. Keying on the week instead makes the retry replay
+  // the recorded result, which is what a person clicking twice, or clicking
+  // again after a dropped connection, actually means.
   const result = await executeOperation(supabase, 'review.complete-weekly.v1', input, {
-    idempotencyKey: randomUUID(),
+    idempotencyKey: `weekly-review:${input.startsOn}`,
     surface: 'ui',
   });
   revalidatePlannerAndRecords();
@@ -371,8 +380,10 @@ export async function completePeriodReview(input: {
   reflectionMarkdown: string;
 }) {
   const { supabase } = await reviewClient();
+  // Same invariant as the weekly review: one completed review per period, so
+  // the key is the period rather than a fresh id.
   const result = await executeOperation(supabase, 'review.complete-period.v1', input, {
-    idempotencyKey: randomUUID(),
+    idempotencyKey: `${input.kind}-review:${input.startsOn}`,
     surface: 'ui',
   });
   revalidatePlannerAndRecords();
