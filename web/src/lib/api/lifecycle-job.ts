@@ -6,7 +6,8 @@ import type { Database } from '@/types/supabase.generated';
 export type LifecycleJobName =
   | 'notification_delivery'
   | 'account_deletion'
-  | 'note_attachment_purge';
+  | 'note_attachment_purge'
+  | 'note_import_purge';
 
 type LifecycleJobOutcome = {
   status: 'succeeded' | 'failed';
