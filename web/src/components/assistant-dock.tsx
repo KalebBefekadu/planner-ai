@@ -20,6 +20,7 @@ import type { AssistantEvidence, ResolvedAssistantClaim } from '@/lib/assistant/
 import { GenUiRenderer } from '@/components/genui-renderer';
 import { parseGenUiSpec, type GenUiParseResult } from '@/lib/genui/schema';
 import { actionFailureMessage } from '@/lib/operations/failure-message';
+import { isPermanentAssistantFailure } from '@/lib/ai/proposal-failures';
 
 type Message = {
   id?: string;
@@ -52,6 +53,7 @@ type AssistantResponse = {
   undoableReceiptId?: string | null;
   conversationClosed?: boolean;
   error?: string;
+  code?: string;
 };
 type ConversationResponse = {
   conversations?: Conversation[];
@@ -133,10 +135,11 @@ export function AssistantDock({ className }: { className?: string }) {
       dismissedProposalId?: string;
       undoReceiptId?: string;
     },
-    restoreOnFailure?: () => void
+    restoreOnFailure?: (failure: { permanent: boolean }) => void
   ) {
     setPending(true);
     setError(null);
+    let failureCode: string | null = null;
     try {
       const selectedNoteId =
         pathname === '/notes' ? new URLSearchParams(window.location.search).get('note') : null;
@@ -165,7 +168,10 @@ export function AssistantDock({ className }: { className?: string }) {
         }),
       });
       const data = (await response.json()) as AssistantResponse;
-      if (!response.ok && response.status !== 409) {
+      // A 409 that carries a reply is the legacy data model politely declining
+      // to act; a 409 with only an error is a real failure and must be shown.
+      if (!response.ok && !data.reply) {
+        failureCode = data.code ?? null;
         throw new Error(data.error ?? 'Planner AI could not respond.');
       }
       if (data.reply) {
@@ -196,7 +202,7 @@ export function AssistantDock({ className }: { className?: string }) {
     } catch (caught) {
       setError(actionFailureMessage(caught, 'Planner AI could not respond.'));
       if (options.message) setFailedMessage(options.message);
-      restoreOnFailure?.();
+      restoreOnFailure?.({ permanent: isPermanentAssistantFailure(failureCode) });
     } finally {
       setPending(false);
     }
@@ -216,21 +222,30 @@ export function AssistantDock({ className }: { className?: string }) {
     if (!proposal || pending) return;
     const actedOn = proposal;
     setProposal(null);
-    void callAssistant({ approvedProposalId: actedOn.id }, () => setProposal(actedOn));
+    // Putting the card back is what makes a retry possible, but a Proposal the
+    // server has already spent can never be approved, and offering it again is
+    // the approval loop this ticket set out to end.
+    void callAssistant({ approvedProposalId: actedOn.id }, ({ permanent }) => {
+      if (!permanent) setProposal(actedOn);
+    });
   }
 
   function dismissProposal() {
     if (!proposal || pending) return;
     const actedOn = proposal;
     setProposal(null);
-    void callAssistant({ dismissedProposalId: actedOn.id }, () => setProposal(actedOn));
+    void callAssistant({ dismissedProposalId: actedOn.id }, ({ permanent }) => {
+      if (!permanent) setProposal(actedOn);
+    });
   }
 
   function undoLastOperation() {
     if (!undoableReceiptId || pending) return;
     const receiptId = undoableReceiptId;
     setUndoableReceiptId(null);
-    void callAssistant({ undoReceiptId: receiptId }, () => setUndoableReceiptId(receiptId));
+    void callAssistant({ undoReceiptId: receiptId }, ({ permanent }) => {
+      if (!permanent) setUndoableReceiptId(receiptId);
+    });
   }
 
   return (
