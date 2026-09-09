@@ -799,18 +799,7 @@ test('search finds a nested Note whose ancestors do not match', async ({ workspa
 // hierarchy that would otherwise tell them apart. Two identical buttons make
 // choosing the right page guesswork, and the cost of guessing wrong is writing
 // into the wrong page.
-/* Quarantined, not deleted: see #213. This fails 5 runs in 10 as authored,
-   because 'Make child of the note above' silently does nothing when clicked
-   soon after creating a Note -- the move is computed from the rendered sibling
-   order, which the router refresh has not caught up with. That looks like an
-   application race rather than a test one, and a person filing a Note quickly
-   would hit the same silent no-op. Two test-side fixes moved it from 50% to
-   35%, which is an improvement and not a fix.
-
-   The pattern under test -- results naming the project they belong to -- is a
-   stated acceptance criterion of #123, so this stays here to be repaired once
-   the underlying move is settled. */
-test.fixme('two Notes with the same title are told apart by where they are filed', async ({
+test('two Notes with the same title are told apart by where they are filed', async ({
   workspace,
 }) => {
   const { page } = workspace;
@@ -818,13 +807,17 @@ test.fixme('two Notes with the same title are told apart by where they are filed
   await goTo(page, '/notes');
   await createRootNote(page, 'Orion', 'The first project.');
   await createRootNote(page, 'Notes', 'Retrieval rewrite decisions.');
-  await openNote(page, 'Notes');
+  // Creating a Note leaves it open, so the Note to file is already the selected
+  // one. Reopening it by title cannot work here: once the first 'Notes' is
+  // filed under Orion the tree holds two buttons with that name, which is the
+  // very ambiguity this journey exists to expose.
+  await expect(page.getByRole('textbox', { name: 'Note title' })).toHaveValue('Notes');
   await page.getByRole('button', { name: 'Make child of the note above' }).click();
   await expect(treeNote(page, 'Notes')).toBeVisible();
 
   await createRootNote(page, 'Vega', 'The second project.');
   await createRootNote(page, 'Notes', 'Retrieval rewrite decisions.');
-  await openNote(page, 'Notes');
+  await expect(page.getByRole('textbox', { name: 'Note title' })).toHaveValue('Notes');
   await page.getByRole('button', { name: 'Make child of the note above' }).click();
 
   const search = page.getByRole('textbox', { name: 'Search notes' });
@@ -840,6 +833,33 @@ test.fixme('two Notes with the same title are told apart by where they are filed
   await locatedNote(page, 'Notes', 'Notes', ['Vega']).click();
   await expect(page.getByRole('textbox', { name: 'Note title' })).toHaveValue('Notes');
   await expect(page.getByRole('navigation', { name: 'Note location' })).toContainText('Vega');
+});
+
+// The mechanism behind #213, pinned on its own so the journey above is not the
+// only thing standing between a regression and a silently lost move.
+//
+// Searching submits a form, which is a document load, and a document load
+// aborts every request still in flight. A move started a moment earlier never
+// reached the server: the Note stayed at root and nothing said so. Under load
+// that swallowed the move about half the time.
+test('a move survives a search started before it has finished', async ({ workspace }) => {
+  const { page } = workspace;
+
+  await goTo(page, '/notes');
+  await createRootNote(page, 'Retention policy', 'The project.');
+  await createRootNote(page, 'Retention decisions', 'Retrieval rewrite decisions.');
+
+  // No wait between the move and the search: that gap is the whole defect.
+  await page.getByRole('button', { name: 'Make child of the note above' }).click();
+  const search = page.getByRole('textbox', { name: 'Search notes' });
+  await search.fill('retrieval');
+  await search.press('Enter');
+
+  // The result names where the Note is filed, so this asserts the move landed
+  // rather than merely that the Note still exists.
+  await expect(
+    locatedNote(page, 'Notes', 'Retention decisions', ['Retention policy'])
+  ).toBeVisible();
 });
 
 // Favourites are the pages someone returns to daily. Held in the page they
