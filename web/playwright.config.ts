@@ -28,7 +28,11 @@ export default defineConfig({
   // The local Supabase Auth stack is intentionally small. Four concurrent
   // signup/onboarding flows still exercise independent workspaces without
   // turning local infrastructure saturation into a false product failure.
-  workers: process.env.CI ? 1 : 4,
+  // CI ran one worker while the machine has several cores, which is why the
+  // full suite took fifteen minutes there and four minutes locally. Three is
+  // below the local four -- the shared Auth stack is small and CI is slower --
+  // and the two retries above already absorb the occasional contended signup.
+  workers: process.env.CI ? 3 : 4,
   forbidOnly: Boolean(process.env.CI),
   retries: process.env.CI ? 2 : 0,
   reporter: process.env.CI ? 'github' : 'list',
