@@ -28,6 +28,7 @@ import {
   experienceAreaForPath,
   experienceCommands,
   experienceNavItems,
+  filterExperienceCommands,
   experienceNavigationForPath,
   experienceRailItems,
   isExperienceNavItemActive,
@@ -107,9 +108,7 @@ export function ExperienceShell({
   const primaryItems = experienceRailItems(canonical, unreadNotifications);
   const mainItems = primaryItems.filter((item) => item.placement === 'main');
   const footerItems = primaryItems.filter((item) => item.placement === 'footer');
-  const commands = experienceCommands(canonical).filter((command) =>
-    `${command.label} ${command.detail}`.toLowerCase().includes(commandQuery.trim().toLowerCase())
-  );
+  const commands = filterExperienceCommands(experienceCommands(canonical), commandQuery);
 
   const shellRef = useRef<HTMLDivElement>(null);
 
@@ -208,7 +207,11 @@ export function ExperienceShell({
         </Link>
       ) : null}
 
-      <nav className="experience-secondary-nav" aria-label={`${navigation.title} sections`}>
+      {/* Named "menu" rather than "sections": on /settings the in-page tab bar
+          is already the "Settings sections" landmark, and two navigation
+          landmarks sharing one name leaves a screen-reader user unable to tell
+          the sidebar from the tab bar. */}
+      <nav className="experience-secondary-nav" aria-label={`${navigation.title} menu`}>
         {navigation.sections.map((section) => (
           <div className="experience-nav-section" key={`${navigation.area}-${section.label}`}>
             <p>{section.label}</p>
@@ -407,7 +410,6 @@ export function ExperienceShell({
               placeholder="Search or open a destination"
               aria-label="Search commands and workspace"
               maxLength={120}
-              autoFocus
             />
             <button
               className="experience-icon-button"
@@ -421,6 +423,14 @@ export function ExperienceShell({
           </form>
           <div className="experience-command-results">
             <p>Open</p>
+            {/* Announced politely so a filter that matches nothing is heard, not
+                just seen as an empty gap above the search fallback. */}
+            <p className="visually-hidden" role="status">
+              {commands.length === 1 ? '1 destination' : `${commands.length} destinations`}
+            </p>
+            {commands.length === 0 ? (
+              <p className="experience-command-empty">No destination matches that.</p>
+            ) : null}
             {commands.map((command) => (
               <Link
                 href={command.href}

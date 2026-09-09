@@ -41,7 +41,7 @@ Two properties keep Preview from becoming a second design system. Both are curre
 | --- | --- | --- | --- | --- |
 | Global rail, primary navigation | keep | `experience-shell.tsx` | UI-02 / [#131](https://github.com/KalebBefekadu/planner-ai/issues/131) | behavior — `keyboard-navigation.spec.ts`, `authenticated-accessibility.spec.ts` |
 | Mobile menu open/close, mobile bar | keep | `experience-shell.tsx` | UI-02 / [#131](https://github.com/KalebBefekadu/planner-ai/issues/131) | behavior — `keyboard-navigation.spec.ts` ("the mobile workspace menu is keyboard-operable") |
-| Command palette (search commands and workspace) | keep | `experience-shell.tsx` | UI-02 / [#131](https://github.com/KalebBefekadu/planner-ai/issues/131) | visual — the palette exists and opens; no test names its command results |
+| Command palette (search commands and workspace) | keep | `experience-shell.tsx` | UI-02 / [#131](https://github.com/KalebBefekadu/planner-ai/issues/131) | behavior — `shell-frame.spec.ts` ("opens on the keyboard shortcut and offers every product area", "narrows the destinations as the query is typed"), `experience-navigation.test.ts` ("command palette results") |
 | Sidebar tree with resizer | keep | `notes-shell.tsx`, `panel-resizer.tsx` | WS-02 / [#123](https://github.com/KalebBefekadu/planner-ai/issues/123) | behavior — `journey-notes.spec.ts` |
 | Context panel: AI / Properties / Links tabs | extract | `notes-workspace.tsx` note inspector | WS-03 / [#124](https://github.com/KalebBefekadu/planner-ai/issues/124) | visual — the real inspector carries details, connections and history; the three-tab framing and its auto-open rule are not ported |
 | Context panel auto-open rule (open only where it helps, closed on compact) | extract | `experience-shell.tsx` / inspector | WS-03 / [#124](https://github.com/KalebBefekadu/planner-ai/issues/124) | open |
@@ -98,11 +98,11 @@ The four rows above are the reason UI-03 cannot simply delete `/preview`. Each F
 | --- | --- | --- | --- | --- |
 | Home view | keep | `/` (Today is the real home) | UI-02 / [#131](https://github.com/KalebBefekadu/planner-ai/issues/131) | behavior — `journey-today.spec.ts`. Preview's Home is a separate dashboard; the real product deliberately makes Today the entrance. Recorded as an accepted divergence, not a gap. |
 | Search view, "Narrow results" | keep | `/search` | WS-02 / [#123](https://github.com/KalebBefekadu/planner-ai/issues/123) | behavior — `workspace-search.test.ts` |
-| Notifications, "Filter notifications" | keep | `/notifications`, `notifications-center.tsx` | UI-02 / [#131](https://github.com/KalebBefekadu/planner-ai/issues/131) | visual |
-| Settings: preferences, ai, memory, data, security | keep | `/settings/*`, `settings-tabs.tsx` | UI-02 / [#131](https://github.com/KalebBefekadu/planner-ai/issues/131) | visual |
+| Notifications | keep | `/notifications`, `notifications-center.tsx` | UI-02 / [#131](https://github.com/KalebBefekadu/planner-ai/issues/131) | behavior — `shell-frame.spec.ts` ("is reachable from the rail and reports a real unread count", "a freshly onboarded workspace shows the caught-up state"). Preview's "Filter notifications" control has no real equivalent and is recorded as an accepted divergence: the real centre shows one owner's queue, which read/dismiss already shortens. |
+| Settings: preferences, ai, memory, data, security | keep | `/settings/*`, `settings-tabs.tsx` | UI-02 / [#131](https://github.com/KalebBefekadu/planner-ai/issues/131) | behavior — `shell-frame.spec.ts` ("every settings section is reachable from the tab bar and keeps its tab marked") |
 | Settings: integrations | keep | `/settings/mcp`, `mcp-token-manager.tsx` | MCP-01 / [#135](https://github.com/KalebBefekadu/planner-ai/issues/135) | behavior — `mcp-token-lifecycle.spec.ts` |
-| Settings: account | extract | no dedicated route; account controls are split across security and data | UI-02 / [#131](https://github.com/KalebBefekadu/planner-ai/issues/131) | open — decide whether the section is created or the divergence is accepted |
-| "Related settings" cross-links | extract | `settings-tabs.tsx` | UI-02 / [#131](https://github.com/KalebBefekadu/planner-ai/issues/131) | open |
+| Settings: account | keep | `/settings/account`, `account-summary.tsx` | UI-02 / [#131](https://github.com/KalebBefekadu/planner-ai/issues/131) | behavior — `shell-frame.spec.ts` ("the account section reports the signed-in owner rather than a fixture"), `settings-sections.test.ts` ("account section"). The section was created. It reports the real record — address, Workspace name, time zone, join date — and links each changeable fact to the section that already owns changing it, rather than becoming a second place to edit. Preview's editable name and photo are an accepted divergence: a first-release Workspace has one owner and no profile record to edit. |
+| "Related settings" cross-links | keep | `settings-tabs.tsx`, `src/app/settings/layout.tsx` | UI-02 / [#131](https://github.com/KalebBefekadu/planner-ai/issues/131) | behavior — `shell-frame.spec.ts` ("each section says where the things it only reports are changed"), `settings-sections.test.ts` ("related settings cross-links"). Ported with intent rather than shape: the tab bar already links everywhere, so each cross-link carries the reason the two sections belong together. |
 
 ## Perimeter and onboarding
 
@@ -139,4 +139,4 @@ Every row above has a disposition and an owning ticket, which satisfies UI-01. R
 3. Every `extract` row is ported or downgraded to an accepted divergence.
 4. Desktop and mobile references are captured for empty, populated, error and dark states using fixture data only.
 
-Nine `open` rows remain. They are the real content of WS-02, WS-03, WS-04 and UI-02, and none of them is blocked by this inventory.
+Seven `open` rows remain. They are the real content of WS-02, WS-03 and WS-04, and none of them is blocked by this inventory. UI-02 closed the two it owned by building the Account section and the "Related settings" footer, and moved the command palette, Notifications and the Settings screens off `visual` by naming them in `shell-frame.spec.ts`.
