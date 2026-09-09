@@ -71,6 +71,13 @@ import {
   type NoteView,
 } from '@/app/notes/actions';
 import { nextParentMove, nextSiblingMove, parentCandidateIds } from '@/lib/notes/sibling-order';
+import { operationFailureCode } from '@/lib/operations';
+import {
+  conflictSummary,
+  describeNoteConflict,
+  resolveWith,
+  type ConflictSide,
+} from '@/lib/notes/conflict-resolution';
 import { NoteAppearanceHeader } from '@/components/note-appearance-header';
 import { noteLocationLabel, notePath, orderFavorites } from '@/lib/notes/note-paths';
 import { RichMarkdownEditor } from '@/components/rich-markdown-editor';
@@ -196,6 +203,10 @@ export function NotesWorkspace({
   const [saveState, setSaveState] = useState<'saved' | 'unsaved' | 'saving' | 'error'>('saved');
   const [dismissedDraftFor, setDismissedDraftFor] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  /* The refused draft, held so the two versions can be compared. Separate from
+     `body`/`title`, which stay exactly as typed -- the editor is never quietly
+     rewritten out from under someone. */
+  const [conflict, setConflict] = useState<{ title: string; bodyMarkdown: string } | null>(null);
   const [tagText, setTagText] = useState(knowledge?.tags.join(', ') ?? '');
   const [targetNoteId, setTargetNoteId] = useState('');
   const [filingParentId, setFilingParentId] = useState('');
@@ -363,6 +374,43 @@ export function NotesWorkspace({
   // pages apart, so whatever ancestor chain is in hand is shown underneath the
   // title: "Notes" under Acme and "Notes" under Globex are distinguishable
   // before the click rather than after it.
+  /* Taking one side of a conflict.
+   *
+   * Whichever side is chosen, the write goes through the ordinary versioned
+   * Operation against the version now stored, so choosing is itself an
+   * ordinary save -- recorded, undoable, and refused again if someone else
+   * saves in the meantime. Keeping the stored version still writes, rather
+   * than silently dropping the draft, so Activity records that a decision was
+   * made rather than leaving a gap where someone's writing used to be. */
+  async function resolveConflict(side: ConflictSide) {
+    if (!conflict || !selected) return;
+    const chosen = resolveWith(side, conflict, {
+      title: selected.title,
+      bodyMarkdown: selected.bodyMarkdown,
+    });
+    setError(null);
+    try {
+      const saved = await updateNote({
+        id: selected.id,
+        title: chosen.title.trim() || 'Untitled',
+        bodyMarkdown: chosen.bodyMarkdown,
+        expectedVersion: selected.version,
+      });
+      versionRef.current = saved.version;
+      setTitle(saved.title);
+      setBody(saved.bodyMarkdown);
+      queuedDraftRef.current = null;
+      pendingSaveRef.current = null;
+      persistedDraftRef.current = { title: saved.title, bodyMarkdown: saved.bodyMarkdown };
+      forgetNoteDraft(selected.id);
+      setConflict(null);
+      setSaveState('saved');
+      router.refresh();
+    } catch (caught) {
+      setError(errorMessage(caught));
+    }
+  }
+
   function renderNoteButton(note: NoteView, locationLabel?: string) {
     return (
       <button
@@ -479,6 +527,18 @@ export function NotesWorkspace({
               savedAt: Date.now(),
               expectedVersion: versionRef.current,
             });
+            /* A version conflict is not an error to report and move on
+               from: the person is now holding two versions of their own
+               writing, and the only advice the copy can give -- refresh -- is
+               the action that discards theirs. Keep the refused draft and show
+               the comparison instead. `router.refresh()` brings the stored
+               version into `notes` without touching the editor. */
+            if (operationFailureCode(caught) === 'version_conflict') {
+              setConflict({ title: nextDraft.title, bodyMarkdown: nextDraft.bodyMarkdown });
+              setSaveState('error');
+              router.refresh();
+              return;
+            }
             setError(errorMessage(caught));
             setSaveState('error');
             return;
@@ -966,6 +1026,74 @@ export function NotesWorkspace({
                 </button>
               </div>
             </div>
+            {conflict && selected
+              ? (() => {
+                  const comparison = describeNoteConflict(conflict, {
+                    title: selected.title,
+                    bodyMarkdown: selected.bodyMarkdown,
+                  });
+                  return (
+                    <section className="note-conflict" role="alert" aria-label="Version conflict">
+                      <p className="note-conflict-summary">{conflictSummary(comparison)}</p>
+                      <p className="note-conflict-help">
+                        Your writing is safe. Read both, then choose which one this Note keeps.
+                      </p>
+                      {comparison.titleDiffers ? (
+                        <dl className="note-conflict-titles">
+                          <dt>Your title</dt>
+                          <dd>{conflict.title || 'Untitled'}</dd>
+                          <dt>Saved title</dt>
+                          <dd>{selected.title || 'Untitled'}</dd>
+                        </dl>
+                      ) : null}
+                      {comparison.bodyDiffers ? (
+                        <ol className="note-conflict-diff">
+                          {comparison.lines.map((line, index) => (
+                            <li
+                              key={`${line.kind}-${index}`}
+                              className={`note-conflict-line note-conflict-line-${line.kind}`}
+                            >
+                              <span className="note-conflict-marker" aria-hidden="true">
+                                {line.kind === 'mine'
+                                  ? '+'
+                                  : line.kind === 'theirs'
+                                    ? '\u2212'
+                                    : ' '}
+                              </span>
+                              {/* The screen reader hears which side a line is on;
+                                sighted readers get the colour and the marker. */}
+                              <span className="note-conflict-side">
+                                {line.kind === 'mine'
+                                  ? 'Yours: '
+                                  : line.kind === 'theirs'
+                                    ? 'Saved: '
+                                    : ''}
+                              </span>
+                              <span className="note-conflict-text">{line.text || '\u00a0'}</span>
+                            </li>
+                          ))}
+                        </ol>
+                      ) : null}
+                      <div className="note-conflict-actions">
+                        <button
+                          className="btn-primary"
+                          type="button"
+                          onClick={() => void resolveConflict('mine')}
+                        >
+                          Keep what I wrote
+                        </button>
+                        <button
+                          className="btn-secondary"
+                          type="button"
+                          onClick={() => void resolveConflict('theirs')}
+                        >
+                          Use the saved version
+                        </button>
+                      </div>
+                    </section>
+                  );
+                })()
+              : null}
             {error ? (
               <p className="status-message status-message-error" role="alert">
                 {error}
