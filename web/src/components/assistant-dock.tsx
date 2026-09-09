@@ -123,12 +123,18 @@ export function AssistantDock({ className }: { className?: string }) {
     });
   }, [loadConversationIndex, pathname, selectConversation]);
 
-  async function callAssistant(options: {
-    message?: string;
-    approvedProposalId?: string;
-    dismissedProposalId?: string;
-    undoReceiptId?: string;
-  }) {
+  // `restoreOnFailure` puts back whatever the caller optimistically cleared
+  // before the request. A provider outage should cost a retry, never the thing
+  // the person was about to act on.
+  async function callAssistant(
+    options: {
+      message?: string;
+      approvedProposalId?: string;
+      dismissedProposalId?: string;
+      undoReceiptId?: string;
+    },
+    restoreOnFailure?: () => void
+  ) {
     setPending(true);
     setError(null);
     try {
@@ -190,6 +196,7 @@ export function AssistantDock({ className }: { className?: string }) {
     } catch (caught) {
       setError(actionFailureMessage(caught, 'Planner AI could not respond.'));
       if (options.message) setFailedMessage(options.message);
+      restoreOnFailure?.();
     } finally {
       setPending(false);
     }
@@ -207,23 +214,23 @@ export function AssistantDock({ className }: { className?: string }) {
 
   function approveProposal() {
     if (!proposal || pending) return;
-    const proposalId = proposal.id;
+    const actedOn = proposal;
     setProposal(null);
-    void callAssistant({ approvedProposalId: proposalId });
+    void callAssistant({ approvedProposalId: actedOn.id }, () => setProposal(actedOn));
   }
 
   function dismissProposal() {
     if (!proposal || pending) return;
-    const proposalId = proposal.id;
+    const actedOn = proposal;
     setProposal(null);
-    void callAssistant({ dismissedProposalId: proposalId });
+    void callAssistant({ dismissedProposalId: actedOn.id }, () => setProposal(actedOn));
   }
 
   function undoLastOperation() {
     if (!undoableReceiptId || pending) return;
     const receiptId = undoableReceiptId;
     setUndoableReceiptId(null);
-    void callAssistant({ undoReceiptId: receiptId });
+    void callAssistant({ undoReceiptId: receiptId }, () => setUndoableReceiptId(receiptId));
   }
 
   return (
