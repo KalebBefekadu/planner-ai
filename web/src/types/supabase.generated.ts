@@ -1792,7 +1792,11 @@ export type Database = {
           ai_excluded: boolean;
           archived_at: string | null;
           body_markdown: string;
+          cover_key: string | null;
+          cover_position: number;
           created_at: string;
+          favorited_at: string | null;
+          icon_emoji: string | null;
           id: string;
           parent_note_id: string | null;
           purge_after: string | null;
@@ -1808,7 +1812,11 @@ export type Database = {
           ai_excluded?: boolean;
           archived_at?: string | null;
           body_markdown?: string;
+          cover_key?: string | null;
+          cover_position?: number;
           created_at?: string;
+          favorited_at?: string | null;
+          icon_emoji?: string | null;
           id?: string;
           parent_note_id?: string | null;
           purge_after?: string | null;
@@ -1824,7 +1832,11 @@ export type Database = {
           ai_excluded?: boolean;
           archived_at?: string | null;
           body_markdown?: string;
+          cover_key?: string | null;
+          cover_position?: number;
           created_at?: string;
+          favorited_at?: string | null;
+          icon_emoji?: string | null;
           id?: string;
           parent_note_id?: string | null;
           purge_after?: string | null;
@@ -2750,6 +2762,15 @@ export type Database = {
         };
         Returns: Json;
       };
+      dispatch_trusted_operation_note_appearance_base: {
+        Args: {
+          p_idempotency_key: string;
+          p_input: Json;
+          p_operation_id: string;
+          p_surface: string;
+        };
+        Returns: Json;
+      };
       dispatch_trusted_operation_notification_base: {
         Args: {
           p_idempotency_key: string;
@@ -2917,6 +2938,15 @@ export type Database = {
           p_input: Json;
           p_operation_id: string;
           p_surface: string;
+        };
+        Returns: Json;
+      };
+      execute_note_appearance_operation: {
+        Args: {
+          p_idempotency_key: string;
+          p_input: Json;
+          p_operation_id: string;
+          p_surface?: string;
         };
         Returns: Json;
       };

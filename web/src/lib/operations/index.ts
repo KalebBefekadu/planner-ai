@@ -731,6 +731,8 @@ export const operationDefinitions = {
         expectedVersion: version,
       })
       .strict(),
+    output: noteOutput,
+  },
   'note.favorite.v1': {
     summary: 'Mark or unmark one Note as a favourite.',
     risk: 'low',
