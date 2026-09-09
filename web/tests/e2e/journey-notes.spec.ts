@@ -1,6 +1,6 @@
 import { readFileSync } from 'node:fs';
 
-import { test, expect, goTo, waitForHydration } from './support/workspace';
+import { test, expect, goTo, replaceFieldValue, waitForHydration } from './support/workspace';
 import { currentTotp } from './support/totp';
 
 // Journey 5 of the delivery rule: knowledge stays understandable after the
@@ -372,18 +372,27 @@ test('a Note edited in two places reports the clash without losing what was type
     'Contested decision'
   );
 
-  await page.getByRole('textbox', { name: 'Note body, Markdown' }).fill('The newer wording.');
+  await replaceFieldValue(
+    page.getByRole('textbox', { name: 'Note body, Markdown' }),
+    'The newer wording.'
+  );
   await expect(page.getByRole('status')).toHaveText('Saved', { timeout: 15_000 });
 
   const losing = 'Work done in the stale view that must not vanish.';
-  await stale.getByRole('textbox', { name: 'Note body, Markdown' }).fill(losing);
+  await replaceFieldValue(stale.getByRole('textbox', { name: 'Note body, Markdown' }), losing);
 
   // The clash is reported plainly rather than being retried into silence.
   await expect(stale.getByRole('status')).toHaveText('Not saved', { timeout: 15_000 });
-  // Scoped past the router's own live region, which is also an alert.
-  await expect(stale.getByRole('alert').filter({ hasText: 'changed elsewhere' })).toContainText(
-    'This item changed elsewhere. Refresh and try again.'
-  );
+  /* What the clash says has changed, and the assertion follows the product
+     rather than pinning the sentence the product stopped saying. The advice
+     used to be "Refresh and try again", which is the one action that discards
+     the words in the editor; the conflict panel now shows both versions and
+     offers a choice. Scoped by name past the router's own live region, which
+     is also an alert. */
+  const clash = stale.getByRole('alert', { name: 'Version conflict' });
+  await expect(clash).toContainText('This Note was saved somewhere else while you were writing.');
+  await expect(clash.getByRole('button', { name: 'Keep what I wrote' })).toBeVisible();
+  await expect(clash.getByRole('button', { name: 'Use the saved version' })).toBeVisible();
 
   // The words are still in the editor, so the person can copy them somewhere
   // safe. Losing them is what makes a conflict a data-loss bug rather than an
