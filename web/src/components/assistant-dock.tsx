@@ -391,9 +391,15 @@ export function AssistantDock({ className }: { className?: string }) {
                   <span>{proposal.risk} risk</span>
                 </div>
                 <div>
+                  {/* Disabled while a decision is in flight, for the same
+                      reason Undo already is. Both handlers ignore a second
+                      click, but a control that still looks pressable invites
+                      one at the moment a person most wants to know whether
+                      their decision landed. */}
                   <button
                     className="btn-secondary button-with-icon"
                     type="button"
+                    disabled={pending}
                     onClick={dismissProposal}
                   >
                     <X size={15} />
@@ -402,6 +408,7 @@ export function AssistantDock({ className }: { className?: string }) {
                   <button
                     className="btn-primary button-with-icon"
                     type="button"
+                    disabled={pending}
                     onClick={approveProposal}
                   >
                     <Check size={15} />

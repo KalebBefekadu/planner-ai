@@ -7207,3 +7207,10 @@ button:disabled {
   line-height: 1.45;
   opacity: 0.78;
 }
+
+/* WS-07: a Capture that has already become a Note or an Action says so on
+   reload, not only in the moment it was filed. Deliberately quiet -- it is a
+   statement of fact about the inbox, not a success banner. */
+.capture-filing .capture-filing-filed {
+  opacity: 0.72;
+}

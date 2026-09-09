@@ -23,15 +23,10 @@ export type CaptureNotePlan = {
 };
 
 export type CaptureActionPlan = {
-  create: {
-    title: string;
-    horizonKind: 'week';
-    startsOn: string;
-    endsOn: string;
-    goalId: null;
-    parentActionId: null;
-    scheduledOn: null;
-  };
+  captureId: string;
+  title: string;
+  startsOn: string;
+  endsOn: string;
   descriptionMarkdown: string | null;
 };
 
@@ -80,6 +75,7 @@ export function planCaptureNote(rawText: string): CaptureNotePlan {
 }
 
 export function planCaptureAction(
+  captureId: string,
   rawText: string,
   localDate: string,
   weekStartsOn: number
@@ -88,19 +84,17 @@ export function planCaptureAction(
   const title = captureFilingTitle(rawText, ACTION_TITLE_LIMIT);
   const startsOn = plannerWeekStart(localDate, weekStartsOn);
   return {
-    create: {
-      title,
-      // The current week, because a thought filed today is a thought about
-      // now. It is deliberately left unscheduled and unattached to a Goal:
-      // deciding the day and the reason is planning work, and guessing at it
-      // here would put words in the person's mouth.
-      horizonKind: 'week',
-      startsOn,
-      endsOn: addCalendarDays(startsOn, 6),
-      goalId: null,
-      parentActionId: null,
-      scheduledOn: null,
-    },
+    // The Capture travels with the plan because the Action and the link back
+    // to its origin are one Operation. An Action that exists without the
+    // Capture it came from is the state this filing path is meant to end.
+    captureId,
+    title,
+    // The current week, because a thought filed today is a thought about now.
+    // It is deliberately left unattached to a Goal: deciding the reason is
+    // planning work, and guessing at it here would put words in the person's
+    // mouth.
+    startsOn,
+    endsOn: addCalendarDays(startsOn, 6),
     // A description is only worth writing when the title is not already the
     // whole thought; repeating the same sentence twice is noise.
     descriptionMarkdown:
