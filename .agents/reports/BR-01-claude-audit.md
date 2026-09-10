@@ -3,10 +3,60 @@
 Task: `.agents/tasks/BR-01-shell-audit.md`
 Owner: Claude (independent read-only audit)
 Branch: `claude/br-01-shell-audit` (base `integration/dogfood`)
-Scope of evidence: `web/src` at this branch, which is byte-identical to `main` for `web/**`.
+Scope of evidence: `web/src` at this branch. Sections 1-7 were written against `main` (`7d27ad0`); **§0 records what changed once this report was rebased onto `integration/dogfood` (`097ce79`) and supersedes the claims it names.**
 Nothing outside `.agents/reports/BR-01-claude-audit.md` was modified.
 
 ---
+
+## 0. Rebase delta — what `integration/dogfood` already fixed
+
+**Read this section first.** Sections 1-7 below were written against `main` (`7d27ad0`). This report is now rebased onto `integration/dogfood` (`097ce79`), which is ~20 commits ahead and has already landed several of the recommendations. The findings below supersede the corresponding claims in the original body. Everything not listed here still holds.
+
+### 0.1 Already implemented — do not re-do
+
+| Original finding | Status on `integration/dogfood` | Evidence |
+| --- | --- | --- |
+| §1.1 "three authenticated frames selected at one place" | **Now two.** The legacy `.app-shell` branch is gone; `ExperienceShell` is unconditional for any authenticated user, and `layout.tsx` no longer reads `PLANNER_UI_V2` at all | `web/src/app/layout.tsx:47-57` |
+| §1.2 "legacy rail — `nav-links.tsx`" | **File deleted** | `web/src/components/nav-links.tsx` no longer exists |
+| §3.3 nav impl 3: `primaryItems` / `commands` hardcoded inside `experience-shell.tsx:75-112` | **Moved into the typed model** as `experienceRailItems()` / `experienceCommands()`; the component now only consumes them | `web/src/components/experience-shell.tsx:107-110`, `web/src/lib/experience-navigation.ts` (now 275 lines, was 140) |
+| §6.6 "rail slicing is positional (`slice(0,4)` / `slice(4)`)" | **Fixed exactly as recommended.** `RailItem` carries `placement: 'main' \| 'footer'` and the component filters on it | `web/src/components/experience-shell.tsx:108-109`; `web/src/lib/experience-navigation.ts:62-85` |
+| §6.5 "legacy shell is the production default with zero browser coverage" | **Obsolete.** With the branch removed there is no unconfigured fallback; every authenticated user gets the V2 frame. The risk inverts: the V2 frame is now the only frame, so a regression in it has no fallback | `web/src/app/layout.tsx:47` |
+| §5 Step 7 "retire the old shell" | **Mostly done** — see §0.3 for the dead remainder | — |
+| §7.4 **blocker** — Preview and real navigation describe different destination sets | **Resolved.** `experience-navigation.ts` now carries Plan/Align grouping and the full Preview destination list: Today, This week, Calendar, Action inbox, Weekly review, Goals & horizons, Vision | `web/src/lib/experience-navigation.ts:104-125` |
+| §3.1 "the real app has no Inter" | **Partly landed.** `--font-ui` is now the Inter stack and `body` consumes it | `web/src/app/globals.css:34`, `:159`, `:182` |
+| §7.2 new `design-tokens.test.ts` | **Exists**, and already pins that `layout.tsx` references neither `experienceV2EnabledForOwner` nor `PLANNER_UI_V2` | `web/tests/unit/design-tokens.test.ts:27-28` |
+
+**Consequence: Step 3 is unblocked and its navigation half is already complete.** What remains of Step 3 is the frame itself — `AppFrame`, the context column, the mobile bottom bar, `ShellStatus` replacing the hardcoded status text, and collapsing the duplicate `AssistantDock` mounts.
+
+### 0.2 Still open — unchanged since the original audit
+
+- **§5 Step 1, token merge: not started.** `globals.css` contains zero `--v2-*` names; `preview.module.css` still defines its own 1150-occurrence parallel palette. Every divergence listed in §3.1 (brand, canvas, ink, border, the missing ink/surface/interaction/accent tiers) still stands. Only the font half of Step 1 landed.
+- **§5 Step 2, component extraction: not started.** `web/src/components/shell/` does not exist. This is now the critical path — nothing downstream of it has moved.
+- **§6.4 two theme stores.** Preview still uses `planner-preview-theme` on `.previewRoot` (`web/src/app/preview/page.tsx:99-100`) against the app's `planner-theme` on `<html>`. The §6.4 sequencing constraint is unchanged: Preview must adopt `ThemeToggle` in the same commit as the token merge.
+- **§6.1 (style attributes discarded under CSP), §6.2 (Notes double sidebar), §6.3 (horizon tab semantics), §6.7-6.9** all still hold. `.notes-shell` is still its own grid, now at `web/src/app/globals.css:2029`.
+- **§7.1 visual baselines: still none.** Nothing in `web/tests/e2e` captures a screenshot. Step 0 remains the correct first action.
+
+### 0.3 Dead code the shell removal left behind
+
+Removing the legacy branch did not remove everything it fed. These are safe, mechanical deletions for whichever ticket next owns these files — they are listed here rather than acted on because `web/**` is outside this audit's writable paths.
+
+| Dead artifact | Location | Why it is dead |
+| --- | --- | --- |
+| `experienceV2EnabledForOwner` and the whole rollout module | `web/src/lib/experience-rollout.ts` | No production caller remains; the only importer is its own test |
+| Its unit test | `web/tests/unit/experience-rollout.test.ts` | Tests a module nothing calls |
+| `PLANNER_UI_V2=enabled` (twice) in the e2e server command | `web/playwright.config.ts:53` | The variable is no longer read by product code |
+| Legacy shell CSS | `web/src/app/globals.css:601-695` and the `.app-shell` / `.app-sidebar` rules in the max-width block at `:5691+` | No `.tsx` references `.app-shell`, `.app-sidebar`, `.brand`, `.brand-mark`, `.app-nav`, `.nav-label`, `.nav-link*`, `.nav-icon`, `.nav-badge`, or `.sidebar-footer` |
+
+**Do not delete the whole `601-730` block.** Four selectors inside it are still live and would break: `.theme-toggle` (`web/src/components/theme-toggle.tsx:51`), `.sign-out` and `.account` / `.account-email` (`web/src/components/auth-button.tsx:7-10`), `.app-main` (`web/src/components/experience-shell.tsx:374`), and `.page`. Move those four rule sets out before removing the rest.
+
+### 0.4 Revised immediate order
+
+1. **Step 0** — capture the desktop/mobile, light/dark Preview baselines (§7.1). Still first; still nothing exists.
+2. **Step 1** — merge `--v2-*` into the global scale and move Preview onto `ThemeToggle` in the same commit (§3.1, §6.4). The font is already in, so land the remaining metrics change against the Step 0 baselines.
+3. **Step 2** — extract `components/shell/**` and `lib/shell/view-model.ts`, repoint Preview at them, add the ESLint import boundary (§4.1, §4.2).
+4. **Step 3 (frame only)** — the navigation model is done; rebuild `ExperienceShell` on `AppFrame`, add the context column and mobile bottom bar, replace the hardcoded status, collapse the duplicate assistant mounts.
+5. Steps 4-6 unchanged. **Step 7 reduces to the §0.3 cleanup.**
+
 
 ## 1. Current real shell entry points and ownership
 
@@ -403,5 +453,6 @@ The Preview and real navigation models describe different destination sets (§3.
 - **Behavior changed:** none. Read-only audit.
 - **Files changed:** `.agents/reports/BR-01-claude-audit.md` (new) only.
 - **Checks run:** no build, lint, or test run — this ticket changes no product code and `npm run agent:check` would report only the pre-existing state recorded in `docs/status.md`.
-- **Known risks/blockers:** the navigation-model reconciliation in §7.4 blocks Step 3 and needs a Codex lead decision. §6.1 (style attributes discarded under CSP) and §6.5 (`PLANNER_UI_V2` unset in production) are the two findings most likely to make otherwise-correct work ship invisibly.
+- **Known risks/blockers:** none blocking. The §7.4 navigation-model reconciliation that originally blocked Step 3 is resolved on `integration/dogfood` (§0.1). §6.1 (style attributes discarded under CSP) remains the finding most likely to make otherwise-correct work ship invisibly, because it is invisible in `next dev`. §6.2 (the Notes double sidebar) remains the highest-regression-risk step.
+- **Rebase note:** this report was written on `main` and rebased onto `integration/dogfood`. §0 reconciles the two; read it before acting on any file:line reference in §1-§7.
 - **Outside writable paths, for the lead's awareness:** no `web/**` change was made or is proposed by this ticket; every change named in §5 belongs to the follow-on implementation ticket.
