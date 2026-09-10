@@ -770,6 +770,19 @@ export const operationDefinitions = {
                 // the source, and stored as the item's reason so the
                 // pre-commit report can say what the conversion cost.
                 conversionNotice: z.string().max(500).nullable(),
+                // How the owner had the page arranged. Only an exported vault
+                // carries any of it; every other source sends null, because
+                // inventing an appearance for an imported Notion page would be
+                // choosing on the owner's behalf and calling it a restore.
+                appearance: z
+                  .object({
+                    iconEmoji: z.string().min(1).max(32).nullable(),
+                    coverKey: z.string().min(1).max(200).nullable(),
+                    coverPosition: z.number().int().min(0).max(100),
+                    favoritedAt: z.string().datetime({ offset: true }).nullable(),
+                  })
+                  .strict()
+                  .nullable(),
               })
               .strict()
           )
