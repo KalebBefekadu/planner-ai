@@ -1093,3 +1093,76 @@ test('a page icon is stored beside the Markdown and survives a reload', async ({
     'A page worth looking at.'
   );
 });
+
+/* Choosing a cover.
+ *
+ * One appearance change per test, on purpose. Each change is a versioned
+ * Operation against the Note's current version and the panel disables itself
+ * while one is in flight, so a test that drives several in a row is really
+ * asserting write sequencing -- and fails for reasons that have nothing to do
+ * with covers. See #229 for how that went the first time. */
+test('a cover can be chosen and is still there after a reload', async ({ workspace }) => {
+  const { page } = workspace;
+
+  await goTo(page, '/notes');
+  await createRootNote(page, 'Covered', 'A page with a picture.');
+
+  await page.getByRole('button', { name: 'Add cover' }).click();
+  await page.getByRole('radio', { name: 'Still water' }).check();
+
+  /* "Change cover" only exists once a cover is rendered, so it is the evidence
+     the choice was applied rather than merely clicked. */
+  await expect(page.getByRole('button', { name: 'Change cover' })).toBeVisible();
+
+  await goTo(page, '/');
+  await goTo(page, '/notes');
+  await openNote(page, 'Covered');
+  await expect(page.getByRole('button', { name: 'Change cover' })).toBeVisible();
+
+  // A cover is not an edit to the writing.
+  await expect(page.getByRole('textbox', { name: 'Note body, Markdown' })).toHaveValue(
+    'A page with a picture.'
+  );
+});
+
+/* Moving the cover, from the keyboard.
+ *
+ * The range input is deliberately the control rather than a drag handle on the
+ * image: dragging is unreachable without a pointer, and a range announces its
+ * value. That only matters if it actually works from a keyboard, which is what
+ * this asserts -- arrow keys, then blur, because the value is committed when
+ * the interaction ends rather than on every intermediate step. */
+test('the cover position can be set from the keyboard and is remembered', async ({ workspace }) => {
+  const { page } = workspace;
+
+  await goTo(page, '/notes');
+  await createRootNote(page, 'Positioned', 'A page whose picture sits high.');
+
+  await page.getByRole('button', { name: 'Add cover' }).click();
+  await page.getByRole('radio', { name: 'Open field' }).check();
+  await expect(page.getByRole('button', { name: 'Change cover' })).toBeVisible();
+
+  /* The panel closes itself once the saved appearance arrives back from the
+     server: the component notices the stored values have changed and resets to
+     a closed state. So the sequence is choose, wait for it to close, reopen --
+     reaching for the slider before the close leaves the test holding an element
+     that is about to be unmounted, which reads as a stuck disabled control
+     rather than as a panel doing what it is supposed to do. */
+  const position = page.getByRole('slider', { name: /Cover position/ });
+  await expect(position).toHaveCount(0);
+
+  await page.getByRole('button', { name: 'Change cover' }).click();
+  await expect(position).toBeEnabled();
+
+  await position.focus();
+  for (let step = 0; step < 5; step += 1) await position.press('ArrowLeft');
+  await expect(page.getByText(/Cover position \(45% from the top\)/)).toBeVisible();
+  // Committed when the interaction ends, so the blur is the save.
+  await position.blur();
+
+  await goTo(page, '/');
+  await goTo(page, '/notes');
+  await openNote(page, 'Positioned');
+  await page.getByRole('button', { name: 'Change cover' }).click();
+  await expect(page.getByText(/Cover position \(45% from the top\)/)).toBeVisible();
+});
