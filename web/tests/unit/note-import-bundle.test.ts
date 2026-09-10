@@ -316,3 +316,28 @@ describe('Notion ID suffix in imported titles', () => {
     expect(candidates[0].title).toBe(`Commit ${id}`);
   });
 });
+
+/* A Notion database that could not be read.
+ *
+ * These are the rows a person reads most carefully, because they are the ones
+ * that did not work. Naming them with Notion's internal ID, and with the file
+ * extension still attached, is the least useful moment to show either. */
+describe('a CSV that cannot be imported', () => {
+  const notionCsv = 'Tasks 5f2c1a3b4d5e6f708192a3b4c5d6e7f8.csv';
+
+  it('is still named the way the owner would recognise it', () => {
+    const [candidate] = candidatesFromFiles([
+      { path: notionCsv, bytes: Buffer.from('"unterminated', 'utf8') },
+    ]);
+    expect(candidate.title).toBe('Tasks');
+    expect(candidate.unsupportedReason).toBeTruthy();
+  });
+
+  it('is named the same way when it parses but holds no rows', () => {
+    const [candidate] = candidatesFromFiles([
+      { path: notionCsv, bytes: Buffer.from('Name,Status\n', 'utf8') },
+    ]);
+    expect(candidate.title).toBe('Tasks');
+    expect(candidate.unsupportedReason).toBe('CSV contains no data rows.');
+  });
+});

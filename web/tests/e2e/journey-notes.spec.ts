@@ -780,7 +780,15 @@ test('search finds a nested Note whose ancestors do not match', async ({ workspa
   // Note that the query will not match.
   await openNote(page, 'Buried finding');
   await page.getByRole('button', { name: 'Make child of the note above' }).click();
-  await expect(treeNote(page, 'Buried finding')).toBeVisible();
+  /* Wait for the move to have actually landed, not for something that was
+     already true. `treeNote` matches a button named exactly the title, which is
+     how a Note appears while it is still at the root -- so asserting it here
+     passed instantly against the pre-move tree and let the search run against a
+     hierarchy that had not changed yet. Once filed, the accessible name carries
+     the ancestor path, so this locator is false before the move and true after,
+     which is the only kind of assertion that can serve as a wait. */
+  await expect(locatedNote(page, 'Notes', 'Buried finding', ['Quarterly container'])).toBeVisible();
+  await expect(treeNote(page, 'Buried finding')).toHaveCount(0);
 
   const search = page.getByRole('textbox', { name: 'Search notes' });
   await search.fill('verification');

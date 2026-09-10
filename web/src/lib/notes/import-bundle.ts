@@ -117,8 +117,20 @@ export function stripNotionIdSuffix(title: string) {
 function titleFrom(pathname: string, body: string) {
   const heading = body.match(/^#\s+(.+)$/m)?.[1]?.trim();
   if (heading) return heading.slice(0, 300);
-  const fallback = stripNotionIdSuffix(path.posix.basename(pathname, path.posix.extname(pathname)));
-  return (fallback || 'Imported Note').slice(0, 300);
+  return titleFromPath(pathname);
+}
+
+/* The name a file gets when nothing inside it offers a better one.
+ *
+ * Split out because the failure paths need it too. A Notion database whose CSV
+ * cannot be parsed still has to appear in the report under the name the owner
+ * would recognise -- "Tasks", not "Tasks 5f2c...c81a.csv". Those rows are the
+ * ones a person reads most carefully, because they are the ones that did not
+ * work, and showing them Notion's internal bookkeeping there is the least
+ * useful moment to do it. */
+function titleFromPath(pathname: string) {
+  const stripped = stripNotionIdSuffix(path.posix.basename(pathname, path.posix.extname(pathname)));
+  return (stripped || 'Imported Note').slice(0, 300);
 }
 
 function markdownCell(value: unknown) {
@@ -140,7 +152,7 @@ function csvCandidates(sourcePath: string, body: string, parentSourcePath: strin
     return [
       {
         sourcePath,
-        title: path.posix.basename(sourcePath),
+        title: titleFromPath(sourcePath),
         bodyMarkdown: '',
         parentSourcePath,
         unsupportedReason: 'CSV could not be parsed safely.',
@@ -151,7 +163,7 @@ function csvCandidates(sourcePath: string, body: string, parentSourcePath: strin
     return [
       {
         sourcePath,
-        title: path.posix.basename(sourcePath),
+        title: titleFromPath(sourcePath),
         bodyMarkdown: '',
         parentSourcePath,
         unsupportedReason: 'CSV contains no data rows.',
