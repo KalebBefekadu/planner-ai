@@ -30,6 +30,12 @@ export type NoteImportCandidate = {
   // are normalised to null by candidatesFromVaultOrFiles and fall back to the
   // dependency-safe staging order.
   sourceSortKey?: number | null;
+  // How the owner had this page arranged: its icon, cover, cover position and
+  // whether it was pinned. Only an exported vault carries any of this; files
+  // from any other source are normalised to null, because inventing an
+  // appearance for an imported Notion page would be making a choice on the
+  // owner's behalf and calling it a restore.
+  appearance?: RestorableAppearance | null;
   // Set when the item is imported but not as a faithful copy of the source.
   // It is stored as the item's reason so the pre-commit report can say what a
   // conversion cost, instead of showing a converted row and an intact page
@@ -43,6 +49,35 @@ export type NoteImportCandidate = {
  * knew about itself is left behind. Naming that here keeps the wording in one
  * place and keeps it identical in the preview and in the stored report.
  */
+export type RestorableAppearance = {
+  iconEmoji: string | null;
+  coverKey: string | null;
+  coverPosition: number;
+  favoritedAt: string | null;
+};
+
+/* Read an appearance out of a manifest entry, refusing anything the database
+   would refuse anyway.
+ *
+ * A manifest is a file the owner can edit, and a restore is exactly when a
+ * hand-edited one turns up. Each field falls back to its own absence rather
+ * than to the whole appearance being discarded, so one bad cover position does
+ * not also cost the icon. */
+const COVER_POSITION_DEFAULT = 50;
+
+function restorableAppearance(item: VaultManifestItem): RestorableAppearance {
+  const position = item.coverPosition;
+  return {
+    iconEmoji: typeof item.iconEmoji === 'string' && item.iconEmoji ? item.iconEmoji : null,
+    coverKey: typeof item.coverKey === 'string' && item.coverKey ? item.coverKey : null,
+    coverPosition:
+      typeof position === 'number' && Number.isInteger(position) && position >= 0 && position <= 100
+        ? position
+        : COVER_POSITION_DEFAULT,
+    favoritedAt: typeof item.favoritedAt === 'string' && item.favoritedAt ? item.favoritedAt : null,
+  };
+}
+
 export const CSV_ROW_CONVERSION_NOTICE =
   'Converted from a CSV row. Column types, formulas, relations, filters and views are not imported.';
 
@@ -318,6 +353,14 @@ type VaultManifestItem = {
   path: string;
   title: string;
   sortKey: number;
+  /* Written by every vault this version exports. Older archives predate them,
+     so each is optional and each has a defined absence: no icon, no cover, the
+     default position, not a favourite. An old vault restores exactly as it did
+     before rather than failing to open. */
+  iconEmoji?: string | null;
+  coverKey?: string | null;
+  coverPosition?: number | null;
+  favoritedAt?: string | null;
 };
 
 function vaultCandidates(files: ImportSourceFile[]) {
@@ -365,6 +408,7 @@ function vaultCandidates(files: ImportSourceFile[]) {
       unsupportedReason: null,
       aiExcluded,
       sourceSortKey: note.sortKey,
+      appearance: restorableAppearance(note),
     } satisfies NoteImportCandidate;
   });
 }
@@ -375,6 +419,7 @@ export function candidatesFromVaultOrFiles(files: ImportSourceFile[]) {
     aiExcluded: false,
     sourceSortKey: null,
     conversionNotice: null,
+    appearance: null,
     ...candidate,
   }));
 }

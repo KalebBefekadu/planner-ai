@@ -11,6 +11,15 @@ export type ExportNote = {
   ai_excluded: boolean;
   created_at: string;
   updated_at: string;
+  /* Appearance and favourites are presentation metadata, deliberately kept
+     beside the Markdown rather than inside it -- but they are still the owner's
+     choices. A vault that restores every word and none of the icons, covers or
+     pinned pages has not restored the workspace; it has restored the text and
+     quietly discarded how the person arranged it. */
+  icon_emoji: string | null;
+  cover_key: string | null;
+  cover_position: number;
+  favorited_at: string | null;
 };
 
 export type ExportAttachment = {
@@ -146,6 +155,10 @@ export async function zipNotes(
       title: note.title,
       sortKey: note.sort_key,
       aiExcluded: note.ai_excluded,
+      iconEmoji: note.icon_emoji,
+      coverKey: note.cover_key,
+      coverPosition: note.cover_position,
+      favoritedAt: note.favorited_at,
       createdAt: note.created_at,
       updatedAt: note.updated_at,
       tags,

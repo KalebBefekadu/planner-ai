@@ -52,7 +52,9 @@ export async function GET() {
   const [notesResult, attachmentsResult, tagsResult, linksResult] = await Promise.all([
     supabase
       .from('notes')
-      .select('id,parent_note_id,title,body_markdown,sort_key,ai_excluded,created_at,updated_at')
+      .select(
+        'id,parent_note_id,title,body_markdown,sort_key,ai_excluded,icon_emoji,cover_key,cover_position,favorited_at,created_at,updated_at'
+      )
       .eq('workspace_id', workspace.id)
       .is('archived_at', null)
       .is('trashed_at', null)

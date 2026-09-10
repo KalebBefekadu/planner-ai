@@ -128,6 +128,7 @@ describe('Notes import bundle', () => {
         aiExcluded: false,
         sourceSortKey: 1000,
         conversionNotice: null,
+        appearance: { iconEmoji: null, coverKey: null, coverPosition: 50, favoritedAt: null },
       },
       {
         sourcePath: `planner-ai-vault/${childId}`,
@@ -138,6 +139,7 @@ describe('Notes import bundle', () => {
         aiExcluded: false,
         sourceSortKey: 2000,
         conversionNotice: null,
+        appearance: { iconEmoji: null, coverKey: null, coverPosition: 50, favoritedAt: null },
       },
     ]);
   });
