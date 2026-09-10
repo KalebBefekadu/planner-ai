@@ -380,9 +380,36 @@ export function richDocumentToPlannerMarkdown(document: JSONContent): string | n
   return serializePlannerMarkdown({ type: 'root', children } as PlannerMarkdownAst);
 }
 
+/* Backslash escapes a CommonMark serializer adds defensively.
+ *
+ * Escaping is always *semantically* safe -- `\[\[Note]]` and `[[Note]]` carry
+ * the same text -- which is exactly why comparing meaning was not enough here.
+ * Obsidian's wikilinks, embeds, block references and callout markers are not
+ * CommonMark at all. To mdast they are ordinary text that happens to begin with
+ * a bracket, so serializing escapes them and `[[North star]]` comes back as
+ * `\[\[North star]]`. The meaning survives and every link in the vault breaks,
+ * silently, on the first save in rich mode.
+ *
+ * Counting escapes rather than comparing the text outright is deliberate. A
+ * table that gains column padding, a bullet normalized from `*` to `-`, an
+ * emphasis marker that changes style -- none of those add escapes and none of
+ * them cost the person anything, and refusing rich mode for them would give up
+ * tables to fix wikilinks. An escape nobody typed is the narrow signal that the
+ * serializer has decided to reinterpret what was written. */
+const backslashEscape = /\\[\\`*_{}[\]()#+\-.!~=|<>]/g;
+
+function escapeCount(markdown: string) {
+  return (markdown.match(backslashEscape) ?? []).length;
+}
+
 export function plannerMarkdownSupportsRichEditing(markdown: string) {
   const document = plannerMarkdownToRichDocument(markdown);
   if (!document) return false;
   const roundTripped = richDocumentToPlannerMarkdown(document);
-  return roundTripped !== null && plannerMarkdownIsSemanticallyEquivalent(markdown, roundTripped);
+  if (roundTripped === null) return false;
+  if (!plannerMarkdownIsSemanticallyEquivalent(markdown, roundTripped)) return false;
+  /* Rich mode is an offer, and the honest condition for making it is that
+     accepting it cannot cost anything. A document whose source would gain
+     escapes keeps Source mode, where what was written is what stays written. */
+  return escapeCount(roundTripped) <= escapeCount(markdown);
 }
