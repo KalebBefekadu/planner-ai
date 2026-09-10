@@ -1,7 +1,7 @@
 import Link from 'next/link';
 import { FileText, Inbox, Search, Target, WandSparkles } from 'lucide-react';
 import { getGoalsHierarchy, getTranscripts } from '@/app/actions';
-import { getNotes, type NoteView } from '@/app/notes/actions';
+import { getNoteBodies, getNotes, type NoteView } from '@/app/notes/actions';
 import { buildWorkspaceSearchResults, type WorkspaceSearchResult } from '@/lib/workspace-search';
 import { noteLocationLabel } from '@/lib/notes/note-paths';
 
@@ -48,11 +48,18 @@ export default async function SearchPage({
       .filter((title, index, all) => all.indexOf(title) !== index)
   );
 
+  /* The tree query returns no text, because a sidebar of titles does not need
+     any. This page does: it ranks and excerpts on what a Note actually says, so
+     without the body a query matching only the writing would return nothing at
+     all. Fetched for the matches alone, which is bounded by how many results
+     there are rather than by how much the workspace holds. */
+  const bodies = await getNoteBodies(matched.map((note) => note.id));
+
   const results = buildWorkspaceSearchResults(query, {
     pages: matched.map((note) => ({
       id: note.id,
       title: note.title,
-      body: note.bodyMarkdown,
+      body: bodies.get(note.id) ?? '',
       context: duplicateTitles.has(note.title.trim().toLocaleLowerCase())
         ? noteLocationLabel(notes, note.id)
         : '',

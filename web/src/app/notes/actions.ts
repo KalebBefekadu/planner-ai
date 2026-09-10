@@ -212,6 +212,27 @@ export async function getFavoriteNotes(): Promise<NoteView[]> {
  * when the Note is not there: an id in the address bar can outlive the Note it
  * named -- it was archived, trashed, or opened from a stale tab -- and that is
  * an empty editor, not an error page. */
+/* Bodies for a known, already-narrowed set of Notes.
+ *
+ * The tree deliberately arrives without text, which is right for a sidebar and
+ * wrong for the search page: that one ranks and excerpts on what a Note says,
+ * so a query matching only the body would silently return nothing. Bounded by
+ * the number of results rather than by the size of the vault, and capped, so a
+ * two-letter query cannot turn into a request for everything ever written. */
+export async function getNoteBodies(ids: string[]): Promise<Map<string, string>> {
+  if (!ids.length) return new Map();
+  const { supabase, workspaceId } = await notesClient();
+  const { data, error } = await supabase
+    .from('notes')
+    .select('id,body_markdown')
+    .eq('workspace_id', workspaceId)
+    .in('id', ids.slice(0, 200));
+  if (error) throw new Error('Unable to load Notes.');
+  return new Map(
+    (data ?? []).map((row) => [row.id as string, (row.body_markdown as string | null) ?? ''])
+  );
+}
+
 export async function getNoteDocument(id: string): Promise<string | null> {
   const { supabase, workspaceId } = await notesClient();
   const { data, error } = await supabase
