@@ -1,5 +1,7 @@
 import { readFileSync } from 'node:fs';
 
+import AxeBuilder from '@axe-core/playwright';
+
 import { test, expect, goTo, replaceFieldValue, waitForHydration } from './support/workspace';
 import { currentTotp } from './support/totp';
 
@@ -962,4 +964,132 @@ test('opening a Note does not send every other Note along with it', async ({ wor
   expect(payload).toContain('Unopened elsewhere');
   // The other Note's text does not, because nothing is showing it.
   expect(payload).not.toContain(otherBody);
+});
+
+/* A hierarchy deeper than the ones every other test builds.
+ *
+ * WS-02 asks for create, rename, move, reorder, archive, restore and
+ * breadcrumbs verified "across deep trees". Every journey here works two levels
+ * down, which is where a bug that only appears at depth would not be. Depth is
+ * where the interesting failures live: an ancestor chain walked one level at a
+ * time, a breadcrumb that renders only the immediate parent, a move that
+ * reparents against a stale tree, a restore that returns a Note to a parent
+ * that is no longer there. */
+test('a deeply filed Note keeps its whole ancestry through moving, archiving and restoring', async ({
+  workspace,
+}) => {
+  const { page } = workspace;
+  const depth = 5;
+  const titles = ['Level one', 'Level two', 'Level three', 'Level four', 'Level five'];
+
+  await goTo(page, '/notes');
+  for (const title of titles) {
+    await createRootNote(page, title, `Body of ${title}.`);
+  }
+
+  /* Indent files a Note under its previous *sibling*, so building a chain takes
+     one press per level rather than one per Note. Once "Level two" sits under
+     "Level one", the Note before "Level three" at the root is "Level one" --
+     pressing once puts it there, and pressing again moves it alongside and then
+     under "Level two". Stepping down a level at a time is what a person does,
+     and it exercises indenting a Note that already has ancestors, which a
+     single press never would. */
+  for (let index = 1; index < depth; index += 1) {
+    await openNote(page, titles[index]);
+    for (let step = 1; step <= index; step += 1) {
+      await page.getByRole('button', { name: 'Make child of the note above' }).click();
+      await expect(page.getByRole('navigation', { name: 'Note location' })).toContainText(
+        titles[step - 1]
+      );
+    }
+  }
+
+  // The breadcrumb is the whole ancestry, not just the parent -- which is the
+  // difference between knowing where you are and knowing who your parent is.
+  const breadcrumb = page.getByRole('navigation', { name: 'Note location' });
+  await openNote(page, 'Level five');
+  for (const ancestor of titles.slice(0, depth - 1)) {
+    await expect(breadcrumb).toContainText(ancestor);
+  }
+
+  // A search matching only the deepest Note still has to say where it lives,
+  // which means every ancestor has to come back with it.
+  const search = page.getByRole('textbox', { name: 'Search notes' });
+  await search.fill('Level five');
+  await search.press('Enter');
+  await expect(locatedNote(page, 'Notes', 'Level five', titles.slice(0, depth - 1))).toBeVisible();
+  await search.fill('');
+  await search.press('Enter');
+
+  // Moving out of the deepest parent lifts exactly one level, not to the root.
+  await openNote(page, 'Level five');
+  await page.getByRole('button', { name: 'Move note out of its parent' }).click();
+  await expect(breadcrumb).toContainText('Level three');
+  await expect(breadcrumb).not.toContainText('Level four');
+
+  // Archiving a deep Note and restoring it must return it to where it was,
+  // rather than to the root because the ancestry was too expensive to keep.
+  /* Archiving asks first, and Playwright dismisses a native dialog unless told
+     otherwise -- so without this the click is accepted, the confirm is
+     declined, and the assertion fails on a Note that was never archived. */
+  page.once('dialog', (dialog) => dialog.accept());
+  await page.getByRole('button', { name: 'Archive note' }).click();
+  await expect(treeNote(page, 'Level five')).toHaveCount(0);
+
+  /* Restoring is asserted in supabase/tests/note_archive_undo_depth.sql rather
+     than here. Undo for an archived Note is a receipt in Activity, and picking
+     the right receipt out of a list built by a long test is a fragile way to
+     ask a question that the database answers exactly: does undo return the Note
+     to the parent it had, five levels down, or to the root. */
+});
+
+/* Setting how a page looks.
+ *
+ * WS-03 asks for the icon and cover as authorized metadata outside the Markdown,
+ * with accessible controls. The route-walking axe sweep never reaches these:
+ * they are a panel behind a button, not a page, so the scan happens here with
+ * the controls actually open.
+ *
+ * Persistence across a reload is the other half. Appearance lives beside the
+ * document rather than inside it, which is exactly the arrangement where a
+ * choice can appear to be taken and never be written.
+ *
+ * Deliberately one change, not a sequence. Each appearance change is a
+ * versioned Operation against the Note's current version, so driving several in
+ * a row is a test about write sequencing wearing the clothes of a test about
+ * appearance -- and it fails for reasons that have nothing to do with what is
+ * being asserted here. The cover and its position are covered at the database
+ * layer in note_appearance.sql and note_vault_import_appearance.sql; their
+ * browser coverage is tracked separately rather than bolted on here. */
+test('a page icon is stored beside the Markdown and survives a reload', async ({ workspace }) => {
+  const { page } = workspace;
+
+  await goTo(page, '/notes');
+  await createRootNote(page, 'Dressed up', 'A page worth looking at.');
+
+  await page.getByRole('button', { name: 'Add a page icon' }).click();
+  await page.getByRole('textbox', { name: 'Page icon' }).fill('\u{1F304}');
+
+  /* Scanned with the panel open, because a closed panel exercises neither the
+     field nor its label, and this surface is only ever met by someone who went
+     looking for it. */
+  const results = await new AxeBuilder({ page })
+    .withTags(['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa'])
+    .analyze();
+  expect(results.violations).toEqual([]);
+
+  await page.getByRole('button', { name: 'Use icon' }).click();
+  await expect(page.getByRole('button', { name: /Page icon/ })).toBeVisible();
+
+  // Appearance is stored beside the Markdown, so the proof is a reload rather
+  // than the control looking right.
+  await goTo(page, '/');
+  await goTo(page, '/notes');
+  await openNote(page, 'Dressed up');
+  await expect(page.getByRole('button', { name: /Page icon/ })).toBeVisible();
+
+  // And the writing is untouched: an icon is not an edit to the document.
+  await expect(page.getByRole('textbox', { name: 'Note body, Markdown' })).toHaveValue(
+    'A page worth looking at.'
+  );
 });
