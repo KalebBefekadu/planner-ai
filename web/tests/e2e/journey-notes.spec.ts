@@ -929,3 +929,37 @@ test('a favourite Note stays reachable without the tree and survives reload', as
   await goTo(page, '/notes');
   await expect(page.getByRole('navigation', { name: 'Favorite notes' })).toHaveCount(0);
 });
+
+/* Opening the workspace must not cost the whole vault.
+ *
+ * The sidebar shows titles and structure. It used to be built from
+ * `select('*')`, so every Note's full Markdown crossed the wire on every
+ * navigation to draw text nobody was looking at -- and the cost of opening the
+ * workspace grew with everything ever written in it, which is exactly backwards
+ * for a product meant to hold years of notes.
+ *
+ * Asserted on the delivered payload rather than on the query, because the query
+ * is an implementation detail and the bytes are the thing a person waits for. */
+test('opening a Note does not send every other Note along with it', async ({ workspace }) => {
+  const { page } = workspace;
+
+  await goTo(page, '/notes');
+  const otherBody = 'Sequestered paragraph that belongs to a Note nobody opened.';
+  await createRootNote(page, 'Unopened elsewhere', otherBody);
+
+  const openBody = 'The paragraph a person is actually reading right now.';
+  await createRootNote(page, 'The open one', openBody);
+  await openNote(page, 'The open one');
+
+  const payload = await page.evaluate(async () => {
+    const response = await fetch(window.location.href, { cache: 'no-store' });
+    return response.text();
+  });
+
+  // The Note being read arrives with its text, because that is the page.
+  expect(payload).toContain(openBody);
+  // Both titles arrive, because the tree is a list of titles.
+  expect(payload).toContain('Unopened elsewhere');
+  // The other Note's text does not, because nothing is showing it.
+  expect(payload).not.toContain(otherBody);
+});

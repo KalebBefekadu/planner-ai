@@ -94,12 +94,26 @@ async function notesClient() {
   return { supabase, workspaceId: workspace.id as string };
 }
 
+/* What the sidebar needs, which is not the whole Note.
+ *
+ * `select('*')` sent every Note's full Markdown to render a list of titles. On
+ * a workspace the size of a real Notion migration that is the entire vault over
+ * the wire on every navigation, to draw text nobody is reading. The body of the
+ * one Note actually open is fetched on its own, so the cost of opening the
+ * workspace stops scaling with how much has been written in it.
+ *
+ * `search_vector` is excluded deliberately as well: it is a tsvector of the
+ * whole document, so shipping it would undo most of the saving. */
+const TREE_COLUMNS =
+  'id,parent_note_id,title,sort_key,ai_excluded,icon_emoji,cover_key,cover_position,favorited_at,version,updated_at';
+
 function mapNote(note: Record<string, unknown>): NoteView {
   return {
     id: note.id as string,
     parentNoteId: note.parent_note_id as string | null,
     title: note.title as string,
-    bodyMarkdown: note.body_markdown as string,
+    // Absent for every Note but the open one, which fetches its own.
+    bodyMarkdown: (note.body_markdown as string | undefined) ?? '',
     sortKey: Number(note.sort_key),
     aiExcluded: Boolean(note.ai_excluded),
     appearance: normalizeNoteAppearance({
@@ -117,7 +131,7 @@ export async function getNotes(query?: string) {
   const { supabase, workspaceId } = await notesClient();
   let request = supabase
     .from('notes')
-    .select('*')
+    .select(TREE_COLUMNS)
     .eq('workspace_id', workspaceId)
     .is('archived_at', null)
     .is('trashed_at', null)
@@ -153,7 +167,7 @@ export async function getNotes(query?: string) {
   while (wanted.length) {
     const { data: parents, error: parentError } = await supabase
       .from('notes')
-      .select('*')
+      .select(TREE_COLUMNS)
       .eq('workspace_id', workspaceId)
       .in('id', wanted);
     if (parentError) throw new Error('Unable to load Notes.');
@@ -182,7 +196,7 @@ export async function getFavoriteNotes(): Promise<NoteView[]> {
   const { supabase, workspaceId } = await notesClient();
   const { data, error } = await supabase
     .from('notes')
-    .select('*')
+    .select(TREE_COLUMNS)
     .eq('workspace_id', workspaceId)
     .is('archived_at', null)
     .is('trashed_at', null)
@@ -190,6 +204,24 @@ export async function getFavoriteNotes(): Promise<NoteView[]> {
     .order('favorited_at');
   if (error) throw new Error('Unable to load your favourite Notes.');
   return (data ?? []).map((note) => mapNote(note as Record<string, unknown>));
+}
+
+/* The body of the one Note being read.
+ *
+ * One row rather than the whole workspace. Returns null rather than throwing
+ * when the Note is not there: an id in the address bar can outlive the Note it
+ * named -- it was archived, trashed, or opened from a stale tab -- and that is
+ * an empty editor, not an error page. */
+export async function getNoteDocument(id: string): Promise<string | null> {
+  const { supabase, workspaceId } = await notesClient();
+  const { data, error } = await supabase
+    .from('notes')
+    .select('body_markdown')
+    .eq('workspace_id', workspaceId)
+    .eq('id', id)
+    .maybeSingle();
+  if (error) throw new Error('Unable to load this Note.');
+  return data ? ((data.body_markdown as string | null) ?? '') : null;
 }
 
 export async function getNoteKnowledgeContext(noteId: string): Promise<NoteKnowledgeContext> {
