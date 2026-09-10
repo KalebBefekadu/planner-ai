@@ -1,11 +1,11 @@
 -- Restoring a vault returned every word and none of the arrangement.
 --
--- The manifest carried sort_key and AI Exclusion, so a restored Note came back
--- in the right place and stayed out of retrieval. It carried nothing about how
--- the owner had actually set the page up: the icon they chose, the cover, where
--- they dragged it to sit, and whether the page was pinned. Export, delete,
--- restore, and a workspace of illustrated, favourited pages came back as an
--- undifferentiated list -- with no error, because nothing had failed.
+-- The manifest carried sibling order and AI Exclusion, so a restored Note came
+-- back in the right place and stayed out of retrieval. It carried nothing about
+-- how the owner had actually set the page up: the icon they chose, the cover,
+-- where they dragged it to sit, and whether the page was pinned. Export,
+-- delete, restore, and a workspace of illustrated, favourited pages came back
+-- as an undifferentiated list -- with no error, because nothing had failed.
 --
 -- Appearance is presentation metadata and deliberately lives beside the
 -- Markdown rather than inside it. That is a reason to carry it in the manifest,
@@ -13,11 +13,10 @@
 -- silently discards choices is not a restore.
 --
 -- Only a vault ever supplies these. An imported Notion page has no Planner AI
--- appearance, and inventing one would be making a decision on someone's behalf
--- and calling it recovery, so every field defaults to its own absence.
+-- appearance, and inventing one would be deciding on the owner's behalf and
+-- calling it recovery, so every field defaults to its own absence.
 
 alter table public.note_import_items
-  add column if not exists source_sort_key numeric(24, 12),
   add column if not exists source_icon_emoji text,
   add column if not exists source_cover_key text,
   -- Bounded here as well as on notes: staging is reached by a manifest the
@@ -27,8 +26,20 @@ alter table public.note_import_items
   add column if not exists source_cover_position smallint
     constraint note_import_items_source_cover_position_range
     check (source_cover_position is null
-           or (source_cover_position >= 0 and source_cover_position <= 100)),
+           or (source_cover_position between 0 and 100)),
   add column if not exists source_favorited_at timestamptz;
+
+begin;
+
+insert into public.operation_contracts (operation_id, risk_class, exposures, reversible) values
+  ('note.import-cancel.v1', 'low', array['ui'], false)
+on conflict (operation_id) do update set
+  risk_class = excluded.risk_class,
+  exposures = excluded.exposures,
+  reversible = excluded.reversible,
+  updated_at = clock_timestamp();
+
+
 
 create or replace function public.execute_note_import_operation(
   p_operation_id text,
@@ -58,13 +69,17 @@ declare
   v_status text;
   v_result jsonb;
   v_item record;
+  v_link record;
+  v_source_path text;
 begin
   if v_user_id is null then
     raise exception using errcode = '28000', message = 'authentication_required';
   end if;
-  if p_operation_id not in ('note.import-preview.v1', 'note.import-commit.v1')
+  if p_operation_id not in (
+      'note.import-preview.v1', 'note.import-commit.v1', 'note.import-cancel.v1'
+    )
     or p_surface not in ('ui', 'chat')
-    or (p_operation_id = 'note.import-preview.v1' and p_surface <> 'ui')
+    or (p_operation_id <> 'note.import-commit.v1' and p_surface <> 'ui')
     or char_length(coalesce(p_idempotency_key, '')) not between 8 and 200 then
     raise exception using errcode = 'P0001', message = 'invalid_operation_context';
   end if;
@@ -92,7 +107,7 @@ begin
       select 1 from jsonb_to_recordset(p_input -> 'items') as item(
         "sourcePath" text, title text, "bodyMarkdown" text,
         "parentSourcePath" text, "unsupportedReason" text, "aiExcluded" boolean,
-        "sourceSortKey" numeric, appearance jsonb
+        "sourceSortKey" numeric, "conversionNotice" text, appearance jsonb
       )
       where item."sourcePath" is null
         or item.title is null
@@ -102,6 +117,7 @@ begin
         or char_length(item."bodyMarkdown") > 50000
         or char_length(coalesce(item."parentSourcePath", '')) > 1000
         or char_length(coalesce(item."unsupportedReason", '')) > 500
+        or char_length(coalesce(item."conversionNotice", '')) > 500
         -- NaN sorts above every number in Postgres, so this bound rejects it
         -- too and a corrupt manifest cannot reach notes.sort_key.
         or (
@@ -175,11 +191,22 @@ begin
         source."unsupportedReason" as unsupported_reason,
         coalesce(source."aiExcluded", false) as ai_excluded,
         source."sourceSortKey" as source_sort_key,
+        source."conversionNotice" as conversion_notice,
         nullif(source.appearance ->> 'iconEmoji', '') as source_icon_emoji,
-        nullif(source.appearance ->> 'coverKey', '') as source_cover_key,
+        -- Checked against the catalogue here, not only by the constraint on
+        -- notes. The list is repeated from notes_cover_key_known deliberately:
+        -- a check constraint can refuse a value but cannot offer a fallback,
+        -- and reaching it means the whole import fails on one unrecognised
+        -- cover. A vault written by a version with more covers than this one
+        -- should restore every page and lose one image, not refuse to open.
+        case
+          when source.appearance ->> 'coverKey' in ('focus', 'north', 'health', 'product')
+          then source.appearance ->> 'coverKey'
+          else null
+        end as source_cover_key,
         -- A hand-edited manifest reaches here. Anything outside the range the
         -- column accepts falls back to the default rather than failing the
-        -- import, and one bad position does not also cost the icon.
+        -- import, so one bad position does not also cost the icon.
         case
           when (source.appearance ->> 'coverPosition') ~ '^[0-9]{1,3}$'
             and (source.appearance ->> 'coverPosition')::integer between 0 and 100
@@ -194,7 +221,7 @@ begin
       from jsonb_to_recordset(p_input -> 'items') as source(
         "sourcePath" text, title text, "bodyMarkdown" text,
         "parentSourcePath" text, "unsupportedReason" text, "aiExcluded" boolean,
-        "sourceSortKey" numeric
+        "sourceSortKey" numeric, "conversionNotice" text, appearance jsonb
       )
     ),
     -- Commit order must follow real parentage, not path shape. A vault records
@@ -220,7 +247,7 @@ begin
       case
         when item.unsupported_reason is not null then item.unsupported_reason
         when duplicate.id is not null then 'Exact title and Markdown already exist.'
-        else null
+        else item.conversion_notice
       end,
       duplicate.id,
       row_number() over (order by depth.depth, item.source_path)::integer,
@@ -239,6 +266,25 @@ begin
         and note.archived_at is null and note.trashed_at is null
       order by note.created_at limit 1
     ) duplicate on true;
+  elsif p_operation_id = 'note.import-cancel.v1' then
+    v_job_id := (p_input ->> 'jobId')::uuid;
+    -- Only a job still waiting for review can be cancelled. A job that is
+    -- committing, completed or already cancelled is not a decision left to
+    -- make, and saying so is more useful than silently doing nothing.
+    select status into v_status from public.note_import_jobs
+    where id = v_job_id and workspace_id = v_workspace_id and status = 'preview'
+    for update;
+    if not found then
+      raise exception using errcode = 'P0001', message = 'import_job_not_cancelable';
+    end if;
+    -- Cancelling is not undoing. Once a Note exists the import has changed the
+    -- workspace, and removing it is note.import-commit.v1's undo, not this.
+    if exists (
+      select 1 from public.note_import_items
+      where workspace_id = v_workspace_id and job_id = v_job_id and committed_at is not null
+    ) then
+      raise exception using errcode = 'P0001', message = 'import_job_not_cancelable';
+    end if;
   else
     v_job_id := (p_input ->> 'jobId')::uuid;
     v_batch_size := (p_input ->> 'batchSize')::integer;
@@ -295,7 +341,45 @@ begin
   into v_create, v_duplicate, v_unsupported, v_committed, v_remaining
   from public.note_import_items
   where workspace_id = v_workspace_id and job_id = v_job_id;
-  if v_remaining = 0 then
+
+  if p_operation_id = 'note.import-commit.v1' then
+    for v_link in
+      select distinct item.target_note_id as note_id, found.parts[1] as token
+      from public.note_import_items item
+      join public.notes note on note.id = item.target_note_id
+      cross join lateral regexp_matches(
+        note.body_markdown, 'planner-ai-import:([0-9a-f]{64})', 'g'
+      ) as found(parts)
+      where item.workspace_id = v_workspace_id and item.job_id = v_job_id
+        and item.committed_at is not null
+    loop
+      select target.target_note_id, target.source_path
+      into v_target_id, v_source_path
+      from public.note_import_items target
+      where target.workspace_id = v_workspace_id and target.job_id = v_job_id
+        and encode(extensions.digest(target.source_path, 'sha256'), 'hex') = v_link.token;
+      if v_target_id is not null then
+        update public.notes set body_markdown = replace(
+          body_markdown, 'planner-ai-import:' || v_link.token, '/notes?note=' || v_target_id
+        ) where id = v_link.note_id and workspace_id = v_workspace_id;
+      elsif v_remaining = 0 and v_source_path is not null then
+        -- The job is finished and this target never became a Note. Restoring
+        -- the path keeps the link readable instead of leaving a token behind.
+        update public.notes set body_markdown = replace(
+          body_markdown, 'planner-ai-import:' || v_link.token, v_source_path
+        ) where id = v_link.note_id and workspace_id = v_workspace_id;
+      end if;
+    end loop;
+  end if;
+
+  if p_operation_id = 'note.import-cancel.v1' then
+    v_status := 'canceled';
+    update public.note_import_jobs set
+      status = 'canceled', committed_count = v_committed,
+      create_count = v_create, duplicate_count = v_duplicate,
+      unsupported_count = v_unsupported, completed_at = coalesce(completed_at, clock_timestamp())
+    where id = v_job_id;
+  elsif v_remaining = 0 then
     v_status := 'completed';
     update public.note_import_jobs set
       status = 'completed', committed_count = v_committed,
@@ -345,5 +429,78 @@ exception
     raise exception using errcode = 'P0001', message = 'invalid_import_input';
 end;
 $$;
+
+
+-- The dispatcher routes by prefix, and a bare 'note.%' falls through to the
+-- general Note executor, which knows nothing about import jobs. The routing
+-- decision lives in the base of the dispatch chain, so that is the one
+-- function this touches: everything layered on top of it since keeps working,
+-- and a branch that adds a new link to the chain does not collide with this.
+create or replace function public.dispatch_trusted_operation_action_template_base(
+  p_operation_id text,
+  p_input jsonb,
+  p_idempotency_key text,
+  p_surface text
+)
+returns jsonb
+language plpgsql
+security definer
+set search_path = pg_catalog, public
+as $$
+declare
+  v_result jsonb;
+begin
+  if p_surface not in ('ui', 'chat', 'mcp', 'automation', 'system') then
+    raise exception using errcode = 'P0001', message = 'invalid_operation_surface';
+  end if;
+  perform 1 from public.operation_contracts
+  where operation_id = p_operation_id and p_surface = any(exposures);
+  if not found then raise exception using errcode = '42501', message = 'operation_surface_not_allowed'; end if;
+  if p_operation_id = 'operation.undo.v1' then
+    v_result := public.execute_operation_undo(p_operation_id, p_input, p_idempotency_key, p_surface);
+  elsif p_operation_id in ('goal.update.v1', 'action.move.v1') then
+    v_result := public.execute_plan_edit_operation(p_operation_id, p_input, p_idempotency_key, p_surface);
+  elsif p_operation_id like 'account.%' then
+    v_result := public.execute_account_operation(p_operation_id, p_input, p_idempotency_key, p_surface);
+  elsif p_operation_id in ('action.update.v1', 'action.status.v1', 'daily-focus.set.v1') then
+    v_result := public.execute_daily_execution_operation(p_operation_id, p_input, p_idempotency_key, p_surface);
+  elsif p_operation_id = 'workspace.onboarding-complete.v1' then
+    v_result := public.execute_guided_onboarding_operation(p_operation_id, p_input, p_idempotency_key, p_surface);
+  elsif p_operation_id = 'workspace.ai-budget.v1' then
+    v_result := public.execute_ai_budget_operation(p_operation_id, p_input, p_idempotency_key, p_surface);
+  elsif p_operation_id like 'workspace.%' then
+    v_result := public.execute_workspace_operation(p_operation_id, p_input, p_idempotency_key, p_surface);
+  elsif p_operation_id in (
+    'note.import-preview.v1', 'note.import-commit.v1', 'note.import-cancel.v1'
+  ) then
+    v_result := public.execute_note_import_operation(p_operation_id, p_input, p_idempotency_key, p_surface);
+  elsif p_operation_id in (
+    'note.goal-link.v1', 'note.goal-unlink.v1', 'note.action-link.v1', 'note.action-unlink.v1'
+  ) then
+    v_result := public.execute_note_relation_operation(p_operation_id, p_input, p_idempotency_key, p_surface);
+  elsif p_operation_id = 'review.complete-period.v1' then
+    v_result := public.execute_period_review_operation(p_operation_id, p_input, p_idempotency_key, p_surface);
+  elsif p_operation_id like 'review.%' then
+    v_result := public.execute_review_operation(p_operation_id, p_input, p_idempotency_key, p_surface);
+  elsif p_operation_id in (
+    'note.tags.set.v1', 'note.link.v1', 'note.unlink.v1', 'capture.file-to-note.v1'
+  ) then
+    v_result := public.execute_knowledge_operation(p_operation_id, p_input, p_idempotency_key, p_surface);
+  elsif p_operation_id like 'note.%' then
+    v_result := public.execute_note_operation(p_operation_id, p_input, p_idempotency_key, p_surface);
+  elsif p_operation_id like 'memory.%' then
+    v_result := public.execute_memory_operation(p_operation_id, p_input, p_idempotency_key, p_surface);
+  elsif p_operation_id like 'trash.%' then
+    v_result := public.execute_trash_operation(p_operation_id, p_input, p_idempotency_key, p_surface);
+  else
+    v_result := public.execute_planner_operation(p_operation_id, p_input, p_idempotency_key, p_surface);
+  end if;
+  return v_result;
+end;
+$$;
+
+revoke all on function
+  public.dispatch_trusted_operation_action_template_base(text, jsonb, text, text)
+from public, anon, authenticated, service_role;
 
 commit;
