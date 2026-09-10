@@ -1512,6 +1512,10 @@ export type Database = {
           parent_source_path: string | null;
           reason: string | null;
           sort_order: number;
+          source_cover_key: string | null;
+          source_cover_position: number | null;
+          source_favorited_at: string | null;
+          source_icon_emoji: string | null;
           source_path: string;
           source_sort_key: number | null;
           target_note_id: string | null;
@@ -1530,6 +1534,10 @@ export type Database = {
           parent_source_path?: string | null;
           reason?: string | null;
           sort_order: number;
+          source_cover_key?: string | null;
+          source_cover_position?: number | null;
+          source_favorited_at?: string | null;
+          source_icon_emoji?: string | null;
           source_path: string;
           source_sort_key?: number | null;
           target_note_id?: string | null;
@@ -1548,6 +1556,10 @@ export type Database = {
           parent_source_path?: string | null;
           reason?: string | null;
           sort_order?: number;
+          source_cover_key?: string | null;
+          source_cover_position?: number | null;
+          source_favorited_at?: string | null;
+          source_icon_emoji?: string | null;
           source_path?: string;
           source_sort_key?: number | null;
           target_note_id?: string | null;
