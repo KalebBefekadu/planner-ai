@@ -304,20 +304,33 @@ export async function getNoteKnowledgeContext(noteId: string): Promise<NoteKnowl
       .select('action_id')
       .eq('workspace_id', workspaceId)
       .eq('note_id', noteId),
-    supabase
-      .from('goals')
-      .select('id,title')
-      .eq('workspace_id', workspaceId)
-      .is('archived_at', null)
-      .is('trashed_at', null)
-      .order('title'),
-    supabase
-      .from('actions')
-      .select('id,title')
-      .eq('workspace_id', workspaceId)
-      .is('archived_at', null)
-      .is('trashed_at', null)
-      .order('title'),
+    /* These two are the pickers for linking a Note to the plan, and they are
+       workspace-wide rather than per-Note. Truncated at max_rows, a Goal past
+       the first thousand simply could not be chosen, and nothing on the screen
+       would say why it was absent. The rest of the reads here are filtered to
+       one Note and cannot reach the cap. */
+    selectAll((from, to) =>
+      supabase
+        .from('goals')
+        .select('id,title')
+        .eq('workspace_id', workspaceId)
+        .is('archived_at', null)
+        .is('trashed_at', null)
+        .order('title')
+        .order('id')
+        .range(from, to)
+    ),
+    selectAll((from, to) =>
+      supabase
+        .from('actions')
+        .select('id,title')
+        .eq('workspace_id', workspaceId)
+        .is('archived_at', null)
+        .is('trashed_at', null)
+        .order('title')
+        .order('id')
+        .range(from, to)
+    ),
     // Removed attachments are still listed while they can be restored. Hiding
     // them made the undo live only in the tab that did the removal: a reload
     // left the file present in storage, recoverable for another thirty days,

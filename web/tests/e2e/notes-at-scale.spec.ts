@@ -88,3 +88,57 @@ test('a vault past the row cap still contains every Note', async ({ workspace })
   // A backup that is quietly short is worse than one that fails loudly.
   expect(markdownFiles, 'the vault was short of the workspace').toBe(TOTAL);
 });
+
+test('a plan past the row cap still shows every Goal', async ({ workspace }) => {
+  test.setTimeout(300_000);
+  const { page, admin, userId } = workspace;
+  const workspaceId = await workspaceIdFor(admin, userId);
+
+  /* A hierarchy truncated at max_rows is worse than a truncated list: a Goal
+     that is not returned takes its children off the screen with it, so the
+     plan looks smaller rather than incomplete. Onboarding leaves one yearly
+     Goal behind, so the seed makes up the rest. */
+  execFileSync(
+    'psql',
+    [
+      'postgresql://postgres:postgres@127.0.0.1:55322/postgres',
+      '-v',
+      'ON_ERROR_STOP=1',
+      '-c',
+      `insert into public.goals (workspace_id, vision_id, horizon_id, title)
+       select '${workspaceId}', g.vision_id, g.horizon_id, 'Seeded goal ' || i
+       from public.goals g
+       cross join generate_series(1, ${TOTAL}) as i
+       where g.workspace_id = '${workspaceId}'
+       limit ${TOTAL};`,
+    ],
+    { stdio: 'pipe' }
+  );
+
+  // Counted as postgres: the service role is denied direct reads here too.
+  const count = Number(
+    execFileSync(
+      'psql',
+      [
+        'postgresql://postgres:postgres@127.0.0.1:55322/postgres',
+        '-tA',
+        '-c',
+        `select count(*) from public.goals where workspace_id = '${workspaceId}' and archived_at is null and trashed_at is null;`,
+      ],
+      { encoding: 'utf8' }
+    ).trim()
+  );
+  expect(count, 'the seed did not pass the row cap').toBeGreaterThan(1000);
+
+  await goTo(page, '/planner');
+  await expect(page.getByRole('heading', { name: 'Plan with a clear line of sight' })).toBeVisible({
+    timeout: 120_000,
+  });
+
+  // The horizon filter counts the plan it was given, so it reports whatever
+  // the page actually received.
+  const yearly = page.getByRole('group', { name: 'Filter plan by horizon' }).getByRole('button', {
+    name: /^Year/,
+  });
+  await expect(yearly).toContainText(String(count));
+});

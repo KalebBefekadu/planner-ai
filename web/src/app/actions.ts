@@ -1,5 +1,7 @@
 'use server';
 
+import { selectAll } from '@/lib/supabase/select-all';
+
 import { randomUUID } from 'node:crypto';
 import { revalidatePath } from 'next/cache';
 import { revalidatePlannerAndRecords, revalidatePlannerViews } from '@/lib/planner-revalidation';
@@ -276,21 +278,35 @@ export async function getGoalsHierarchy(): Promise<GoalsData | null> {
 
   if (canonicalEnabled) {
     const { supabase, workspaceId, timezone, weekStartsOn } = await requireWorkspaceId();
+    /* Paged: PostgREST caps a response at max_rows without saying so, and a
+       plan that has accumulated for a few years passes a thousand rows without
+       being remarkable. Truncated, the screen would show part of the plan as
+       though it were all of it -- and unlike a list, a hierarchy with missing
+       parents silently drops their children too. The id tiebreaks created_at,
+       which is not unique. */
     const [goalsResult, actionsResult] = await Promise.all([
-      supabase
-        .from('goals')
-        .select('*, planning_horizons!inner(kind,starts_on,ends_on)')
-        .eq('workspace_id', workspaceId)
-        .is('archived_at', null)
-        .is('trashed_at', null)
-        .order('created_at'),
-      supabase
-        .from('actions')
-        .select('*, planning_horizons!inner(kind,starts_on,ends_on)')
-        .eq('workspace_id', workspaceId)
-        .is('archived_at', null)
-        .is('trashed_at', null)
-        .order('created_at'),
+      selectAll((from, to) =>
+        supabase
+          .from('goals')
+          .select('*, planning_horizons!inner(kind,starts_on,ends_on)')
+          .eq('workspace_id', workspaceId)
+          .is('archived_at', null)
+          .is('trashed_at', null)
+          .order('created_at')
+          .order('id')
+          .range(from, to)
+      ),
+      selectAll((from, to) =>
+        supabase
+          .from('actions')
+          .select('*, planning_horizons!inner(kind,starts_on,ends_on)')
+          .eq('workspace_id', workspaceId)
+          .is('archived_at', null)
+          .is('trashed_at', null)
+          .order('created_at')
+          .order('id')
+          .range(from, to)
+      ),
     ]);
     if (goalsResult.error || actionsResult.error) throw new Error('Unable to load your plan.');
     const localDate = dateInTimezone(timezone);
