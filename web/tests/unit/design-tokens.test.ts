@@ -73,7 +73,11 @@ describe('brand and shell contracts', () => {
         .map((m) => m[1])
         // The alias tail and the scale are theme-independent by design.
         .filter(
-          (n) => !/^--(fs|r|t|lh|font)-|^--(ease|text|text-muted|line-strong|accent|teal)$/.test(n)
+          (n) =>
+            !/^--(fs|r|t|lh|font)-|^--(ease|text|text-muted|line-strong|accent|teal)$/.test(n) &&
+            // Cover chips sit on a photograph, not the app canvas, so they are
+            // defined once and deliberately never redefined per theme.
+            !/^--(media-chip|media-chip-line|on-media)$/.test(n)
         );
     const at = (start: string) => {
       const i = css.indexOf(start);

@@ -16,11 +16,6 @@
   --veil: rgba(255, 255, 255, 0.94);
   --veil-soft: rgba(255, 255, 255, 0.6);
 
-  /* ---------- media chips keep one appearance in both themes ---------- */
-  --media-chip: rgba(23, 26, 24, 0.72);
-  --media-chip-line: rgba(255, 255, 255, 0.65);
-  --on-media: #ffffff;
-
   /* ---------- ink ---------- */
   --ink: #171a18;
   --ink-soft: #424b46;
@@ -140,11 +135,6 @@
   --veil: rgba(24, 28, 25, 0.94);
   --veil-soft: rgba(231, 235, 231, 0.06);
 
-  /* ---------- media chips keep one appearance in both themes ---------- */
-  --media-chip: rgba(23, 26, 24, 0.72);
-  --media-chip-line: rgba(255, 255, 255, 0.65);
-  --on-media: #ffffff;
-
   /* ---------- ink ---------- */
   --ink: #e7ebe7;
   --ink-soft: #c3ccc5;
@@ -215,11 +205,6 @@
     --scrim: rgba(0, 0, 0, 0.58);
     --veil: rgba(24, 28, 25, 0.94);
     --veil-soft: rgba(231, 235, 231, 0.06);
-
-    /* ---------- media chips keep one appearance in both themes ---------- */
-    --media-chip: rgba(23, 26, 24, 0.72);
-    --media-chip-line: rgba(255, 255, 255, 0.65);
-    --on-media: #ffffff;
 
     /* ---------- ink ---------- */
     --ink: #e7ebe7;

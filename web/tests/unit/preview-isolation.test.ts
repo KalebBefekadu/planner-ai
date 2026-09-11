@@ -55,6 +55,8 @@ describe('preview stays isolated from the real application', () => {
     // an unreviewed new dependency shows up as a failure to think about.
     expect([...new Set(imports)].sort()).toEqual([
       '@/components/panel-resizer',
+      '@/components/shell/tab-list',
+      '@/lib/shell/theme',
       '@/lib/use-dialog',
     ]);
   });
