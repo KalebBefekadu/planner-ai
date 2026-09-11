@@ -8,6 +8,7 @@ import {
   type NoteCoverKey,
 } from '@/lib/notes/appearance';
 import { nextParentMove, nextSiblingMove, placeUnderParent } from '@/lib/notes/sibling-order';
+import { selectAll } from '@/lib/supabase/select-all';
 import { executeOperation } from '@/lib/operations';
 import { createClient } from '@/lib/supabase/server';
 
@@ -129,21 +130,29 @@ function mapNote(note: Record<string, unknown>): NoteView {
 
 export async function getNotes(query?: string) {
   const { supabase, workspaceId } = await notesClient();
-  let request = supabase
-    .from('notes')
-    .select(TREE_COLUMNS)
-    .eq('workspace_id', workspaceId)
-    .is('archived_at', null)
-    .is('trashed_at', null)
-    .order('sort_key');
   const normalizedQuery = query?.trim();
-  if (normalizedQuery) {
-    request = request.textSearch('search_vector', normalizedQuery, {
-      config: 'simple',
-      type: 'websearch',
-    });
-  }
-  const { data, error } = await request;
+  /* Paged, because PostgREST caps a response at max_rows without saying so:
+     a workspace past a thousand Notes was showing the first thousand and
+     nothing at all about the rest. The id is a tiebreak on sort_key, since
+     paging an order that is not total can repeat one row and drop another. */
+  const { data, error } = await selectAll((from, to) => {
+    let request = supabase
+      .from('notes')
+      .select(TREE_COLUMNS)
+      .eq('workspace_id', workspaceId)
+      .is('archived_at', null)
+      .is('trashed_at', null)
+      .order('sort_key')
+      .order('id')
+      .range(from, to);
+    if (normalizedQuery) {
+      request = request.textSearch('search_vector', normalizedQuery, {
+        config: 'simple',
+        type: 'websearch',
+      });
+    }
+    return request;
+  });
   if (error) throw new Error('Unable to load Notes.');
   const matches = (data ?? []).map((note) => mapNote(note as Record<string, unknown>));
   if (!normalizedQuery) return matches;
