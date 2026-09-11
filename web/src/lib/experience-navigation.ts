@@ -174,12 +174,21 @@ export function experienceNavigationForPath(
               },
               {
                 label: 'Workspace',
+                // A destination is named once. These labels match each page's
+                // own heading and the settings tab bar, because the sidebar,
+                // the tab bar and the page were disagreeing: "AI and agents"
+                // opened a page titled "AI usage", and "MCP" opened "AI
+                // connections".
                 items: [
                   { label: 'Preferences', href: '/settings/preferences', match: 'prefix' as const },
-                  { label: 'AI and agents', href: '/settings/ai', match: 'prefix' as const },
+                  { label: 'AI usage', href: '/settings/ai', match: 'prefix' as const },
                   { label: 'Memory', href: '/settings/memory', match: 'prefix' as const },
-                  { label: 'Data and offline', href: '/settings/data', match: 'prefix' as const },
-                  { label: 'MCP', href: '/settings/mcp', match: 'prefix' as const },
+                  {
+                    label: 'Data and portability',
+                    href: '/settings/data',
+                    match: 'prefix' as const,
+                  },
+                  { label: 'AI connections', href: '/settings/mcp', match: 'prefix' as const },
                 ],
               },
             ]

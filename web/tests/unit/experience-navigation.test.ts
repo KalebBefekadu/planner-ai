@@ -46,7 +46,22 @@ describe('experience navigation', () => {
       experienceNavItems(experienceNavigationForPath('/settings/mcp', true)).map(
         (item) => item.label
       )
-    ).toContain('MCP');
+    ).toContain('AI connections');
+  });
+
+  it('names each Settings destination the way its page and tab bar do', () => {
+    // The sidebar, the settings tab bar and the page heading were three
+    // different names for the same place: "AI and agents" opened a page titled
+    // "AI usage", and "MCP" opened "AI connections".
+    const labels = experienceNavItems(experienceNavigationForPath('/settings/ai', true)).map(
+      (item) => item.label
+    );
+    expect(labels).toContain('AI usage');
+    expect(labels).toContain('AI connections');
+    expect(labels).toContain('Data and portability');
+    expect(labels).not.toContain('AI and agents');
+    expect(labels).not.toContain('Data and offline');
+    expect(labels).not.toContain('MCP');
   });
 
   it('omits canonical-only destinations while the legacy model is active', () => {
