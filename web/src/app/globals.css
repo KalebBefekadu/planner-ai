@@ -910,6 +910,21 @@ button:disabled {
   text-transform: uppercase;
   letter-spacing: 0.08em;
 }
+/* A vision is read far more often than it is rewritten, so the saved one is
+   set the way the rest of the product sets a statement: the display face, at
+   reading size. */
+.vision-statement {
+  margin: 4px 0 0;
+  color: var(--ink);
+  font-family: var(--font-display);
+  font-size: var(--fs-title);
+  line-height: var(--lh-read);
+}
+.vision-written {
+  margin: 12px 0 0;
+  color: var(--muted);
+  font-size: var(--fs-label);
+}
 .vision-textarea {
   width: 100%;
   min-height: 360px;

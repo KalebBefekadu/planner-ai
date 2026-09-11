@@ -214,3 +214,36 @@ test('the sidebar marks the planner destination that was chosen', async ({ works
   // And the page it lands on is actually showing every period.
   await expect(page.getByText('Every period on record')).toBeVisible();
 });
+
+test('a written vision is something to read, and still something to change', async ({
+  workspace,
+}) => {
+  const { page } = workspace;
+  await goTo(page, '/vision');
+
+  // Onboarding wrote one, so this workspace opens on the statement rather than
+  // on a form field left open. Scoped to the statement: the editor is only
+  // hidden, so it still holds the same words.
+  const statement = page.locator('.vision-statement');
+  await expect(statement).toHaveText(onboardingSeed.vision);
+  await expect(page.getByRole('textbox', { name: 'Vision draft' })).toBeHidden();
+
+  await page.getByRole('button', { name: 'Edit vision' }).click();
+  const draft = page.getByRole('textbox', { name: 'Vision draft' });
+  await expect(draft).toBeVisible();
+  await expect(draft).toHaveValue(onboardingSeed.vision);
+
+  const rewritten = 'Build a calm week that still moves the long arc forward.';
+  await draft.fill(rewritten);
+  await page.getByRole('button', { name: 'Save vision' }).click();
+
+  /* Back to reading, showing what was just written. Nothing refreshes this
+     route after a save, so reading the server value back would have shown the
+     previous vision to the person who had just replaced it. */
+  await expect(statement).toHaveText(rewritten);
+  await expect(page.getByRole('textbox', { name: 'Vision draft' })).toBeHidden();
+
+  // And it really reached the server.
+  await page.reload();
+  await expect(page.locator('.vision-statement')).toHaveText(rewritten);
+});
