@@ -1166,3 +1166,42 @@ test('the cover position can be set from the keyboard and is remembered', async 
   await page.getByRole('button', { name: 'Change cover' }).click();
   await expect(page.getByText(/Cover position \(45% from the top\)/)).toBeVisible();
 });
+
+test('a long title is readable at the size the design sets it in', async ({ workspace }) => {
+  const { page } = workspace;
+  const long = 'A deliberately long personal operating system title that has to wrap';
+
+  await goTo(page, '/notes');
+  await createRootNote(page, long, 'Keep the scope small.');
+
+  const title = page.getByRole('textbox', { name: 'Note title' });
+  const measured = await title.evaluate((element) => {
+    const style = getComputedStyle(element);
+    return {
+      family: style.fontFamily,
+      size: Number.parseFloat(style.fontSize),
+      scrollsSideways: element.scrollWidth > element.clientWidth + 1,
+      clipsVertically: element.scrollHeight > element.clientHeight + 1,
+    };
+  });
+
+  // The display face at the display size, the same treatment every other page
+  // heading gets.
+  expect(measured.family).toContain('Iowan Old Style');
+  expect(measured.size).toBeGreaterThanOrEqual(32);
+
+  // It wraps. As an input it could not, so a long title scrolled sideways out
+  // of view -- barely noticeable at the old 20px, unusable at 40.
+  expect(measured.scrollsSideways, 'the title scrolled sideways instead of wrapping').toBe(false);
+  expect(measured.clipsVertically, 'the wrapped title was cut off').toBe(false);
+
+  // Still one line of text: Enter commits instead of opening a second
+  // paragraph, and the stored title keeps every word.
+  await title.focus();
+  await page.keyboard.press('End');
+  await page.keyboard.press('Enter');
+  await expect(title).toHaveValue(long);
+
+  await page.reload();
+  await expect(page.getByRole('textbox', { name: 'Note title' })).toHaveValue(long);
+});

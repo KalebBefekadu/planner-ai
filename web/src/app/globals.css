@@ -2547,6 +2547,11 @@ button:disabled {
 .note-editor-breadcrumb span:last-child {
   color: var(--ink);
 }
+/* The document title is the most prominent thing on the Workspace, and the
+   reference sets it in the display face at the display size -- the same
+   treatment every other page heading already gets. It is an input rather than
+   an h1 because it is edited in place, so it has to ask for the face itself
+   instead of inheriting the .experience-main h1 rule. */
 .note-title-input {
   width: 100%;
   min-width: 0;
@@ -2554,8 +2559,16 @@ button:disabled {
   outline: 0;
   background: transparent;
   color: var(--ink);
-  font-size: var(--fs-title);
-  font-weight: 700;
+  padding: 0;
+  overflow: hidden;
+  resize: none;
+  font-family: var(--font-display);
+  font-size: var(--fs-display);
+  font-weight: 600;
+  line-height: 1.15;
+}
+.note-title-input::placeholder {
+  color: var(--ink-faint);
 }
 .note-header-actions {
   display: flex;
@@ -5935,6 +5948,11 @@ button:disabled {
 }
 
 @media (max-width: 760px) {
+  /* A 40px display title is most of a narrow screen before any words are
+     read, so it steps down to the page size the way the reference does. */
+  .note-title-input {
+    font-size: var(--fs-page);
+  }
   .workspace-search-form {
     grid-template-columns: 22px minmax(0, 1fr);
   }
