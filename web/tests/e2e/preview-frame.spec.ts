@@ -1,4 +1,5 @@
 import { test, expect } from '@playwright/test';
+import { scanTest } from './support/workspace';
 
 /* The reference frame had no browser coverage of its own geometry. Both panel
  * widths are data -- a person drags them -- and the rest of the application
@@ -58,4 +59,33 @@ test.describe('the preview frame applies the widths it is given', () => {
     expect(discarded, '/preview rendered a style the policy refuses').toEqual([]);
     expect(refusals, '/preview was refused a style by the policy').toEqual([]);
   });
+});
+
+/* Signed in, /preview used to render inside the application frame, because the
+ * root layout wraps every authenticated route. The reference is a complete
+ * frame laid over the viewport, so the result was two of everything: two
+ * "Primary navigation" landmarks, two assistant launchers, and a hundred-odd
+ * links and buttons hidden behind the overlay but still in the tab order. */
+scanTest('the reference does not render inside a second application frame', async ({ page }) => {
+  await page.goto('/preview');
+  await expect(page.getByRole('navigation', { name: 'Primary navigation' })).toBeVisible();
+
+  const stacked = await page.evaluate(() => {
+    const shell = document.querySelector('.experience-shell');
+    return {
+      primaryNavCount: document.querySelectorAll('nav[aria-label="Primary navigation"]').length,
+      assistantLaunchers: document.querySelectorAll('.assistant-launch').length,
+      focusableBehindOverlay: shell
+        ? shell.querySelectorAll(
+            'a[href],button:not([disabled]),input,[tabindex]:not([tabindex="-1"])'
+          ).length
+        : 0,
+    };
+  });
+
+  expect(stacked.primaryNavCount, 'the reference is wrapped in a second frame').toBe(1);
+  // Preview styles its own launcher from its CSS module, so the only way
+  // .assistant-launch appears here is the application frame rendering behind.
+  expect(stacked.assistantLaunchers, 'the application dock rendered behind').toBe(0);
+  expect(stacked.focusableBehindOverlay, 'controls are reachable behind the overlay').toBe(0);
 });

@@ -86,6 +86,14 @@ export function ExperienceShell({
 }: ExperienceShellProps) {
   const pathname = usePathname();
   const standaloneFlow = pathname === '/onboarding';
+  // /preview is a complete frame of its own, laid over the viewport. Rendering
+  // the application frame behind it produced two of everything: two "Primary
+  // navigation" landmarks, two assistant launchers, and a hundred-odd links
+  // and buttons that were invisible but still in the tab order, so tabbing
+  // through the reference walked into controls nobody could see. The route
+  // brings its own rail, sidebar, topbar and skip link, so there is nothing
+  // for the frame to contribute.
+  const routeOwnsFrame = pathname === '/preview' || pathname.startsWith('/preview/');
   const contentOwnsSidebar = pathname === '/notes';
   const router = useRouter();
   const sidebarOpen = useSyncExternalStore(subscribeToSidebar, sidebarOpenSnapshot, () => true);
@@ -242,6 +250,8 @@ export function ExperienceShell({
       />
     </aside>
   );
+
+  if (routeOwnsFrame) return <>{children}</>;
 
   /* One assistant for the whole frame. The launchers below are entry
      points into it, not separate docks. */
