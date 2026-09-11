@@ -548,7 +548,10 @@ export function PlannerWorkspace({
         </p>
       ) : null}
 
-      <nav className="planner-horizon-tabs" aria-label="Filter plan by horizon">
+      {/* A group of toggles, not navigation: these buttons filter the plan in
+          place and route nowhere, so a nav landmark announced a list of links
+          that does not exist. The period filter above already says group. */}
+      <div className="planner-horizon-tabs" role="group" aria-label="Filter plan by horizon">
         {horizonOptions.map((option) => (
           <button
             key={option.id}
@@ -561,7 +564,7 @@ export function PlannerWorkspace({
             <small>{option.count}</small>
           </button>
         ))}
-      </nav>
+      </div>
 
       <nav className="planner-flow" aria-label="Planning flow">
         <Link href="/vision">
