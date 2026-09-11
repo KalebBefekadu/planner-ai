@@ -3419,6 +3419,11 @@ button:disabled {
 .review-action-copy span {
   color: var(--muted);
   font-size: var(--fs-label);
+}
+/* Capitalisation belongs to machine values -- a status, a source type -- and
+   never to anything a person wrote. Applying it to a whole line rewrote the
+   owner's own Goal titles into title case. */
+.enum-label {
   text-transform: capitalize;
 }
 .review-action-row select,
@@ -3623,7 +3628,6 @@ button:disabled {
 .period-goal-unmeasured {
   color: var(--muted);
   font-size: var(--fs-label);
-  text-transform: capitalize;
 }
 .period-goal-progress {
   display: grid;
@@ -5238,7 +5242,6 @@ button:disabled {
 .memory-row span {
   color: var(--muted);
   font-size: var(--fs-label);
-  text-transform: capitalize;
 }
 .memory-row > div:last-child {
   display: flex;
