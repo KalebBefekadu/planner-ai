@@ -25,6 +25,8 @@ Nothing outside `.agents/reports/BR-01-claude-audit.md` was modified.
 | §7.4 **blocker** — Preview and real navigation describe different destination sets | **Resolved.** `experience-navigation.ts` now carries Plan/Align grouping and the full Preview destination list: Today, This week, Calendar, Action inbox, Weekly review, Goals & horizons, Vision | `web/src/lib/experience-navigation.ts:104-125` |
 | §3.1 "the real app has no Inter" | **Partly landed.** `--font-ui` is now the Inter stack and `body` consumes it | `web/src/app/globals.css:34`, `:159`, `:182` |
 | §7.2 new `design-tokens.test.ts` | **Exists**, and already pins that `layout.tsx` references neither `experienceV2EnabledForOwner` nor `PLANNER_UI_V2` | `web/tests/unit/design-tokens.test.ts:27-28` |
+| §2.1 mobile bottom bar — "no equivalent exists in the real shell" | **Wrong; it exists.** The shell renders a real bottom nav, CSS-driven rather than the JS media query §6.8 warned against | `web/src/components/experience-shell.tsx:379` |
+| §6.2 the Notes double sidebar, "the highest-risk change" | **Largely resolved.** `contentOwnsSidebar` lets `/notes` own the single sidebar and suppresses the shell's, and the inspector was regrouped without the hardcoded viewport calculation the audit flagged | `web/src/components/experience-shell.tsx:88`, `:328`; `web/tests/unit/design-tokens.test.ts` ("lets Notes provide the single real workspace tree", "groups Note details without a hardcoded viewport-height calculation") |
 
 **Consequence: Step 3 is unblocked and its navigation half is already complete.** What remains of Step 3 is the frame itself — `AppFrame`, the context column, the mobile bottom bar, `ShellStatus` replacing the hardcoded status text, and collapsing the duplicate `AssistantDock` mounts.
 
@@ -33,7 +35,7 @@ Nothing outside `.agents/reports/BR-01-claude-audit.md` was modified.
 - **§5 Step 1, token merge: not started.** `globals.css` contains zero `--v2-*` names; `preview.module.css` still defines its own 1150-occurrence parallel palette. Every divergence listed in §3.1 (brand, canvas, ink, border, the missing ink/surface/interaction/accent tiers) still stands. Only the font half of Step 1 landed.
 - **§5 Step 2, component extraction: not started.** `web/src/components/shell/` does not exist. This is now the critical path — nothing downstream of it has moved.
 - **§6.4 two theme stores.** Preview still uses `planner-preview-theme` on `.previewRoot` (`web/src/app/preview/page.tsx:99-100`) against the app's `planner-theme` on `<html>`. The §6.4 sequencing constraint is unchanged: Preview must adopt `ThemeToggle` in the same commit as the token merge.
-- **§6.1 (style attributes discarded under CSP), §6.2 (Notes double sidebar), §6.3 (horizon tab semantics), §6.7-6.9** all still hold. `.notes-shell` is still its own grid, now at `web/src/app/globals.css:2029`.
+- **§6.1 (style attributes discarded under CSP), §6.3 (horizon tab semantics), §6.7-6.9** still hold. Of §6.2 only the residue remains: `.notes-shell` is still its own grid (`web/src/app/globals.css:2029`) rendered inside the work area (`web/src/components/notes-workspace.tsx:497`), but it no longer produces a second navigation sidebar.
 - **§7.1 visual baselines: still none.** Nothing in `web/tests/e2e` captures a screenshot. Step 0 remains the correct first action.
 
 ### 0.3 Dead code the shell removal left behind
