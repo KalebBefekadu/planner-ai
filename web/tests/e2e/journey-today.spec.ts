@@ -328,3 +328,25 @@ test('/today reaches Today instead of a not-found page', async ({ workspace }) =
   await expect(page).toHaveURL(/\/planner\/today(?:\?|$)/);
   await expect(page.getByRole('heading', { name: 'Make today count', exact: true })).toBeVisible();
 });
+
+test('Today offers the way back into the page you were last writing', async ({ workspace }) => {
+  const { page } = workspace;
+
+  await goTo(page, '/notes');
+  await page.getByRole('button', { name: 'New root note' }).click();
+  await expect(page.getByRole('textbox', { name: 'Note title' })).toHaveValue('Untitled');
+  await page.getByRole('textbox', { name: 'Note title' }).fill('Quarterly summary');
+  await page
+    .getByRole('textbox', { name: 'Note body, Markdown' })
+    .fill('The numbers that matter this quarter.');
+  await expect(page.getByRole('status')).toHaveText('Saved');
+
+  await goTo(page, '/');
+  const recent = page.getByRole('region', { name: 'Recent work' });
+  await expect(recent).toBeVisible();
+
+  // The way back is the whole point: it opens the page, not a list of pages.
+  await recent.getByRole('link', { name: /Quarterly summary/ }).click();
+  await expect(page).toHaveURL(/\/notes\?note=/);
+  await expect(page.getByRole('textbox', { name: 'Note title' })).toHaveValue('Quarterly summary');
+});

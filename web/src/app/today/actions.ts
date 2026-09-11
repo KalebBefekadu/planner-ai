@@ -39,6 +39,8 @@ export type TodayData = {
   actions: TodayAction[];
   goals: TodayGoalOption[];
   recentCaptures: Array<{ id: string; rawText: string; createdAt: string }>;
+  /** The Notes touched most recently, so the day can start where it stopped. */
+  recentNotes: Array<{ id: string; title: string; updatedAt: string }>;
 };
 
 export type CreateTodayActionResult = {
@@ -95,41 +97,59 @@ async function readFocusIds(
 export async function getTodayData(): Promise<TodayData> {
   const { supabase, workspaceId, timezone, weekStartsOn, coachingIntensity } = await todayClient();
   const localDate = dateInTimezone(timezone);
-  const [actionsResult, focusResult, goalsResult, capturesResult] = await Promise.all([
-    supabase
-      .from('actions')
-      .select('id,title,description_markdown,status,version,scheduled_on,goals(title)')
-      .eq('workspace_id', workspaceId)
-      .in('status', ['open', 'in_progress', 'blocked'])
-      .is('archived_at', null)
-      .is('trashed_at', null)
-      .order('scheduled_on', { ascending: true, nullsFirst: false })
-      .limit(200),
-    supabase
-      .from('daily_focus_items')
-      .select('action_id,sort_order')
-      .eq('workspace_id', workspaceId)
-      .eq('focus_on', localDate)
-      .order('sort_order'),
-    supabase
-      .from('goals')
-      .select('id,title')
-      .eq('workspace_id', workspaceId)
-      .in('status', ['draft', 'active', 'paused'])
-      .is('archived_at', null)
-      .is('trashed_at', null)
-      .order('title')
-      .limit(200),
-    supabase
-      .from('captures')
-      .select('id,raw_text,created_at')
-      .eq('workspace_id', workspaceId)
-      .is('archived_at', null)
-      .is('trashed_at', null)
-      .order('created_at', { ascending: false })
-      .limit(5),
-  ]);
-  if (actionsResult.error || focusResult.error || goalsResult.error || capturesResult.error) {
+  const [actionsResult, focusResult, goalsResult, capturesResult, recentNotesResult] =
+    await Promise.all([
+      supabase
+        .from('actions')
+        .select('id,title,description_markdown,status,version,scheduled_on,goals(title)')
+        .eq('workspace_id', workspaceId)
+        .in('status', ['open', 'in_progress', 'blocked'])
+        .is('archived_at', null)
+        .is('trashed_at', null)
+        .order('scheduled_on', { ascending: true, nullsFirst: false })
+        .limit(200),
+      supabase
+        .from('daily_focus_items')
+        .select('action_id,sort_order')
+        .eq('workspace_id', workspaceId)
+        .eq('focus_on', localDate)
+        .order('sort_order'),
+      supabase
+        .from('goals')
+        .select('id,title')
+        .eq('workspace_id', workspaceId)
+        .in('status', ['draft', 'active', 'paused'])
+        .is('archived_at', null)
+        .is('trashed_at', null)
+        .order('title')
+        .limit(200),
+      supabase
+        .from('captures')
+        .select('id,raw_text,created_at')
+        .eq('workspace_id', workspaceId)
+        .is('archived_at', null)
+        .is('trashed_at', null)
+        .order('created_at', { ascending: false })
+        .limit(5),
+      /* Picking work back up is how a day usually starts, and the reference puts
+       it on this screen. Four rows: enough to recognise where you were,
+       few enough that it stays a shortcut rather than a second Notes tree. */
+      supabase
+        .from('notes')
+        .select('id,title,updated_at')
+        .eq('workspace_id', workspaceId)
+        .is('archived_at', null)
+        .is('trashed_at', null)
+        .order('updated_at', { ascending: false })
+        .limit(4),
+    ]);
+  if (
+    actionsResult.error ||
+    focusResult.error ||
+    goalsResult.error ||
+    capturesResult.error ||
+    recentNotesResult.error
+  ) {
     throw new Error('Unable to load Today.');
   }
 
@@ -171,6 +191,11 @@ export async function getTodayData(): Promise<TodayData> {
     goals: (goalsResult.data ?? []).map((goal) => ({
       id: goal.id as string,
       title: goal.title as string,
+    })),
+    recentNotes: (recentNotesResult.data ?? []).map((note) => ({
+      id: note.id as string,
+      title: (note.title as string) || 'Untitled',
+      updatedAt: note.updated_at as string,
     })),
     recentCaptures: (capturesResult.data ?? []).map((capture) => ({
       id: capture.id as string,

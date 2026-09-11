@@ -1899,6 +1899,51 @@ button:disabled {
   border-color: transparent;
   background: transparent;
 }
+/* The heading row gives its trailing link only what it needs, and "View all"
+   was breaking across two lines in that space. Only where there is room for
+   it: held on one line at 320px it is the 3px that stops the page reflowing. */
+@media (min-width: 761px) {
+  .today-recent-work > .section-heading > a {
+    white-space: nowrap;
+  }
+}
+.recent-work-list {
+  display: grid;
+}
+.recent-work-item {
+  display: grid;
+  min-width: 0;
+  grid-template-columns: 18px minmax(0, 1fr) 16px;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 4px;
+  border-bottom: 1px solid var(--line-soft);
+  color: var(--ink);
+  text-decoration: none;
+}
+.recent-work-item:last-child {
+  border-bottom: 0;
+}
+.recent-work-item:hover {
+  background: var(--hover);
+}
+.recent-work-item span {
+  display: grid;
+  min-width: 0;
+}
+.recent-work-item strong {
+  overflow: hidden;
+  font-size: var(--fs-body);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.recent-work-item small {
+  color: var(--muted);
+  font-size: var(--fs-label);
+}
+.recent-work-item svg {
+  color: var(--muted);
+}
 .today-capture-strip {
   padding-top: 6px;
 }
