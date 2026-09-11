@@ -46,6 +46,7 @@ import {
   Undo2,
   WandSparkles,
 } from 'lucide-react';
+import { applyTheme, nextTheme, useThemePreference, type ThemePreference } from '@/lib/shell/theme';
 import { useState, useSyncExternalStore } from 'react';
 import { PanelResizer } from '@/components/panel-resizer';
 import { GoalsHorizonsView, VisionView } from './align-surfaces';
@@ -94,25 +95,6 @@ type Stage =
   | { kind: 'perimeter'; screen: PerimeterScreen }
   | { kind: 'state'; which: SystemState };
 
-type ThemePreference = 'system' | 'light' | 'dark';
-
-const THEME_KEY = 'planner-preview-theme';
-const THEME_EVENT = 'planner-preview-theme-change';
-
-function subscribeToTheme(onChange: () => void) {
-  window.addEventListener(THEME_EVENT, onChange);
-  window.addEventListener('storage', onChange);
-  return () => {
-    window.removeEventListener(THEME_EVENT, onChange);
-    window.removeEventListener('storage', onChange);
-  };
-}
-
-function themeSnapshot(): ThemePreference {
-  const stored = window.localStorage.getItem(THEME_KEY);
-  return stored === 'light' || stored === 'dark' ? stored : 'system';
-}
-
 type PrimaryView = 'home' | 'planner' | 'workspace' | 'search' | 'settings' | 'notifications';
 type WorkspaceMode = 'document' | 'table' | 'graph' | 'canvas';
 type ContextMode = 'ai' | 'properties' | 'links';
@@ -146,14 +128,7 @@ export default function ProductPreviewPage() {
   const [sidebarWidth, setSidebarWidth] = useState(248);
   const [contextWidth, setContextWidth] = useState(336);
 
-  // Read through to storage rather than mirroring it into state in an effect,
-  // which keeps the server and first client render agreeing on 'system'.
-  const theme = useSyncExternalStore(subscribeToTheme, themeSnapshot, () => 'system' as const);
-  const chooseTheme = (next: ThemePreference) => {
-    if (next === 'system') window.localStorage.removeItem(THEME_KEY);
-    else window.localStorage.setItem(THEME_KEY, next);
-    window.dispatchEvent(new Event(THEME_EVENT));
-  };
+  const theme = useThemePreference();
 
   const isCompact = useSyncExternalStore(
     subscribeToCompactLayout,
@@ -239,7 +214,6 @@ export default function ProductPreviewPage() {
     return (
       <div
         className={`${frameClass} ${styles.previewRootPlain}`}
-        data-theme={theme === 'system' ? undefined : theme}
         style={frameStyle}
         onKeyDown={paletteShortcut(setPaletteOpen)}
       >
@@ -258,12 +232,7 @@ export default function ProductPreviewPage() {
   }
 
   return (
-    <div
-      className={frameClass}
-      data-theme={theme === 'system' ? undefined : theme}
-      style={frameStyle}
-      onKeyDown={paletteShortcut(setPaletteOpen)}
-    >
+    <div className={frameClass} style={frameStyle} onKeyDown={paletteShortcut(setPaletteOpen)}>
       <a className={styles.skipLink} href="#preview-main">
         Skip to content
       </a>
@@ -286,7 +255,7 @@ export default function ProductPreviewPage() {
           <span className={styles.notificationDot} />
           <span className={styles.visuallyHidden}>4 unread</span>
         </button>
-        <ThemeControl theme={theme} onChoose={chooseTheme} />
+        <ThemeControl theme={theme} />
         <button
           className={styles.iconButton}
           type="button"
@@ -347,7 +316,7 @@ export default function ProductPreviewPage() {
         ) : null}
         {isMobileBar ? null : (
           <div className={styles.railBottom}>
-            <ThemeControl theme={theme} onChoose={chooseTheme} />
+            <ThemeControl theme={theme} />
             <RailButton
               label="Notifications"
               active={primaryView === 'notifications'}
@@ -709,28 +678,24 @@ function RailButton({
   );
 }
 
-const THEME_ORDER: ThemePreference[] = ['system', 'light', 'dark'];
 const THEME_META: Record<ThemePreference, { label: string; icon: React.ReactNode }> = {
   system: { label: 'Match system', icon: <Monitor size={18} /> },
   light: { label: 'Light', icon: <Sun size={18} /> },
   dark: { label: 'Dark', icon: <Moon size={18} /> },
 };
 
-function ThemeControl({
-  theme,
-  onChoose,
-}: {
-  theme: ThemePreference;
-  onChoose: (next: ThemePreference) => void;
-}) {
-  const next = THEME_ORDER[(THEME_ORDER.indexOf(theme) + 1) % THEME_ORDER.length];
+/* The rail icon is Preview's own presentation of the one shared theme
+   control; the state, the storage key and the <html> stamp come from
+   lib/shell/theme.ts, the same module the authenticated ThemeToggle uses. */
+function ThemeControl({ theme }: { theme: ThemePreference }) {
+  const next = nextTheme(theme);
   return (
     <button
       className={styles.railButton}
       type="button"
       title={`Theme: ${THEME_META[theme].label}`}
       aria-label={`Theme: ${THEME_META[theme].label}. Switch to ${THEME_META[next].label}`}
-      onClick={() => onChoose(next)}
+      onClick={() => applyTheme(next)}
     >
       {THEME_META[theme].icon}
     </button>
