@@ -4802,6 +4802,37 @@ button:disabled {
   display: grid;
   gap: 14px;
 }
+/* Same chip language as workspace search, so the two filters read as one
+   idea. Here they are a real tablist -- choosing one swaps the panel below
+   rather than going anywhere -- which is what TabList provides. */
+.notification-kinds {
+  display: flex;
+  overflow-x: auto;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin: 4px 0 12px;
+}
+.notification-kinds button {
+  padding: 6px 12px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: var(--surface);
+  color: var(--ink-soft);
+  font-size: var(--fs-label);
+  font-weight: 600;
+  white-space: nowrap;
+  cursor: pointer;
+  transition: background var(--t-feedback) var(--ease);
+}
+.notification-kinds button:hover {
+  background: var(--hover);
+}
+.notification-kinds .notification-kind-active {
+  border-color: var(--brand);
+  background: var(--brand-soft);
+  color: var(--brand-strong);
+}
+
 .notification-toolbar {
   display: flex;
   min-height: 40px;
