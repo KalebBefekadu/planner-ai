@@ -119,7 +119,7 @@ test('the period filter excludes other periods without hiding the work', async (
   await expect(composer).toContainText('is saved');
 
   await page.goto('/planner');
-  const horizons = page.getByRole('navigation', { name: 'Filter plan by horizon' });
+  const horizons = page.getByRole('group', { name: 'Filter plan by horizon' });
   const weekTab = horizons.getByRole('button', { name: /^Week/ });
   const monthTab = horizons.getByRole('button', { name: /^Month/ });
 
@@ -170,7 +170,7 @@ test('choosing a horizon names the actual period it covers', async ({ workspace 
   await goTo(page, '/planner');
 
   await page
-    .getByRole('navigation', { name: 'Filter plan by horizon' })
+    .getByRole('group', { name: 'Filter plan by horizon' })
     .getByRole('button', { name: /^Week/ })
     .click();
   await expect(page).toHaveURL(/horizon=weekly/);
@@ -182,7 +182,7 @@ test('choosing a horizon names the actual period it covers', async ({ workspace 
   await page.reload();
   await expect(
     page
-      .getByRole('navigation', { name: 'Filter plan by horizon' })
+      .getByRole('group', { name: 'Filter plan by horizon' })
       .getByRole('button', { name: /^Week/ })
   ).toHaveAttribute('aria-pressed', 'true');
 });

@@ -172,7 +172,7 @@ test('work planned monthly and committed to this week must be resolved too', asy
   // still monthly work, and rewriting its horizon would silently reclassify
   // it. So it stays in the Month horizon and leaves this week.
   await goTo(page, '/planner');
-  const horizons = page.getByRole('navigation', { name: 'Filter plan by horizon' });
+  const horizons = page.getByRole('group', { name: 'Filter plan by horizon' });
   await expect(horizons.getByRole('button', { name: /^Month/ })).toContainText('1');
   await expect(horizons.getByRole('button', { name: /^Week/ })).toContainText('0');
 });
