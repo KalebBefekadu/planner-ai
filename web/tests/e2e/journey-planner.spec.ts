@@ -34,7 +34,7 @@ test('the horizon filter narrows the plan without deleting anything', async ({ w
   const { page } = workspace;
   await goTo(page, '/planner');
 
-  const horizons = page.getByRole('navigation', { name: 'Filter plan by horizon' });
+  const horizons = page.getByRole('group', { name: 'Filter plan by horizon' });
   await expect(horizons.getByRole('button', { name: /All horizons/ })).toHaveAttribute(
     'aria-pressed',
     'true'
