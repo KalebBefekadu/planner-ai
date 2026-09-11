@@ -5752,6 +5752,53 @@ button:disabled {
 .workspace-search-form input::placeholder {
   color: var(--muted);
 }
+/* The reference puts the kind filter directly under the query, as a row of
+   chips that carry their own count. Links, not buttons: a filtered search is
+   an address, and the row works before any JavaScript arrives. */
+.workspace-search-kinds {
+  display: flex;
+  overflow-x: auto;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin: 12px 0 4px;
+}
+.workspace-search-kind {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 12px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: var(--surface);
+  color: var(--ink-soft);
+  font-size: var(--fs-label);
+  font-weight: 600;
+  text-decoration: none;
+  white-space: nowrap;
+  transition: background var(--t-feedback) var(--ease);
+}
+.workspace-search-kind:hover {
+  background: var(--hover);
+}
+.workspace-search-kind small {
+  color: var(--muted);
+  font-variant-numeric: tabular-nums;
+}
+.workspace-search-kind[aria-current='page'] {
+  border-color: var(--brand);
+  background: var(--brand-soft);
+  color: var(--brand-strong);
+}
+.workspace-search-kind[aria-current='page'] small {
+  color: var(--brand-strong);
+}
+/* A kind with nothing behind it is dimmed, not disabled: it reports a real
+   count of zero, still activates, and lands on an empty state that offers the
+   way back. */
+.workspace-search-kind[data-empty='true'] {
+  color: var(--ink-faint);
+}
+
 .workspace-search-results > header {
   min-height: 42px;
   display: flex;
