@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import {
+  activeExperienceNavHref,
   experienceAreaForPath,
   experienceCommands,
   filterExperienceCommands,
@@ -179,5 +180,27 @@ describe('settings navigation', () => {
   it('keeps the account destination out of the legacy model, which has no workspace row', () => {
     const items = experienceNavItems(experienceNavigationForPath('/settings/security', false));
     expect(items.map((item) => item.href)).not.toContain('/settings/account');
+  });
+
+  it('marks the destination that was actually chosen, not the one sharing its path', () => {
+    /* "This week" is /planner and "Goals & horizons" is /planner with every
+       period. Matching on pathname alone marked both, so the sidebar claimed
+       you were somewhere you had not clicked. */
+    const items = experienceNavItems(experienceNavigationForPath('/planner', true));
+    const thisWeek = items.find((item) => item.label === 'This week')!;
+    const goals = items.find((item) => item.label === 'Goals & horizons')!;
+    expect(goals.href).toBe('/planner?period=all');
+
+    // The plain address belongs to This week.
+    expect(activeExperienceNavHref('/planner', '', items)).toBe(thisWeek.href);
+
+    // The one whose query is satisfied wins over the one naming no query.
+    expect(activeExperienceNavHref('/planner', 'period=all', items)).toBe(goals.href);
+
+    // A query neither entry names leaves the plain address current.
+    expect(activeExperienceNavHref('/planner', 'horizon=year', items)).toBe(thisWeek.href);
+
+    // A different page marks neither.
+    expect(activeExperienceNavHref('/notes', 'period=all', items)).toBe(null);
   });
 });

@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react';
 import Link from 'next/link';
-import { usePathname, useRouter } from 'next/navigation';
+import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 
 import { ShellQuickCapture } from '@/components/shell-quick-capture';
 import {
@@ -31,7 +31,7 @@ import {
   filterExperienceCommands,
   experienceNavigationForPath,
   experienceRailItems,
-  isExperienceNavItemActive,
+  activeExperienceNavHref,
   type ExperienceArea,
 } from '@/lib/experience-navigation';
 
@@ -85,6 +85,7 @@ export function ExperienceShell({
   unreadNotifications,
 }: ExperienceShellProps) {
   const pathname = usePathname();
+  const searchParams = useSearchParams();
   const standaloneFlow = pathname === '/onboarding';
   // /preview is a complete frame of its own, laid over the viewport. Rendering
   // the application frame behind it produced two of everything: two "Primary
@@ -110,9 +111,14 @@ export function ExperienceShell({
     [canonical, pathname]
   );
   const navigationItems = useMemo(() => experienceNavItems(navigation), [navigation]);
+  // Two entries can lead to one page and differ only by what they ask it to
+  // show, so which one is current depends on the query as well as the path.
+  const activeNavHref = useMemo(
+    () => activeExperienceNavHref(pathname, searchParams.toString(), navigationItems),
+    [pathname, searchParams, navigationItems]
+  );
   const currentLabel =
-    navigationItems.find((item) => isExperienceNavItemActive(pathname, item))?.label ??
-    navigation.title;
+    navigationItems.find((item) => item.href === activeNavHref)?.label ?? navigation.title;
   const primaryItems = experienceRailItems(canonical, unreadNotifications);
   const mainItems = primaryItems.filter((item) => item.placement === 'main');
   const footerItems = primaryItems.filter((item) => item.placement === 'footer');
@@ -215,12 +221,8 @@ export function ExperienceShell({
             {section.items.map((item) => (
               <Link
                 key={`${navigation.area}-${item.href}-${item.label}`}
-                aria-current={isExperienceNavItemActive(pathname, item) ? 'page' : undefined}
-                className={
-                  isExperienceNavItemActive(pathname, item)
-                    ? 'experience-secondary-active'
-                    : undefined
-                }
+                aria-current={item.href === activeNavHref ? 'page' : undefined}
+                className={item.href === activeNavHref ? 'experience-secondary-active' : undefined}
                 href={item.href}
                 onClick={() => setMobileMenuOpen(false)}
               >

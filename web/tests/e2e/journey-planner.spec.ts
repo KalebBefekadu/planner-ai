@@ -186,3 +186,31 @@ test('choosing a horizon names the actual period it covers', async ({ workspace 
       .getByRole('button', { name: /^Week/ })
   ).toHaveAttribute('aria-pressed', 'true');
 });
+
+test('the sidebar marks the planner destination that was chosen', async ({ workspace }) => {
+  const { page } = workspace;
+  await goTo(page, '/planner');
+
+  const sidebar = page.getByRole('navigation', { name: 'Planner' });
+  const thisWeek = sidebar.getByRole('link', { name: 'This week', exact: true });
+  const goals = sidebar.getByRole('link', { name: 'Goals & horizons', exact: true });
+
+  await expect(thisWeek).toHaveAttribute('aria-current', 'page');
+  await expect(goals).not.toHaveAttribute('aria-current', 'page');
+
+  /* Goals & horizons used to point at /goals, a permanent redirect to
+     /planner, so choosing it landed on the page This week is marked as and
+     the sidebar claimed you were somewhere you had not clicked. */
+  await goals.click();
+  await expect(page).toHaveURL(/\/planner\?period=all/);
+  await expect(
+    sidebar.getByRole('link', { name: 'Goals & horizons', exact: true })
+  ).toHaveAttribute('aria-current', 'page');
+  await expect(sidebar.getByRole('link', { name: 'This week', exact: true })).not.toHaveAttribute(
+    'aria-current',
+    'page'
+  );
+
+  // And the page it lands on is actually showing every period.
+  await expect(page.getByText('Every period on record')).toBeVisible();
+});
