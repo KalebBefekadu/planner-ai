@@ -2,7 +2,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { cleanup, render, screen, fireEvent, waitFor } from '@testing-library/react';
 import '@testing-library/jest-dom/vitest';
-import { AssistantDock } from '@/components/assistant-dock';
+import { AssistantDock, AssistantLauncher, AssistantProvider } from '@/components/assistant-dock';
 
 vi.mock('next/navigation', () => ({
   usePathname: () => '/notes',
@@ -114,5 +114,41 @@ describe('AssistantDock proposal controls while pending', () => {
       expect(screen.getByRole('button', { name: /^approve$/i })).not.toBeDisabled();
     });
     expect(screen.getByRole('button', { name: /dismiss/i })).not.toBeDisabled();
+  });
+
+  it('keeps one conversation behind every launcher in the frame', async () => {
+    // The frame shows a sidebar launcher on desktop and a fixed one on mobile,
+    // with CSS hiding whichever does not apply. Mounting a dock behind each
+    // gave them separate conversations, so collapsing the sidebar swapped the
+    // visible launcher and silently discarded an in-flight draft.
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async () => new Response(JSON.stringify({ conversations: [] }), { status: 200 }))
+    );
+
+    render(
+      <AssistantProvider>
+        <AssistantLauncher />
+        <AssistantLauncher className="experience-mobile-assistant" />
+      </AssistantProvider>
+    );
+
+    const launchers = screen.getAllByRole('button', { name: /ask planner ai/i });
+    expect(launchers).toHaveLength(2);
+
+    fireEvent.click(launchers[0]);
+    const textbox = await screen.findByRole('textbox', { name: /message planner ai/i });
+    fireEvent.change(textbox, { target: { value: 'half-written thought' } });
+
+    // One panel, not two -- and the other launcher reopens this same one.
+    expect(screen.getAllByRole('dialog', { name: /planner ai assistant/i })).toHaveLength(1);
+
+    fireEvent.click(launchers[1]);
+    await waitFor(() => {
+      expect(screen.getByRole('textbox', { name: /message planner ai/i })).toHaveValue(
+        'half-written thought'
+      );
+    });
+    expect(screen.getAllByRole('dialog', { name: /planner ai assistant/i })).toHaveLength(1);
   });
 });
