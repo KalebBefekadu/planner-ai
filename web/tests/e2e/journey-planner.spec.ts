@@ -187,7 +187,12 @@ test('choosing a horizon names the actual period it covers', async ({ workspace 
   ).toHaveAttribute('aria-pressed', 'true');
 });
 
-test('the sidebar marks the planner destination that was chosen', async ({ workspace }) => {
+test('the sidebar marks the planner destination that was chosen', async ({
+  workspace,
+}, testInfo) => {
+  // The contextual sidebar is the desktop frame; on mobile it lives in the
+  // drawer, which keyboard-navigation.spec.ts covers.
+  test.skip(testInfo.project.name !== 'chromium', 'The sidebar is the desktop navigation frame.');
   const { page } = workspace;
   await goTo(page, '/planner');
 

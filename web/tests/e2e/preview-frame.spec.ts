@@ -15,7 +15,12 @@ test.describe('the preview frame applies the widths it is given', () => {
     await expect(page.getByRole('navigation', { name: 'Primary navigation' })).toBeVisible();
   });
 
-  test('the sidebar resizer moves the sidebar and the width applies', async ({ page }) => {
+  test('the sidebar resizer moves the sidebar and the width applies', async ({
+    page,
+  }, testInfo) => {
+    // The reference collapses to a single column on a narrow screen, so there
+    // is no panel to drag.
+    test.skip(testInfo.project.name !== 'chromium', 'Dragging a panel is a desktop affordance.');
     const resizer = page.getByRole('separator', { name: 'Resize sidebar' });
     await expect(resizer).toBeVisible();
 

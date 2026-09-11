@@ -1167,8 +1167,13 @@ test('the cover position can be set from the keyboard and is remembered', async 
   await expect(page.getByText(/Cover position \(45% from the top\)/)).toBeVisible();
 });
 
-test('a long title is readable at the size the design sets it in', async ({ workspace }) => {
+test('a long title is readable at the size the design sets it in', async ({
+  workspace,
+}, testInfo) => {
   const { page } = workspace;
+  // 40px is most of a narrow screen before any words are read, so the design
+  // steps the title down to the page size there. Both are the display face.
+  const smallest = testInfo.project.name === 'chromium' ? 32 : 24;
   const long = 'A deliberately long personal operating system title that has to wrap';
 
   await goTo(page, '/notes');
@@ -1188,7 +1193,7 @@ test('a long title is readable at the size the design sets it in', async ({ work
   // The display face at the display size, the same treatment every other page
   // heading gets.
   expect(measured.family).toContain('Iowan Old Style');
-  expect(measured.size).toBeGreaterThanOrEqual(32);
+  expect(measured.size).toBeGreaterThanOrEqual(smallest);
 
   // It wraps. As an input it could not, so a long title scrolled sideways out
   // of view -- barely noticeable at the old 20px, unusable at 40.
