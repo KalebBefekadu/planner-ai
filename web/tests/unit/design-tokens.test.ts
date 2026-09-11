@@ -26,6 +26,14 @@ describe('brand and shell contracts', () => {
     expect(themeStore).not.toContain('planner-preview-theme');
   });
 
+  it('lets the pre-paint theme stamp past the nonce-based CSP', () => {
+    // proxy.ts serves script-src with a nonce and 'strict-dynamic', so an
+    // un-nonced inline script is blocked and the stamp never runs: every load
+    // painted light before hydration corrected it.
+    expect(layout).toContain("headers()).get('x-nonce')");
+    expect(layout).toMatch(/<script\s+nonce=\{nonce\}/);
+  });
+
   it('gives Preview and the authenticated shell one theme store', () => {
     // Two stores meant an explicit choice stamped on .previewRoot while <html>
     // stayed light, which rendered the page half-themed.

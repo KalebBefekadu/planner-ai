@@ -1,4 +1,5 @@
 import type { Metadata } from 'next';
+import { headers } from 'next/headers';
 import './globals.css';
 import { createClient } from '@/lib/supabase/server';
 import { ServiceWorkerRegistration } from '@/components/service-worker-registration';
@@ -13,6 +14,11 @@ export const metadata: Metadata = {
 };
 
 export default async function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {
+  // proxy.ts mints a per-request nonce and the CSP is nonce-based, so an
+  // un-nonced inline script is blocked outright. Without this the pre-paint
+  // stamp below never ran and every load flashed the wrong theme before
+  // hydration corrected it.
+  const nonce = (await headers()).get('x-nonce') ?? undefined;
   const supabase = await createClient();
   const {
     data: { user },
@@ -36,6 +42,7 @@ export default async function RootLayout({ children }: Readonly<{ children: Reac
             choice the stamp is absent and prefers-color-scheme decides, so the
             default costs nothing and there is no flash either way. */}
         <script
+          nonce={nonce}
           dangerouslySetInnerHTML={{
             __html:
               "try{var t=localStorage.getItem('planner-theme');if(t==='dark'||t==='light')document.documentElement.dataset.theme=t}catch(e){}",
