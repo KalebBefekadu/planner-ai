@@ -47,7 +47,7 @@ import {
   WandSparkles,
 } from 'lucide-react';
 import { applyTheme, nextTheme, useThemePreference, type ThemePreference } from '@/lib/shell/theme';
-import { useState, useSyncExternalStore } from 'react';
+import { useEffect, useRef, useState, useSyncExternalStore } from 'react';
 import { PanelResizer } from '@/components/panel-resizer';
 import { GoalsHorizonsView, VisionView } from './align-surfaces';
 import { PerimeterView, type PerimeterScreen } from './perimeter';
@@ -205,16 +205,26 @@ export default function ProductPreviewPage() {
   );
 
   const frameClass = styles.previewRoot;
-  const frameStyle = {
-    '--v2-sidebar-w': `${sidebarWidth}px`,
-    '--v2-context-w': `${contextWidth}px`,
-  } as React.CSSProperties;
+
+  // Both panels are dragged to any width, so these cannot be classes. The rest
+  // of the application writes measurements like this through the CSSOM rather
+  // than a style attribute -- see components/measured-fill.tsx and the sidebar
+  // width in experience-shell.tsx -- because a nonce does not extend to style
+  // attributes and a stricter policy would drop them. Preview was the last
+  // place still setting frame geometry the other way.
+  const frameRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    const frame = frameRef.current;
+    if (!frame) return;
+    frame.style.setProperty('--v2-sidebar-w', `${sidebarWidth}px`);
+    frame.style.setProperty('--v2-context-w', `${contextWidth}px`);
+  }, [sidebarWidth, contextWidth]);
 
   if (stage.kind === 'perimeter') {
     return (
       <div
+        ref={frameRef}
         className={`${frameClass} ${styles.previewRootPlain}`}
-        style={frameStyle}
         onKeyDown={paletteShortcut(setPaletteOpen)}
       >
         <PerimeterView
@@ -232,7 +242,7 @@ export default function ProductPreviewPage() {
   }
 
   return (
-    <div className={frameClass} style={frameStyle} onKeyDown={paletteShortcut(setPaletteOpen)}>
+    <div ref={frameRef} className={frameClass} onKeyDown={paletteShortcut(setPaletteOpen)}>
       <a className={styles.skipLink} href="#preview-main">
         Skip to content
       </a>
