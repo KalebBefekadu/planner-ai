@@ -1,4 +1,5 @@
-import { readFileSync } from 'node:fs';
+import { existsSync, readdirSync, readFileSync } from 'node:fs';
+import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 
 const css = readFileSync('src/app/globals.css', 'utf8');
@@ -92,9 +93,25 @@ describe('brand and shell contracts', () => {
     expect(systemDark).toEqual(light);
   });
 
-  it('does not gate authenticated users behind the retired shell rollout', () => {
-    expect(layout).not.toContain('experienceV2EnabledForOwner');
-    expect(layout).not.toContain('PLANNER_UI_V2');
+  it('has no trace of the retired shell rollout left', () => {
+    // The legacy frame is gone, so the flag that chose between the two is
+    // dead weight. Asserting only that layout.tsx omits it would pass even if
+    // the module and the env var came back somewhere else.
+    expect(existsSync('src/lib/experience-rollout.ts')).toBe(false);
+    const sources = ['src', 'tests']
+      .flatMap((dir) =>
+        readdirSync(dir, { recursive: true, encoding: 'utf8' }).map((entry) => join(dir, entry))
+      )
+      .filter((file) => /\.tsx?$/.test(file))
+      // This file names the flag in order to forbid it.
+      .filter((file) => !file.endsWith('design-tokens.test.ts'));
+    expect(sources.length).toBeGreaterThan(100);
+    const offenders = sources.filter((file) => {
+      const text = readFileSync(file, 'utf8');
+      return text.includes('PLANNER_UI_V2') || text.includes('experienceV2EnabledForOwner');
+    });
+    expect(offenders).toEqual([]);
+    expect(readFileSync('playwright.config.ts', 'utf8')).not.toContain('PLANNER_UI_V2');
     expect(layout).toContain('{user ? (');
   });
 

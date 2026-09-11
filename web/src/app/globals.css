@@ -544,7 +544,6 @@ a {
   width: 100%;
   margin: 0;
 }
-.experience-sidebar-footer .sidebar-footer,
 .experience-sidebar-footer .account {
   padding: 0;
 }
@@ -724,101 +723,6 @@ a {
   display: none;
 }
 
-.app-shell {
-  min-height: 100vh;
-  display: grid;
-  grid-template-columns: 228px minmax(0, 1fr);
-}
-.app-sidebar {
-  position: sticky;
-  top: 0;
-  height: 100vh;
-  display: flex;
-  flex-direction: column;
-  padding: 24px 16px;
-  border-right: 1px solid var(--line);
-  background: var(--surface);
-}
-.brand {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  padding: 0 8px;
-  font-weight: 700;
-  font-size: var(--fs-read);
-}
-.brand-mark {
-  display: grid;
-  width: 28px;
-  height: 28px;
-  place-items: center;
-  border-radius: 7px;
-  background: var(--brand);
-  color: var(--on-brand);
-  font-size: var(--fs-body);
-}
-.app-nav {
-  display: grid;
-  gap: 4px;
-  margin-top: 42px;
-}
-.nav-label {
-  margin: 0 0 7px;
-  padding: 0 8px;
-  color: var(--muted);
-  font-size: var(--fs-label);
-  font-weight: 700;
-  text-transform: uppercase;
-  letter-spacing: 0.08em;
-}
-.nav-link {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  min-height: 40px;
-  padding: 8px;
-  border-radius: 6px;
-  color: var(--muted);
-  font-size: var(--fs-body);
-  font-weight: 600;
-}
-.nav-link:hover {
-  background: var(--surface-muted);
-  color: var(--ink);
-}
-.nav-link-active {
-  background: var(--brand-soft);
-  color: var(--brand-strong);
-}
-.nav-icon {
-  flex: 0 0 auto;
-  color: inherit;
-}
-.nav-link > span:not(.nav-badge) {
-  min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-.nav-badge {
-  min-width: 20px;
-  height: 20px;
-  display: grid;
-  place-items: center;
-  margin-left: auto;
-  border-radius: 10px;
-  padding: 0 6px;
-  background: var(--coral);
-  color: var(--on-coral);
-  font-size: var(--fs-label);
-  font-weight: 800;
-}
-.sidebar-footer {
-  display: grid;
-  gap: 12px;
-  margin-top: auto;
-  padding: 8px;
-}
 .theme-toggle,
 .sign-out {
   width: 100%;
@@ -6194,44 +6098,6 @@ button:disabled {
   }
   .conversation-promotion > div {
     grid-template-columns: 1fr;
-  }
-  .app-shell {
-    display: block;
-  }
-  .app-sidebar {
-    position: sticky;
-    z-index: 3;
-    height: auto;
-    padding: 12px 16px;
-    border-right: 0;
-    border-bottom: 1px solid var(--line);
-  }
-  .brand {
-    padding: 0;
-  }
-  .app-nav {
-    display: flex;
-    gap: 4px;
-    margin-top: 14px;
-    overflow-x: auto;
-  }
-  .nav-label,
-  .sidebar-footer .account {
-    display: none;
-  }
-  .nav-link {
-    flex: 0 0 auto;
-    padding: 7px 9px;
-  }
-  .nav-badge {
-    margin-left: 0;
-  }
-  .sidebar-footer {
-    position: absolute;
-    top: 8px;
-    right: 8px;
-    margin: 0;
-    padding: 0;
   }
   .theme-toggle {
     width: auto;
