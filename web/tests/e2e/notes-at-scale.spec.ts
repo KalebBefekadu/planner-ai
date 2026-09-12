@@ -1,4 +1,5 @@
 import { execFileSync } from 'node:child_process';
+import { readFileSync } from 'node:fs';
 import { test, expect, goTo } from './support/workspace';
 import { currentTotp } from './support/totp';
 
@@ -15,6 +16,52 @@ import { currentTotp } from './support/totp';
 
 const TOTAL = 1400;
 
+/**
+ * Names in a ZIP's central directory, without unpacking it.
+ *
+ * The end-of-central-directory record is at the tail, and each central
+ * directory header begins with the same signature and states its own name
+ * length, so the entries can be walked without decompressing anything.
+ */
+function countZipEntries(archive: Buffer, suffix: string) {
+  const END_SIGNATURE = 0x06054b50;
+  const HEADER_SIGNATURE = 0x02014b50;
+  let end = archive.length - 22;
+  while (end >= 0 && archive.readUInt32LE(end) !== END_SIGNATURE) end -= 1;
+  if (end < 0) throw new Error('the download is not a ZIP archive');
+
+  const total = archive.readUInt16LE(end + 10);
+  let offset = archive.readUInt32LE(end + 16);
+  let matches = 0;
+  for (let index = 0; index < total; index += 1) {
+    if (archive.readUInt32LE(offset) !== HEADER_SIGNATURE) {
+      throw new Error('the central directory is not where the archive says it is');
+    }
+    const nameLength = archive.readUInt16LE(offset + 28);
+    const extraLength = archive.readUInt16LE(offset + 30);
+    const commentLength = archive.readUInt16LE(offset + 32);
+    const name = archive.toString('utf8', offset + 46, offset + 46 + nameLength);
+    if (name.endsWith(suffix)) matches += 1;
+    offset += 46 + nameLength + extraLength + commentLength;
+  }
+  return matches;
+}
+
+/* The database URL is asked for rather than written down: CI starts its own
+   Supabase stack on its own ports, and a hard-coded loopback address is one
+   machine's configuration rather than a fact. `supabase status` is the same
+   source the CI workflow reads its other credentials from. */
+let databaseUrl: string | null = null;
+function localDatabaseUrl() {
+  if (databaseUrl) return databaseUrl;
+  const status = JSON.parse(
+    execFileSync('npx', ['supabase', 'status', '-o', 'json'], { encoding: 'utf8' })
+  ) as { DB_URL?: string };
+  if (!status.DB_URL) throw new Error('supabase status did not report a DB_URL');
+  databaseUrl = status.DB_URL;
+  return databaseUrl;
+}
+
 function seedNotes(workspaceId: string, total: number) {
   // The service role is denied direct writes to notes -- everything goes
   // through execute_ui_operation -- so a fixture this size is seeded as
@@ -29,7 +76,7 @@ function seedNotes(workspaceId: string, total: number) {
   execFileSync(
     'psql',
     [
-      'postgresql://postgres:postgres@127.0.0.1:55322/postgres',
+      localDatabaseUrl(),
       '-v',
       'ON_ERROR_STOP=1',
       '-c',
@@ -82,8 +129,12 @@ test('a vault past the row cap still contains every Note', async ({ workspace })
   const vault = await download;
   expect(await vault.failure()).toBeNull();
 
-  const listing = execFileSync('unzip', ['-l', (await vault.path())!], { encoding: 'utf8' });
-  const markdownFiles = (listing.match(/\.md$/gm) ?? []).length;
+  /* Counted by reading the archive's own central directory rather than by
+     shelling out to unzip, so the test does not depend on what a runner image
+     happens to have installed -- and deliberately not with the application's
+     filesFromZip, which enforces the *import* limits and refuses a vault this
+     size outright (see #240). */
+  const markdownFiles = countZipEntries(readFileSync((await vault.path())!), '.md');
 
   // A backup that is quietly short is worse than one that fails loudly.
   expect(markdownFiles, 'the vault was short of the workspace').toBe(TOTAL);
@@ -101,7 +152,7 @@ test('a plan past the row cap still shows every Goal', async ({ workspace }) => 
   execFileSync(
     'psql',
     [
-      'postgresql://postgres:postgres@127.0.0.1:55322/postgres',
+      localDatabaseUrl(),
       '-v',
       'ON_ERROR_STOP=1',
       '-c',
@@ -120,7 +171,7 @@ test('a plan past the row cap still shows every Goal', async ({ workspace }) => 
     execFileSync(
       'psql',
       [
-        'postgresql://postgres:postgres@127.0.0.1:55322/postgres',
+        localDatabaseUrl(),
         '-tA',
         '-c',
         `select count(*) from public.goals where workspace_id = '${workspaceId}' and archived_at is null and trashed_at is null;`,
