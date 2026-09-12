@@ -62,6 +62,16 @@ function localDatabaseUrl() {
   return databaseUrl;
 }
 
+/* SQL goes in on stdin rather than as an argument. Linux caps a single
+   argument at 128 KB and a 1400-row insert is well past that, so passing it
+   with -c worked on a developer's machine and failed in CI with E2BIG. */
+function runSql(sql: string) {
+  return execFileSync('psql', [localDatabaseUrl(), '-v', 'ON_ERROR_STOP=1', '-f', '-'], {
+    input: sql,
+    encoding: 'utf8',
+  });
+}
+
 function seedNotes(workspaceId: string, total: number) {
   // The service role is denied direct writes to notes -- everything goes
   // through execute_ui_operation -- so a fixture this size is seeded as
@@ -73,16 +83,8 @@ function seedNotes(workspaceId: string, total: number) {
         i
       ).padStart(6, '0')}')`
   ).join(',');
-  execFileSync(
-    'psql',
-    [
-      localDatabaseUrl(),
-      '-v',
-      'ON_ERROR_STOP=1',
-      '-c',
-      `insert into public.notes (id,workspace_id,parent_note_id,title,body_markdown,sort_key) values ${values};`,
-    ],
-    { stdio: 'pipe' }
+  runSql(
+    `insert into public.notes (id,workspace_id,parent_note_id,title,body_markdown,sort_key) values ${values};`
   );
 }
 
@@ -149,35 +151,19 @@ test('a plan past the row cap still shows every Goal', async ({ workspace }) => 
      that is not returned takes its children off the screen with it, so the
      plan looks smaller rather than incomplete. Onboarding leaves one yearly
      Goal behind, so the seed makes up the rest. */
-  execFileSync(
-    'psql',
-    [
-      localDatabaseUrl(),
-      '-v',
-      'ON_ERROR_STOP=1',
-      '-c',
-      `insert into public.goals (workspace_id, vision_id, horizon_id, title)
+  runSql(`insert into public.goals (workspace_id, vision_id, horizon_id, title)
        select '${workspaceId}', g.vision_id, g.horizon_id, 'Seeded goal ' || i
        from public.goals g
        cross join generate_series(1, ${TOTAL}) as i
        where g.workspace_id = '${workspaceId}'
-       limit ${TOTAL};`,
-    ],
-    { stdio: 'pipe' }
-  );
+       limit ${TOTAL};`);
 
   // Counted as postgres: the service role is denied direct reads here too.
   const count = Number(
-    execFileSync(
-      'psql',
-      [
-        localDatabaseUrl(),
-        '-tA',
-        '-c',
-        `select count(*) from public.goals where workspace_id = '${workspaceId}' and archived_at is null and trashed_at is null;`,
-      ],
-      { encoding: 'utf8' }
-    ).trim()
+    execFileSync('psql', [localDatabaseUrl(), '-tA', '-f', '-'], {
+      input: `select count(*) from public.goals where workspace_id = '${workspaceId}' and archived_at is null and trashed_at is null;`,
+      encoding: 'utf8',
+    }).trim()
   );
   expect(count, 'the seed did not pass the row cap').toBeGreaterThan(1000);
 
