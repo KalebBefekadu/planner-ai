@@ -1,9 +1,13 @@
-import { readFileSync } from 'node:fs';
+import { existsSync, readdirSync, readFileSync } from 'node:fs';
+import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 
 const css = readFileSync('src/app/globals.css', 'utf8');
 const layout = readFileSync('src/app/layout.tsx', 'utf8');
 const themeToggle = readFileSync('src/components/theme-toggle.tsx', 'utf8');
+const themeStore = readFileSync('src/lib/shell/theme.ts', 'utf8');
+const previewCss = readFileSync('src/app/preview/preview.module.css', 'utf8');
+const previewPage = readFileSync('src/app/preview/page.tsx', 'utf8');
 const experienceShell = readFileSync('src/components/experience-shell.tsx', 'utf8');
 const notesWorkspace = readFileSync('src/components/notes-workspace.tsx', 'utf8');
 
@@ -16,16 +20,98 @@ describe('brand and shell contracts', () => {
     expect(css).toMatch(/\.experience-main h1\s*{[^}]*font-family:\s*var\(--font-display\)/);
   });
 
-  it('uses the same persisted theme key before paint and in the control', () => {
+  it('uses the same persisted theme key before paint and in every control', () => {
     expect(layout).toContain("localStorage.getItem('planner-theme')");
-    expect(themeToggle).toContain("const KEY = 'planner-theme'");
+    expect(themeStore).toContain("export const THEME_KEY = 'planner-theme'");
     expect(layout).not.toContain('planner-preview-theme');
-    expect(themeToggle).not.toContain('planner-preview-theme');
+    expect(themeStore).not.toContain('planner-preview-theme');
   });
 
-  it('does not gate authenticated users behind the retired shell rollout', () => {
-    expect(layout).not.toContain('experienceV2EnabledForOwner');
-    expect(layout).not.toContain('PLANNER_UI_V2');
+  it('lets the pre-paint theme stamp past the nonce-based CSP', () => {
+    // proxy.ts serves script-src with a nonce and 'strict-dynamic', so an
+    // un-nonced inline script is blocked and the stamp never runs: every load
+    // painted light before hydration corrected it.
+    expect(layout).toContain("headers()).get('x-nonce')");
+    expect(layout).toMatch(/<script\s+nonce=\{nonce\}/);
+  });
+
+  it('gives Preview and the authenticated shell one theme store', () => {
+    // Two stores meant an explicit choice stamped on .previewRoot while <html>
+    // stayed light, which rendered the page half-themed.
+    for (const source of [themeToggle, previewPage]) {
+      expect(source).toContain("from '@/lib/shell/theme'");
+      expect(source).not.toContain('localStorage');
+    }
+    expect(themeStore).toContain('document.documentElement.dataset.theme');
+    expect(previewPage).not.toContain('data-theme={theme');
+  });
+
+  it('resolves every --v2-* name to the one global scale', () => {
+    const defined = [...previewCss.matchAll(/^\s*(--v2-[a-z0-9-]+)\s*:\s*([^;]+);/gm)];
+    expect(defined.length).toBeGreaterThan(50);
+    for (const [, name, value] of defined) {
+      // The two panel widths are set at runtime and legitimately carry a
+      // literal fallback; every other name must be an alias, not a value.
+      if (name === '--v2-sidebar-w' || name === '--v2-context-w') continue;
+      expect(value.trim(), `${name} must alias a global token`).toMatch(/^var\(--[a-z0-9-]+\)$/);
+    }
+    const used = new Set([...previewCss.matchAll(/var\(\s*(--v2-[a-z0-9-]+)/g)].map((m) => m[1]));
+    const names = new Set(defined.map((m) => m[1]));
+    for (const name of used) {
+      if (name === '--v2-sidebar-w' || name === '--v2-context-w') continue;
+      expect(names.has(name), `${name} is used but never aliased`).toBe(true);
+    }
+  });
+
+  it('keeps Preview from redefining the palette or a second dark theme', () => {
+    expect(previewCss).not.toMatch(/\[data-theme='dark'\]/);
+    expect(previewCss).not.toContain('prefers-color-scheme');
+  });
+
+  it('defines every dark token the light scale defines, in the same order', () => {
+    const names = (block: string) =>
+      [...block.matchAll(/^\s*(--[a-z0-9-]+)\s*:/gm)]
+        .map((m) => m[1])
+        // The alias tail and the scale are theme-independent by design.
+        .filter(
+          (n) =>
+            !/^--(fs|r|t|lh|font)-|^--(ease|text|text-muted|line-strong|accent|teal)$/.test(n) &&
+            // Cover chips sit on a photograph, not the app canvas, so they are
+            // defined once and deliberately never redefined per theme.
+            !/^--(media-chip|media-chip-line|on-media)$/.test(n)
+        );
+    const at = (start: string) => {
+      const i = css.indexOf(start);
+      expect(i, `${start} block is missing`).toBeGreaterThan(-1);
+      return css.slice(i, css.indexOf('\n}', i));
+    };
+    const light = names(at(':root {'));
+    const explicitDark = names(at("[data-theme='dark'] {"));
+    const systemDark = names(at(":root:not([data-theme='light']) {"));
+    expect(light.length).toBeGreaterThan(40);
+    expect(explicitDark).toEqual(light);
+    expect(systemDark).toEqual(light);
+  });
+
+  it('has no trace of the retired shell rollout left', () => {
+    // The legacy frame is gone, so the flag that chose between the two is
+    // dead weight. Asserting only that layout.tsx omits it would pass even if
+    // the module and the env var came back somewhere else.
+    expect(existsSync('src/lib/experience-rollout.ts')).toBe(false);
+    const sources = ['src', 'tests']
+      .flatMap((dir) =>
+        readdirSync(dir, { recursive: true, encoding: 'utf8' }).map((entry) => join(dir, entry))
+      )
+      .filter((file) => /\.tsx?$/.test(file))
+      // This file names the flag in order to forbid it.
+      .filter((file) => !file.endsWith('design-tokens.test.ts'));
+    expect(sources.length).toBeGreaterThan(100);
+    const offenders = sources.filter((file) => {
+      const text = readFileSync(file, 'utf8');
+      return text.includes('PLANNER_UI_V2') || text.includes('experienceV2EnabledForOwner');
+    });
+    expect(offenders).toEqual([]);
+    expect(readFileSync('playwright.config.ts', 'utf8')).not.toContain('PLANNER_UI_V2');
     expect(layout).toContain('{user ? (');
   });
 

@@ -1,4 +1,5 @@
 import { notFound } from 'next/navigation';
+import { selectAll } from '@/lib/supabase/select-all';
 import { TrashManager, type TrashBatchView } from '@/components/trash-manager';
 import { createClient } from '@/lib/supabase/server';
 
@@ -9,12 +10,20 @@ type TrashBatchRow = Omit<TrashBatchView, 'affectedCount'> & {
 export default async function TrashPage() {
   if (process.env.PLANNER_DATA_MODEL !== 'canonical') notFound();
   const supabase = await createClient();
-  const { data, error } = await supabase
-    .from('trash_batches')
-    .select('id,root_item_type,root_label,created_at,trash_batch_items(count)')
-    .is('restored_at', null)
-    .is('emptied_at', null)
-    .order('created_at', { ascending: false });
+  /* Paged: PostgREST caps a response at max_rows without saying so, and Trash
+     is a recovery surface -- a batch that is not listed cannot be restored, and
+     nothing on the screen would say it existed. The id tiebreaks created_at,
+     which is not unique. */
+  const { data, error } = await selectAll((from, to) =>
+    supabase
+      .from('trash_batches')
+      .select('id,root_item_type,root_label,created_at,trash_batch_items(count)')
+      .is('restored_at', null)
+      .is('emptied_at', null)
+      .order('created_at', { ascending: false })
+      .order('id')
+      .range(from, to)
+  );
   if (error) throw new Error('Unable to load Trash.');
   /* Eligibility is decided here rather than in the client component: this is
      an async server component, so it renders once per request and there is no

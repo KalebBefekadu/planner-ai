@@ -12,12 +12,34 @@ const resultIcons = {
   capture: Inbox,
 } satisfies Record<WorkspaceSearchResult['kind'], typeof FileText>;
 
+/* A workspace the size of a real Notion export answers most queries with more
+   rows than fit on a screen, and the thing the person knows is usually what
+   kind of thing they are looking for. The filter is a link with the query
+   carried along rather than a client control, so it works the same way the
+   search form does: no JavaScript required, and a filtered search is an
+   address that can be reopened. */
+const KINDS = [
+  { id: 'all', label: 'Everything' },
+  { id: 'page', label: 'Pages' },
+  { id: 'goal', label: 'Goals' },
+  { id: 'action', label: 'Actions' },
+  { id: 'capture', label: 'Captures' },
+] as const;
+
+type KindFilter = (typeof KINDS)[number]['id'];
+
+function readKind(value: string | undefined): KindFilter {
+  return KINDS.some((kind) => kind.id === value) ? (value as KindFilter) : 'all';
+}
+
 export default async function SearchPage({
   searchParams,
 }: {
-  searchParams: Promise<{ q?: string }>;
+  searchParams: Promise<{ q?: string; kind?: string }>;
 }) {
-  const rawQuery = (await searchParams).q ?? '';
+  const params = await searchParams;
+  const rawQuery = params.q ?? '';
+  const kind = readKind(params.kind);
   const query = rawQuery.replace(/\s+/g, ' ').trim().slice(0, 120);
   const canonical = process.env.PLANNER_DATA_MODEL === 'canonical';
 
@@ -55,7 +77,7 @@ export default async function SearchPage({
      there are rather than by how much the workspace holds. */
   const bodies = await getNoteBodies(matched.map((note) => note.id));
 
-  const results = buildWorkspaceSearchResults(query, {
+  const allResults = buildWorkspaceSearchResults(query, {
     pages: matched.map((note) => ({
       id: note.id,
       title: note.title,
@@ -96,6 +118,12 @@ export default async function SearchPage({
     })),
   });
 
+  // Counts describe the whole query, not the current filter, so a chip that
+  // would show nothing says so before it is chosen rather than after.
+  const countFor = (id: KindFilter) =>
+    id === 'all' ? allResults.length : allResults.filter((result) => result.kind === id).length;
+  const results = kind === 'all' ? allResults : allResults.filter((result) => result.kind === kind);
+
   return (
     <div className="page workspace-search-page">
       <header className="workspace-search-heading">
@@ -115,15 +143,54 @@ export default async function SearchPage({
           maxLength={120}
           autoFocus
         />
+        {/* Submitting a new query starts from everything again: the filter
+            belonged to the search that is being replaced. */}
         <button className="btn-primary" type="submit">
           Search
         </button>
       </form>
 
+      {query.length >= 2 ? (
+        <nav className="workspace-search-kinds" aria-label="Filter results by kind">
+          {KINDS.map((option) => {
+            const count = countFor(option.id);
+            const href =
+              option.id === 'all'
+                ? `/search?q=${encodeURIComponent(query)}`
+                : `/search?q=${encodeURIComponent(query)}&kind=${option.id}`;
+            return (
+              <Link
+                className="workspace-search-kind"
+                key={option.id}
+                href={href}
+                aria-current={kind === option.id ? 'page' : undefined}
+                // Not aria-disabled: the link works, and it lands on an
+                // empty state that offers the way back. Saying "disabled"
+                // about a control that navigates would be untrue, and it
+                // would stop assistive technology activating it at all.
+                data-empty={count === 0 ? 'true' : undefined}
+              >
+                {option.label}
+                <small>{count}</small>
+              </Link>
+            );
+          })}
+        </nav>
+      ) : null}
+
       <section className="workspace-search-results" aria-label="Search results">
         <header>
-          <strong>{query.length >= 2 ? `${results.length} results` : 'Recent knowledge'}</strong>
-          {query.length >= 2 ? <span>for &quot;{query}&quot;</span> : null}
+          <strong>
+            {query.length >= 2
+              ? `${results.length} ${results.length === 1 ? 'result' : 'results'}`
+              : 'Recent knowledge'}
+          </strong>
+          {query.length >= 2 ? (
+            <span>
+              for &quot;{query}&quot;
+              {kind === 'all' ? null : ` in ${KINDS.find((option) => option.id === kind)!.label}`}
+            </span>
+          ) : null}
         </header>
 
         {results.length ? (
@@ -155,7 +222,17 @@ export default async function SearchPage({
           <div className="workspace-search-empty">
             <Search size={22} aria-hidden="true" />
             <h2>No results</h2>
-            <p>Try a title, phrase, Goal, or Action name.</p>
+            {kind === 'all' ? (
+              <p>Try a title, phrase, Goal, or Action name.</p>
+            ) : (
+              <p>
+                Nothing of this kind matches.{' '}
+                <Link href={`/search?q=${encodeURIComponent(query)}`}>
+                  Search everything instead
+                </Link>
+                {allResults.length ? ` (${allResults.length} elsewhere).` : '.'}
+              </p>
+            )}
           </div>
         ) : (
           <div className="workspace-search-empty">

@@ -14,6 +14,8 @@ import {
 } from 'lucide-react';
 import { usePathname } from 'next/navigation';
 
+/* One name per destination: these match the sidebar in experience-navigation.ts
+   and each page's own heading. */
 const tabs = [
   { href: '/settings/account', label: 'Account', icon: UserRound },
   { href: '/settings/preferences', label: 'Preferences', icon: SlidersHorizontal },
@@ -22,7 +24,7 @@ const tabs = [
   { href: '/settings/safety', label: 'Safety', icon: ShieldAlert },
   { href: '/settings/mcp', label: 'AI connections', icon: PlugZap },
   { href: '/settings/memory', label: 'Memory', icon: Brain },
-  { href: '/settings/data', label: 'Data', icon: Database },
+  { href: '/settings/data', label: 'Data and portability', icon: Database },
 ];
 
 const legacyTabs = ['/settings/security', '/settings/safety'];

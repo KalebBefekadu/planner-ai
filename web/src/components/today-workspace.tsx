@@ -11,6 +11,7 @@ import {
   Check,
   CircleSlash,
   CornerUpRight,
+  FileText,
   Inbox,
   Pencil,
   Plus,
@@ -570,6 +571,46 @@ export function TodayWorkspace({ data }: { data: TodayData }) {
       {/* A section with no accessible name is not exposed as a landmark, so
           this block was unreachable by landmark navigation while every other
           region on the page was named. */}
+      {/* Picking work back up is how a day usually starts, and the reference
+          puts that on this screen. It is a shortcut into Notes, not a second
+          tree: four rows, newest first. */}
+      <section className="today-section today-recent-work" aria-labelledby="today-recent-work">
+        <div className="section-heading">
+          <div>
+            <p className="eyebrow">Continue</p>
+            <h2 id="today-recent-work">Recent work</h2>
+          </div>
+          <Link href="/notes">View all</Link>
+        </div>
+        {data.recentNotes.length ? (
+          <div className="recent-work-list">
+            {data.recentNotes.map((note) => (
+              <Link className="recent-work-item" href={`/notes?note=${note.id}`} key={note.id}>
+                <FileText size={16} aria-hidden="true" />
+                <span>
+                  <strong>{note.title}</strong>
+                  <small>
+                    Edited{' '}
+                    <time dateTime={note.updatedAt}>
+                      {new Intl.DateTimeFormat('en-US', {
+                        month: 'short',
+                        day: 'numeric',
+                      }).format(new Date(note.updatedAt))}
+                    </time>
+                  </small>
+                </span>
+                <ArrowRight size={15} aria-hidden="true" />
+              </Link>
+            ))}
+          </div>
+        ) : (
+          <div className="inline-empty">
+            <p>Pages you write will be waiting here.</p>
+            <Link href="/notes">Start a page</Link>
+          </div>
+        )}
+      </section>
+
       <section
         className="today-section today-capture-strip"
         aria-labelledby="today-recent-captures"

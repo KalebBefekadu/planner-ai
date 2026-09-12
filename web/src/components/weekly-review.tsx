@@ -201,8 +201,14 @@ export function WeeklyReview({ data }: { data: WeeklyReviewData }) {
                   <article className="review-action-row" key={action.id}>
                     <div className="review-action-copy">
                       <strong>{action.title}</strong>
+                      {/* The status is an enum and reads better capitalised;
+                          the Goal title is the owner's own sentence and must
+                          reach the screen exactly as it was written. They were
+                          sharing one element, so "Ship the private beta to ten
+                          invited people." was being displayed as title case. */}
                       <span>
-                        {action.goalTitle ?? 'Unlinked action'} · {action.status.replace('_', ' ')}
+                        {action.goalTitle ?? 'Unlinked action'} ·{' '}
+                        <span className="enum-label">{action.status.replace('_', ' ')}</span>
                       </span>
                     </div>
                     <select

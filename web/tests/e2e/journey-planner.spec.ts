@@ -34,7 +34,7 @@ test('the horizon filter narrows the plan without deleting anything', async ({ w
   const { page } = workspace;
   await goTo(page, '/planner');
 
-  const horizons = page.getByRole('navigation', { name: 'Filter plan by horizon' });
+  const horizons = page.getByRole('group', { name: 'Filter plan by horizon' });
   await expect(horizons.getByRole('button', { name: /All horizons/ })).toHaveAttribute(
     'aria-pressed',
     'true'
@@ -119,7 +119,7 @@ test('the period filter excludes other periods without hiding the work', async (
   await expect(composer).toContainText('is saved');
 
   await page.goto('/planner');
-  const horizons = page.getByRole('navigation', { name: 'Filter plan by horizon' });
+  const horizons = page.getByRole('group', { name: 'Filter plan by horizon' });
   const weekTab = horizons.getByRole('button', { name: /^Week/ });
   const monthTab = horizons.getByRole('button', { name: /^Month/ });
 
@@ -170,7 +170,7 @@ test('choosing a horizon names the actual period it covers', async ({ workspace 
   await goTo(page, '/planner');
 
   await page
-    .getByRole('navigation', { name: 'Filter plan by horizon' })
+    .getByRole('group', { name: 'Filter plan by horizon' })
     .getByRole('button', { name: /^Week/ })
     .click();
   await expect(page).toHaveURL(/horizon=weekly/);
@@ -182,7 +182,73 @@ test('choosing a horizon names the actual period it covers', async ({ workspace 
   await page.reload();
   await expect(
     page
-      .getByRole('navigation', { name: 'Filter plan by horizon' })
+      .getByRole('group', { name: 'Filter plan by horizon' })
       .getByRole('button', { name: /^Week/ })
   ).toHaveAttribute('aria-pressed', 'true');
+});
+
+test('the sidebar marks the planner destination that was chosen', async ({
+  workspace,
+}, testInfo) => {
+  // The contextual sidebar is the desktop frame; on mobile it lives in the
+  // drawer, which keyboard-navigation.spec.ts covers.
+  test.skip(testInfo.project.name !== 'chromium', 'The sidebar is the desktop navigation frame.');
+  const { page } = workspace;
+  await goTo(page, '/planner');
+
+  const sidebar = page.getByRole('navigation', { name: 'Planner' });
+  const thisWeek = sidebar.getByRole('link', { name: 'This week', exact: true });
+  const goals = sidebar.getByRole('link', { name: 'Goals & horizons', exact: true });
+
+  await expect(thisWeek).toHaveAttribute('aria-current', 'page');
+  await expect(goals).not.toHaveAttribute('aria-current', 'page');
+
+  /* Goals & horizons used to point at /goals, a permanent redirect to
+     /planner, so choosing it landed on the page This week is marked as and
+     the sidebar claimed you were somewhere you had not clicked. */
+  await goals.click();
+  await expect(page).toHaveURL(/\/planner\?period=all/);
+  await expect(
+    sidebar.getByRole('link', { name: 'Goals & horizons', exact: true })
+  ).toHaveAttribute('aria-current', 'page');
+  await expect(sidebar.getByRole('link', { name: 'This week', exact: true })).not.toHaveAttribute(
+    'aria-current',
+    'page'
+  );
+
+  // And the page it lands on is actually showing every period.
+  await expect(page.getByText('Every period on record')).toBeVisible();
+});
+
+test('a written vision is something to read, and still something to change', async ({
+  workspace,
+}) => {
+  const { page } = workspace;
+  await goTo(page, '/vision');
+
+  // Onboarding wrote one, so this workspace opens on the statement rather than
+  // on a form field left open. Scoped to the statement: the editor is only
+  // hidden, so it still holds the same words.
+  const statement = page.locator('.vision-statement');
+  await expect(statement).toHaveText(onboardingSeed.vision);
+  await expect(page.getByRole('textbox', { name: 'Vision draft' })).toBeHidden();
+
+  await page.getByRole('button', { name: 'Edit vision' }).click();
+  const draft = page.getByRole('textbox', { name: 'Vision draft' });
+  await expect(draft).toBeVisible();
+  await expect(draft).toHaveValue(onboardingSeed.vision);
+
+  const rewritten = 'Build a calm week that still moves the long arc forward.';
+  await draft.fill(rewritten);
+  await page.getByRole('button', { name: 'Save vision' }).click();
+
+  /* Back to reading, showing what was just written. Nothing refreshes this
+     route after a save, so reading the server value back would have shown the
+     previous vision to the person who had just replaced it. */
+  await expect(statement).toHaveText(rewritten);
+  await expect(page.getByRole('textbox', { name: 'Vision draft' })).toBeHidden();
+
+  // And it really reached the server.
+  await page.reload();
+  await expect(page.locator('.vision-statement')).toHaveText(rewritten);
 });
