@@ -45,7 +45,10 @@ function matchesPath(pathname: string, path: string) {
   return pathname === path || pathname.startsWith(`${path}/`);
 }
 
-export function experienceAreaForPath(pathname: string): ExperienceArea {
+export function experienceAreaForPath(href: string): ExperienceArea {
+  // Destinations may carry a query -- "Goals & horizons" is /planner with
+  // every period -- and the area is a property of the path alone.
+  const [pathname] = href.split('?');
   if (pathname.startsWith('/settings/')) return 'settings';
   if (matchesPath(pathname, '/notifications')) return 'notifications';
   if (matchesPath(pathname, '/search')) return 'search';
@@ -119,7 +122,15 @@ export function experienceNavigationForPath(
             ...(canonical
               ? [
                   { label: 'Weekly review', href: '/review', match: 'prefix' as const },
-                  { label: 'Goals & horizons', href: '/goals', match: 'prefix' as const },
+                  {
+                    label: 'Goals & horizons',
+                    // /goals is a permanent redirect to /planner, so linking to it
+                    // landed on the page "This week" is marked as. The plan
+                    // across every period is what this entry means, and the
+                    // planner already keeps that in the address.
+                    href: '/planner?period=all',
+                    match: 'exact' as const,
+                  },
                 ]
               : []),
             { label: 'Vision', href: '/vision', match: 'prefix' },
@@ -174,12 +185,21 @@ export function experienceNavigationForPath(
               },
               {
                 label: 'Workspace',
+                // A destination is named once. These labels match each page's
+                // own heading and the settings tab bar, because the sidebar,
+                // the tab bar and the page were disagreeing: "AI and agents"
+                // opened a page titled "AI usage", and "MCP" opened "AI
+                // connections".
                 items: [
                   { label: 'Preferences', href: '/settings/preferences', match: 'prefix' as const },
-                  { label: 'AI and agents', href: '/settings/ai', match: 'prefix' as const },
+                  { label: 'AI usage', href: '/settings/ai', match: 'prefix' as const },
                   { label: 'Memory', href: '/settings/memory', match: 'prefix' as const },
-                  { label: 'Data and offline', href: '/settings/data', match: 'prefix' as const },
-                  { label: 'MCP', href: '/settings/mcp', match: 'prefix' as const },
+                  {
+                    label: 'Data and portability',
+                    href: '/settings/data',
+                    match: 'prefix' as const,
+                  },
+                  { label: 'AI connections', href: '/settings/mcp', match: 'prefix' as const },
                 ],
               },
             ]
@@ -259,7 +279,7 @@ export function experienceCommands(canonical: boolean): ExperienceCommand[] {
       ? [
           { label: 'Calendar', detail: 'Planner', href: '/planner/calendar' },
           { label: 'Weekly review', detail: 'Planner', href: '/review' },
-          { label: 'Goals & horizons', detail: 'Planner', href: '/goals' },
+          { label: 'Goals & horizons', detail: 'Planner', href: '/planner?period=all' },
           { label: 'Notes', detail: 'Workspace', href: '/notes' },
           { label: 'Conversations', detail: 'Workspace', href: '/conversations' },
         ]
@@ -292,5 +312,33 @@ export function filterExperienceCommands(
 }
 
 export function isExperienceNavItemActive(pathname: string, item: ExperienceNavItem) {
-  return item.match === 'exact' ? pathname === item.href : matchesPath(pathname, item.href);
+  const [path] = item.href.split('?');
+  return item.match === 'exact' ? pathname === path : matchesPath(pathname, path);
+}
+
+/* Two entries can lead to the same page and differ only by what they ask it to
+   show -- "This week" is /planner, "Goals & horizons" is /planner with every
+   period. Matching on pathname alone marked both, so the sidebar said you were
+   somewhere you had not clicked.
+   The most specific destination wins: an entry whose query is satisfied beats
+   one that names no query at all. An entry whose query is contradicted is not
+   current whatever its path says. */
+export function activeExperienceNavHref(
+  pathname: string,
+  search: string,
+  items: ExperienceNavItem[]
+): string | null {
+  const current = new URLSearchParams(search);
+  let best: { href: string; specificity: number } | null = null;
+
+  for (const item of items) {
+    if (!isExperienceNavItemActive(pathname, item)) continue;
+    const [, query = ''] = item.href.split('?');
+    const wanted = [...new URLSearchParams(query)];
+    if (wanted.some(([key, value]) => current.get(key) !== value)) continue;
+    const specificity = wanted.length;
+    if (!best || specificity > best.specificity) best = { href: item.href, specificity };
+  }
+
+  return best?.href ?? null;
 }

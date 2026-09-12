@@ -1,19 +1,48 @@
 :root {
   color-scheme: light dark;
-  --canvas: #f5f5f0;
+
+  /* ---------- ground ---------- */
+  --canvas: #f7f8f6;
   --surface: #ffffff;
+  --surface-sub: #f2f4f1;
+  --surface-sunken: #eceeeb;
   --surface-muted: #ecece6;
-  --ink: #16211e;
+  --experience-sidebar: #eff2ef;
+  --experience-sidebar-deep: #e6eae6;
+  --experience-rail: #e5e9e5;
+  --hover: rgba(23, 26, 24, 0.045);
+  --hover-strong: rgba(255, 255, 255, 0.72);
+  --scrim: rgba(24, 38, 30, 0.32);
+  --veil: rgba(255, 255, 255, 0.94);
+  --veil-soft: rgba(255, 255, 255, 0.6);
+
+  /* ---------- ink ---------- */
+  --ink: #171a18;
+  --ink-soft: #424b46;
   --muted: #626a65;
-  --line: #d9ddd6;
-  --brand: #13795b;
-  --brand-strong: #0d6248;
-  --brand-soft: #e1f1e9;
-  --coral: #bf4e37;
-  --coral-soft: #f8e6e1;
-  --shadow: 0 12px 32px rgba(22, 33, 30, 0.07);
-  --brand-line: #bcd9cd;
+  --ink-subtle: #58625c;
+  --ink-faint: #7d8781;
+  --inverse: #24312c;
+  --on-inverse: #ffffff;
+
+  /* ---------- lines and elevation ---------- */
+  --line: #d7ddd8;
+  --line-soft: #e3e8e4;
   --border-strong: #93a099;
+  --focus: #265eb8;
+  --shadow-sm: 0 1px 3px rgba(19, 37, 28, 0.08);
+  --shadow-md: 0 10px 30px rgba(24, 38, 30, 0.12);
+  --shadow: 0 12px 32px rgba(22, 33, 30, 0.07);
+  --shadow-lg: 0 24px 64px rgba(10, 18, 15, 0.2);
+
+  /* ---------- brand ---------- */
+  --brand: #08745a;
+  --brand-strong: #075e4a;
+  --brand-soft: #e5f1ec;
+  --brand-line: #bcd9cd;
+  --on-brand: #ffffff;
+
+  /* ---------- functional (WCAG AA on their own wash) ---------- */
   --link: #265eb8;
   --ai: #6a4bc3;
   --ai-soft: #efeafb;
@@ -24,16 +53,19 @@
   --warning-soft: #faf1e2;
   --danger: #b42318;
   --danger-soft: #fbedeb;
-  --on-brand: #ffffff;
+  --coral: #a94d39;
+  --coral-soft: #f8e4de;
   --on-coral: #ffffff;
-  --scrim: rgba(10, 18, 15, 0.38);
-  --experience-rail: #e5e9e5;
-  --experience-sidebar: #f0f2ef;
-  --shadow-sm: 0 1px 3px rgba(19, 37, 28, 0.09);
-  --shadow-lg: 0 24px 64px rgba(10, 18, 15, 0.2);
-  --font-ui: Inter, 'Avenir Next', Avenir, 'Segoe UI', Helvetica, Arial, sans-serif;
-  --font-display: 'Iowan Old Style', Charter, 'Bitstream Charter', Georgia, serif;
-  --font-mono: 'SFMono-Regular', Consolas, 'Liberation Mono', monospace;
+
+  /* ---------- page accents (ink darkened to 4.5:1 on its own wash) ---------- */
+  --accent-green: #08745a;
+  --accent-green-soft: #e5f1e8;
+  --accent-blue: #406e9c;
+  --accent-blue-soft: #e2edf7;
+  --accent-coral: #a94d39;
+  --accent-coral-soft: #f8e4de;
+  --accent-yellow: #896518;
+  --accent-yellow-soft: #f7edcd;
 
   /* Type scale, radius and motion from docs/product/experience.md.
      Six sizes, three radii, three durations -- the same contract the /preview
@@ -44,6 +76,9 @@
   --fs-title: 20px;
   --fs-page: 28px;
   --fs-display: 40px;
+  --lh-tight: 1.25;
+  --lh-ui: 1.45;
+  --lh-read: 1.7;
   --r-control: 4px;
   --r-record: 6px;
   --r-frame: 8px;
@@ -51,6 +86,10 @@
   --t-panel: 180ms;
   --t-spatial: 240ms;
   --ease: cubic-bezier(0.2, 0, 0, 1);
+
+  --font-ui: Inter, 'Avenir Next', Avenir, 'Segoe UI', Helvetica, Arial, sans-serif;
+  --font-display: 'Iowan Old Style', Charter, 'Bitstream Charter', Georgia, serif;
+  --font-mono: 'SFMono-Regular', Consolas, 'Liberation Mono', monospace;
 
   /* Names already referenced across the stylesheet and in toast.tsx /
      loading-spinner.tsx that were never defined, so those rules resolved to
@@ -73,21 +112,56 @@
   --teal: var(--brand);
 }
 
+/* Dark is a separately tuned semantic palette, not inverted light values
+   (docs/product/experience.md). Only the tokens are redefined; no component
+   rule below is aware that a second theme exists. The explicit choice and the
+   OS preference define the same names in the same order, and
+   tests/unit/design-tokens.test.ts asserts they stay key-for-key identical. */
 [data-theme='dark'] {
-  --canvas: #15201d;
-  --surface: #1e2b27;
+  color-scheme: dark;
+
+  /* ---------- ground ---------- */
+  --canvas: #101310;
+  --surface: #181c19;
+  --surface-sub: #1f241f;
+  --surface-sunken: #151815;
   --surface-muted: #293630;
-  --ink: #f5f6ef;
-  --muted: #aeb8b2;
-  --line: #3a4841;
-  --brand: #63c79f;
-  --brand-strong: #8fe0bb;
-  --brand-soft: #1e3a2e;
-  --coral: #ef927b;
-  --coral-soft: #4a2925;
-  --shadow: 0 12px 32px rgba(0, 0, 0, 0.2);
-  --brand-line: #2c584c;
+  --experience-sidebar: #141714;
+  --experience-sidebar-deep: #1b201c;
+  --experience-rail: #0c0e0c;
+  --hover: rgba(231, 235, 231, 0.06);
+  --hover-strong: rgba(231, 235, 231, 0.09);
+  --scrim: rgba(0, 0, 0, 0.58);
+  --veil: rgba(24, 28, 25, 0.94);
+  --veil-soft: rgba(231, 235, 231, 0.06);
+
+  /* ---------- ink ---------- */
+  --ink: #e7ebe7;
+  --ink-soft: #c3ccc5;
+  --muted: #9aa69e;
+  --ink-subtle: #a4b0a8;
+  --ink-faint: #7f8b84;
+  --inverse: #e7ebe7;
+  --on-inverse: #101310;
+
+  /* ---------- lines and elevation ---------- */
+  --line: #2c332d;
+  --line-soft: #232823;
   --border-strong: #5c665e;
+  --focus: #8fb6f2;
+  --shadow-sm: 0 1px 3px rgba(0, 0, 0, 0.5);
+  --shadow-md: 0 10px 30px rgba(0, 0, 0, 0.62);
+  --shadow: 0 12px 32px rgba(0, 0, 0, 0.2);
+  --shadow-lg: 0 24px 64px rgba(0, 0, 0, 0.62);
+
+  /* ---------- brand ---------- */
+  --brand: #5fc0a0;
+  --brand-strong: #7fd3b7;
+  --brand-soft: #16302a;
+  --brand-line: #2c584c;
+  --on-brand: #06231b;
+
+  /* ---------- functional (WCAG AA on their own wash) ---------- */
   --link: #8fb6f2;
   --ai: #b39cf0;
   --ai-soft: #241f36;
@@ -98,31 +172,67 @@
   --warning-soft: #2c2417;
   --danger: #f0958a;
   --danger-soft: #2f1c19;
-  --on-brand: #06231b;
+  --coral: #eb9683;
+  --coral-soft: #2f1e19;
   --on-coral: #3a1712;
-  --experience-rail: #121b18;
-  --experience-sidebar: #18231f;
-  --scrim: rgba(0, 0, 0, 0.58);
-  --shadow-sm: 0 1px 3px rgba(0, 0, 0, 0.5);
-  --shadow-lg: 0 24px 64px rgba(0, 0, 0, 0.62);
+
+  /* ---------- page accents (ink darkened to 4.5:1 on its own wash) ---------- */
+  --accent-green: #6fc7a8;
+  --accent-green-soft: #16302a;
+  --accent-blue: #8db6de;
+  --accent-blue-soft: #182633;
+  --accent-coral: #eb9683;
+  --accent-coral-soft: #2f1e19;
+  --accent-yellow: #d9b25f;
+  --accent-yellow-soft: #2b2415;
 }
 
 @media (prefers-color-scheme: dark) {
   :root:not([data-theme='light']) {
-    --canvas: #15201d;
-    --surface: #1e2b27;
+    color-scheme: dark;
+
+    /* ---------- ground ---------- */
+    --canvas: #101310;
+    --surface: #181c19;
+    --surface-sub: #1f241f;
+    --surface-sunken: #151815;
     --surface-muted: #293630;
-    --ink: #f5f6ef;
-    --muted: #aeb8b2;
-    --line: #3a4841;
-    --brand: #63c79f;
-    --brand-strong: #8fe0bb;
-    --brand-soft: #1e3a2e;
-    --coral: #ef927b;
-    --coral-soft: #4a2925;
-    --shadow: 0 12px 32px rgba(0, 0, 0, 0.2);
-    --brand-line: #2c584c;
+    --experience-sidebar: #141714;
+    --experience-sidebar-deep: #1b201c;
+    --experience-rail: #0c0e0c;
+    --hover: rgba(231, 235, 231, 0.06);
+    --hover-strong: rgba(231, 235, 231, 0.09);
+    --scrim: rgba(0, 0, 0, 0.58);
+    --veil: rgba(24, 28, 25, 0.94);
+    --veil-soft: rgba(231, 235, 231, 0.06);
+
+    /* ---------- ink ---------- */
+    --ink: #e7ebe7;
+    --ink-soft: #c3ccc5;
+    --muted: #9aa69e;
+    --ink-subtle: #a4b0a8;
+    --ink-faint: #7f8b84;
+    --inverse: #e7ebe7;
+    --on-inverse: #101310;
+
+    /* ---------- lines and elevation ---------- */
+    --line: #2c332d;
+    --line-soft: #232823;
     --border-strong: #5c665e;
+    --focus: #8fb6f2;
+    --shadow-sm: 0 1px 3px rgba(0, 0, 0, 0.5);
+    --shadow-md: 0 10px 30px rgba(0, 0, 0, 0.62);
+    --shadow: 0 12px 32px rgba(0, 0, 0, 0.2);
+    --shadow-lg: 0 24px 64px rgba(0, 0, 0, 0.62);
+
+    /* ---------- brand ---------- */
+    --brand: #5fc0a0;
+    --brand-strong: #7fd3b7;
+    --brand-soft: #16302a;
+    --brand-line: #2c584c;
+    --on-brand: #06231b;
+
+    /* ---------- functional (WCAG AA on their own wash) ---------- */
     --link: #8fb6f2;
     --ai: #b39cf0;
     --ai-soft: #241f36;
@@ -133,13 +243,19 @@
     --warning-soft: #2c2417;
     --danger: #f0958a;
     --danger-soft: #2f1c19;
-    --on-brand: #06231b;
+    --coral: #eb9683;
+    --coral-soft: #2f1e19;
     --on-coral: #3a1712;
-    --experience-rail: #121b18;
-    --experience-sidebar: #18231f;
-    --scrim: rgba(0, 0, 0, 0.58);
-    --shadow-sm: 0 1px 3px rgba(0, 0, 0, 0.5);
-    --shadow-lg: 0 24px 64px rgba(0, 0, 0, 0.62);
+
+    /* ---------- page accents (ink darkened to 4.5:1 on its own wash) ---------- */
+    --accent-green: #6fc7a8;
+    --accent-green-soft: #16302a;
+    --accent-blue: #8db6de;
+    --accent-blue-soft: #182633;
+    --accent-coral: #eb9683;
+    --accent-coral-soft: #2f1e19;
+    --accent-yellow: #d9b25f;
+    --accent-yellow-soft: #2b2415;
   }
 }
 
@@ -428,7 +544,6 @@ a {
   width: 100%;
   margin: 0;
 }
-.experience-sidebar-footer .sidebar-footer,
 .experience-sidebar-footer .account {
   padding: 0;
 }
@@ -608,101 +723,6 @@ a {
   display: none;
 }
 
-.app-shell {
-  min-height: 100vh;
-  display: grid;
-  grid-template-columns: 228px minmax(0, 1fr);
-}
-.app-sidebar {
-  position: sticky;
-  top: 0;
-  height: 100vh;
-  display: flex;
-  flex-direction: column;
-  padding: 24px 16px;
-  border-right: 1px solid var(--line);
-  background: var(--surface);
-}
-.brand {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  padding: 0 8px;
-  font-weight: 700;
-  font-size: var(--fs-read);
-}
-.brand-mark {
-  display: grid;
-  width: 28px;
-  height: 28px;
-  place-items: center;
-  border-radius: 7px;
-  background: var(--brand);
-  color: var(--on-brand);
-  font-size: var(--fs-body);
-}
-.app-nav {
-  display: grid;
-  gap: 4px;
-  margin-top: 42px;
-}
-.nav-label {
-  margin: 0 0 7px;
-  padding: 0 8px;
-  color: var(--muted);
-  font-size: var(--fs-label);
-  font-weight: 700;
-  text-transform: uppercase;
-  letter-spacing: 0.08em;
-}
-.nav-link {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  min-height: 40px;
-  padding: 8px;
-  border-radius: 6px;
-  color: var(--muted);
-  font-size: var(--fs-body);
-  font-weight: 600;
-}
-.nav-link:hover {
-  background: var(--surface-muted);
-  color: var(--ink);
-}
-.nav-link-active {
-  background: var(--brand-soft);
-  color: var(--brand-strong);
-}
-.nav-icon {
-  flex: 0 0 auto;
-  color: inherit;
-}
-.nav-link > span:not(.nav-badge) {
-  min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-.nav-badge {
-  min-width: 20px;
-  height: 20px;
-  display: grid;
-  place-items: center;
-  margin-left: auto;
-  border-radius: 10px;
-  padding: 0 6px;
-  background: var(--coral);
-  color: var(--on-coral);
-  font-size: var(--fs-label);
-  font-weight: 800;
-}
-.sidebar-footer {
-  display: grid;
-  gap: 12px;
-  margin-top: auto;
-  padding: 8px;
-}
 .theme-toggle,
 .sign-out {
   width: 100%;
@@ -889,6 +909,21 @@ button:disabled {
   font-weight: 700;
   text-transform: uppercase;
   letter-spacing: 0.08em;
+}
+/* A vision is read far more often than it is rewritten, so the saved one is
+   set the way the rest of the product sets a statement: the display face, at
+   reading size. */
+.vision-statement {
+  margin: 4px 0 0;
+  color: var(--ink);
+  font-family: var(--font-display);
+  font-size: var(--fs-title);
+  line-height: var(--lh-read);
+}
+.vision-written {
+  margin: 12px 0 0;
+  color: var(--muted);
+  font-size: var(--fs-label);
 }
 .vision-textarea {
   width: 100%;
@@ -1879,6 +1914,51 @@ button:disabled {
   border-color: transparent;
   background: transparent;
 }
+/* The heading row gives its trailing link only what it needs, and "View all"
+   was breaking across two lines in that space. Only where there is room for
+   it: held on one line at 320px it is the 3px that stops the page reflowing. */
+@media (min-width: 761px) {
+  .today-recent-work > .section-heading > a {
+    white-space: nowrap;
+  }
+}
+.recent-work-list {
+  display: grid;
+}
+.recent-work-item {
+  display: grid;
+  min-width: 0;
+  grid-template-columns: 18px minmax(0, 1fr) 16px;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 4px;
+  border-bottom: 1px solid var(--line-soft);
+  color: var(--ink);
+  text-decoration: none;
+}
+.recent-work-item:last-child {
+  border-bottom: 0;
+}
+.recent-work-item:hover {
+  background: var(--hover);
+}
+.recent-work-item span {
+  display: grid;
+  min-width: 0;
+}
+.recent-work-item strong {
+  overflow: hidden;
+  font-size: var(--fs-body);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.recent-work-item small {
+  color: var(--muted);
+  font-size: var(--fs-label);
+}
+.recent-work-item svg {
+  color: var(--muted);
+}
 .today-capture-strip {
   padding-top: 6px;
 }
@@ -2527,6 +2607,11 @@ button:disabled {
 .note-editor-breadcrumb span:last-child {
   color: var(--ink);
 }
+/* The document title is the most prominent thing on the Workspace, and the
+   reference sets it in the display face at the display size -- the same
+   treatment every other page heading already gets. It is an input rather than
+   an h1 because it is edited in place, so it has to ask for the face itself
+   instead of inheriting the .experience-main h1 rule. */
 .note-title-input {
   width: 100%;
   min-width: 0;
@@ -2534,8 +2619,16 @@ button:disabled {
   outline: 0;
   background: transparent;
   color: var(--ink);
-  font-size: var(--fs-title);
-  font-weight: 700;
+  padding: 0;
+  overflow: hidden;
+  resize: none;
+  font-family: var(--font-display);
+  font-size: var(--fs-display);
+  font-weight: 600;
+  line-height: 1.15;
+}
+.note-title-input::placeholder {
+  color: var(--ink-faint);
 }
 .note-header-actions {
   display: flex;
@@ -3341,6 +3434,11 @@ button:disabled {
 .review-action-copy span {
   color: var(--muted);
   font-size: var(--fs-label);
+}
+/* Capitalisation belongs to machine values -- a status, a source type -- and
+   never to anything a person wrote. Applying it to a whole line rewrote the
+   owner's own Goal titles into title case. */
+.enum-label {
   text-transform: capitalize;
 }
 .review-action-row select,
@@ -3545,7 +3643,6 @@ button:disabled {
 .period-goal-unmeasured {
   color: var(--muted);
   font-size: var(--fs-label);
-  text-transform: capitalize;
 }
 .period-goal-progress {
   display: grid;
@@ -4782,6 +4879,37 @@ button:disabled {
   display: grid;
   gap: 14px;
 }
+/* Same chip language as workspace search, so the two filters read as one
+   idea. Here they are a real tablist -- choosing one swaps the panel below
+   rather than going anywhere -- which is what TabList provides. */
+.notification-kinds {
+  display: flex;
+  overflow-x: auto;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin: 4px 0 12px;
+}
+.notification-kinds button {
+  padding: 6px 12px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: var(--surface);
+  color: var(--ink-soft);
+  font-size: var(--fs-label);
+  font-weight: 600;
+  white-space: nowrap;
+  cursor: pointer;
+  transition: background var(--t-feedback) var(--ease);
+}
+.notification-kinds button:hover {
+  background: var(--hover);
+}
+.notification-kinds .notification-kind-active {
+  border-color: var(--brand);
+  background: var(--brand-soft);
+  color: var(--brand-strong);
+}
+
 .notification-toolbar {
   display: flex;
   min-height: 40px;
@@ -5129,7 +5257,6 @@ button:disabled {
 .memory-row span {
   color: var(--muted);
   font-size: var(--fs-label);
-  text-transform: capitalize;
 }
 .memory-row > div:last-child {
   display: flex;
@@ -5732,6 +5859,53 @@ button:disabled {
 .workspace-search-form input::placeholder {
   color: var(--muted);
 }
+/* The reference puts the kind filter directly under the query, as a row of
+   chips that carry their own count. Links, not buttons: a filtered search is
+   an address, and the row works before any JavaScript arrives. */
+.workspace-search-kinds {
+  display: flex;
+  overflow-x: auto;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin: 12px 0 4px;
+}
+.workspace-search-kind {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 12px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: var(--surface);
+  color: var(--ink-soft);
+  font-size: var(--fs-label);
+  font-weight: 600;
+  text-decoration: none;
+  white-space: nowrap;
+  transition: background var(--t-feedback) var(--ease);
+}
+.workspace-search-kind:hover {
+  background: var(--hover);
+}
+.workspace-search-kind small {
+  color: var(--muted);
+  font-variant-numeric: tabular-nums;
+}
+.workspace-search-kind[aria-current='page'] {
+  border-color: var(--brand);
+  background: var(--brand-soft);
+  color: var(--brand-strong);
+}
+.workspace-search-kind[aria-current='page'] small {
+  color: var(--brand-strong);
+}
+/* A kind with nothing behind it is dimmed, not disabled: it reports a real
+   count of zero, still activates, and lands on an empty state that offers the
+   way back. */
+.workspace-search-kind[data-empty='true'] {
+  color: var(--ink-faint);
+}
+
 .workspace-search-results > header {
   min-height: 42px;
   display: flex;
@@ -5837,6 +6011,11 @@ button:disabled {
 }
 
 @media (max-width: 760px) {
+  /* A 40px display title is most of a narrow screen before any words are
+     read, so it steps down to the page size the way the reference does. */
+  .note-title-input {
+    font-size: var(--fs-page);
+  }
   .workspace-search-form {
     grid-template-columns: 22px minmax(0, 1fr);
   }
@@ -6078,44 +6257,6 @@ button:disabled {
   }
   .conversation-promotion > div {
     grid-template-columns: 1fr;
-  }
-  .app-shell {
-    display: block;
-  }
-  .app-sidebar {
-    position: sticky;
-    z-index: 3;
-    height: auto;
-    padding: 12px 16px;
-    border-right: 0;
-    border-bottom: 1px solid var(--line);
-  }
-  .brand {
-    padding: 0;
-  }
-  .app-nav {
-    display: flex;
-    gap: 4px;
-    margin-top: 14px;
-    overflow-x: auto;
-  }
-  .nav-label,
-  .sidebar-footer .account {
-    display: none;
-  }
-  .nav-link {
-    flex: 0 0 auto;
-    padding: 7px 9px;
-  }
-  .nav-badge {
-    margin-left: 0;
-  }
-  .sidebar-footer {
-    position: absolute;
-    top: 8px;
-    right: 8px;
-    margin: 0;
-    padding: 0;
   }
   .theme-toggle {
     width: auto;

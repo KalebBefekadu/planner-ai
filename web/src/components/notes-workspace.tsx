@@ -196,6 +196,18 @@ export function NotesWorkspace({
     null;
   const activeNoteId = selected?.id ?? null;
   const [title, setTitle] = useState(selected?.title ?? '');
+  const titleRef = useRef<HTMLTextAreaElement>(null);
+
+  /* A wrapping title has no fixed height, so it is measured rather than
+     guessed: reset to nothing, then take the height the content actually
+     needs. Written through the CSSOM like every other measurement in the app
+     (components/measured-fill.tsx records why). */
+  useEffect(() => {
+    const node = titleRef.current;
+    if (!node) return;
+    node.style.height = 'auto';
+    node.style.height = `${node.scrollHeight}px`;
+  }, [title]);
   const [body, setBody] = useState(selected?.bodyMarkdown ?? '');
   const versionRef = useRef(selected?.version ?? 1);
   // The durable mutation currently in flight, if any. Only whether one is
@@ -952,10 +964,23 @@ export function NotesWorkspace({
                     </Fragment>
                   ))}
                 </nav>
-                <input
+                {/* A textarea rather than an input: titles run long, and an
+                    input cannot wrap, so a long one scrolled sideways out of
+                    view at the display size the reference sets it in. It is
+                    still one line of text -- Enter commits rather than opening
+                    a second paragraph, and a pasted newline is flattened. */}
+                <textarea
+                  ref={titleRef}
                   className="note-title-input"
                   value={title}
-                  onChange={(event) => setTitle(event.target.value)}
+                  rows={1}
+                  onChange={(event) => setTitle(event.target.value.replace(/[\r\n]+/g, ' '))}
+                  onKeyDown={(event) => {
+                    if (event.key === 'Enter') {
+                      event.preventDefault();
+                      event.currentTarget.blur();
+                    }
+                  }}
                   aria-label="Note title"
                   maxLength={300}
                 />

@@ -1,6 +1,7 @@
 import { PassThrough } from 'node:stream';
 import * as archiverModule from 'archiver';
 import type { ZipArchive } from 'archiver';
+import { VAULT_FORMAT, VAULT_MANIFEST_PATH, VAULT_SCHEMA_VERSION } from '@/lib/notes/vault-format';
 
 export type ExportNote = {
   id: string;
@@ -211,8 +212,8 @@ export async function zipNotes(
   archive.append(
     JSON.stringify(
       {
-        format: 'planner-ai-notes-vault',
-        schemaVersion: 1,
+        format: VAULT_FORMAT,
+        schemaVersion: VAULT_SCHEMA_VERSION,
         exportedAt: new Date().toISOString(),
         notes: manifest,
         attachments: attachmentManifest,
@@ -233,7 +234,7 @@ export async function zipNotes(
       null,
       2
     ),
-    { name: 'planner-ai-vault.json' }
+    { name: VAULT_MANIFEST_PATH }
   );
   if (unavailableAttachments.length) {
     archive.append(

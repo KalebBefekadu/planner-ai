@@ -54,7 +54,7 @@ export default defineConfig({
     // navigating away mid-render -- was ending the whole dev process. Every
     // test after that point then failed against a server that was simply gone,
     // which reads as a broad regression rather than one cancelled request.
-    command: `NEXT_DIST_DIR=.next-e2e PLANNER_DATA_MODEL=canonical PLANNER_UI_PREVIEW=enabled PLANNER_UI_V2=enabled NEXT_PUBLIC_APP_URL=${publicOrigin} npm run build && NEXT_DIST_DIR=.next-e2e PLANNER_DATA_MODEL=canonical PLANNER_UI_PREVIEW=enabled PLANNER_UI_V2=enabled NEXT_PUBLIC_APP_URL=${publicOrigin} npm run start -- --hostname 127.0.0.1 --port ${port}`,
+    command: `NEXT_DIST_DIR=.next-e2e PLANNER_DATA_MODEL=canonical PLANNER_UI_PREVIEW=enabled NEXT_PUBLIC_APP_URL=${publicOrigin} npm run build && NEXT_DIST_DIR=.next-e2e PLANNER_DATA_MODEL=canonical PLANNER_UI_PREVIEW=enabled NEXT_PUBLIC_APP_URL=${publicOrigin} npm run start -- --hostname 127.0.0.1 --port ${port}`,
     url: `${origin}/login`,
     reuseExistingServer: false,
     timeout: 300_000,

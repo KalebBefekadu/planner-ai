@@ -157,7 +157,7 @@ export function PeriodReview({ data }: { data: PeriodReviewData }) {
                       <div>
                         <strong>{goal.title}</strong>
                         <span>
-                          {goal.status}
+                          <span className="enum-label">{goal.status}</span>
                           {goal.dueOn ? ` · due ${formatPeriodDate(goal.dueOn)}` : ''}
                         </span>
                       </div>

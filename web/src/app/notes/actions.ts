@@ -8,6 +8,7 @@ import {
   type NoteCoverKey,
 } from '@/lib/notes/appearance';
 import { nextParentMove, nextSiblingMove, placeUnderParent } from '@/lib/notes/sibling-order';
+import { selectAll } from '@/lib/supabase/select-all';
 import { executeOperation } from '@/lib/operations';
 import { createClient } from '@/lib/supabase/server';
 
@@ -129,21 +130,29 @@ function mapNote(note: Record<string, unknown>): NoteView {
 
 export async function getNotes(query?: string) {
   const { supabase, workspaceId } = await notesClient();
-  let request = supabase
-    .from('notes')
-    .select(TREE_COLUMNS)
-    .eq('workspace_id', workspaceId)
-    .is('archived_at', null)
-    .is('trashed_at', null)
-    .order('sort_key');
   const normalizedQuery = query?.trim();
-  if (normalizedQuery) {
-    request = request.textSearch('search_vector', normalizedQuery, {
-      config: 'simple',
-      type: 'websearch',
-    });
-  }
-  const { data, error } = await request;
+  /* Paged, because PostgREST caps a response at max_rows without saying so:
+     a workspace past a thousand Notes was showing the first thousand and
+     nothing at all about the rest. The id is a tiebreak on sort_key, since
+     paging an order that is not total can repeat one row and drop another. */
+  const { data, error } = await selectAll((from, to) => {
+    let request = supabase
+      .from('notes')
+      .select(TREE_COLUMNS)
+      .eq('workspace_id', workspaceId)
+      .is('archived_at', null)
+      .is('trashed_at', null)
+      .order('sort_key')
+      .order('id')
+      .range(from, to);
+    if (normalizedQuery) {
+      request = request.textSearch('search_vector', normalizedQuery, {
+        config: 'simple',
+        type: 'websearch',
+      });
+    }
+    return request;
+  });
   if (error) throw new Error('Unable to load Notes.');
   const matches = (data ?? []).map((note) => mapNote(note as Record<string, unknown>));
   if (!normalizedQuery) return matches;
@@ -212,6 +221,27 @@ export async function getFavoriteNotes(): Promise<NoteView[]> {
  * when the Note is not there: an id in the address bar can outlive the Note it
  * named -- it was archived, trashed, or opened from a stale tab -- and that is
  * an empty editor, not an error page. */
+/* Bodies for a known, already-narrowed set of Notes.
+ *
+ * The tree deliberately arrives without text, which is right for a sidebar and
+ * wrong for the search page: that one ranks and excerpts on what a Note says,
+ * so a query matching only the body would silently return nothing. Bounded by
+ * the number of results rather than by the size of the vault, and capped, so a
+ * two-letter query cannot turn into a request for everything ever written. */
+export async function getNoteBodies(ids: string[]): Promise<Map<string, string>> {
+  if (!ids.length) return new Map();
+  const { supabase, workspaceId } = await notesClient();
+  const { data, error } = await supabase
+    .from('notes')
+    .select('id,body_markdown')
+    .eq('workspace_id', workspaceId)
+    .in('id', ids.slice(0, 200));
+  if (error) throw new Error('Unable to load Notes.');
+  return new Map(
+    (data ?? []).map((row) => [row.id as string, (row.body_markdown as string | null) ?? ''])
+  );
+}
+
 export async function getNoteDocument(id: string): Promise<string | null> {
   const { supabase, workspaceId } = await notesClient();
   const { data, error } = await supabase
@@ -274,20 +304,33 @@ export async function getNoteKnowledgeContext(noteId: string): Promise<NoteKnowl
       .select('action_id')
       .eq('workspace_id', workspaceId)
       .eq('note_id', noteId),
-    supabase
-      .from('goals')
-      .select('id,title')
-      .eq('workspace_id', workspaceId)
-      .is('archived_at', null)
-      .is('trashed_at', null)
-      .order('title'),
-    supabase
-      .from('actions')
-      .select('id,title')
-      .eq('workspace_id', workspaceId)
-      .is('archived_at', null)
-      .is('trashed_at', null)
-      .order('title'),
+    /* These two are the pickers for linking a Note to the plan, and they are
+       workspace-wide rather than per-Note. Truncated at max_rows, a Goal past
+       the first thousand simply could not be chosen, and nothing on the screen
+       would say why it was absent. The rest of the reads here are filtered to
+       one Note and cannot reach the cap. */
+    selectAll((from, to) =>
+      supabase
+        .from('goals')
+        .select('id,title')
+        .eq('workspace_id', workspaceId)
+        .is('archived_at', null)
+        .is('trashed_at', null)
+        .order('title')
+        .order('id')
+        .range(from, to)
+    ),
+    selectAll((from, to) =>
+      supabase
+        .from('actions')
+        .select('id,title')
+        .eq('workspace_id', workspaceId)
+        .is('archived_at', null)
+        .is('trashed_at', null)
+        .order('title')
+        .order('id')
+        .range(from, to)
+    ),
     // Removed attachments are still listed while they can be restored. Hiding
     // them made the undo live only in the tab that did the removal: a reload
     // left the file present in storage, recoverable for another thirty days,

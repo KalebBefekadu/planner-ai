@@ -19,8 +19,17 @@ export function VisionUI({ initialVision }: { initialVision: Vision | null }) {
   const [notice, setNotice] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [questionsError, setQuestionsError] = useState<string | null>(null);
-  const saved = initialVision?.content ?? '';
+  /* What is on the server, tracked here because nothing refreshes this route
+     after a save: reading initialVision back would show the previous vision
+     to someone who had just rewritten it. */
+  const [saved, setSaved] = useState(initialVision?.content ?? '');
+  const [savedAt, setSavedAt] = useState(initialVision?.updated_at ?? null);
   const unsaved = visionText.trim() !== saved.trim();
+  /* A vision is something you return to and read, not a form field left open.
+     The reference shows the written statement and offers to edit it; a
+     workspace that has none opens straight into writing one. */
+  const [editing, setEditing] = useState(!saved);
+  const reading = Boolean(saved) && !editing;
 
   async function askQuestions(text: string) {
     if (text.trim().length < 20) return;
@@ -54,6 +63,9 @@ export function VisionUI({ initialVision }: { initialVision: Vision | null }) {
     setNotice(null);
     try {
       await saveVision(visionText);
+      setSaved(visionText.trim());
+      setSavedAt(new Date().toISOString());
+      setEditing(false);
       setNotice('Vision saved. Your plan will now use this as its North Star.');
     } catch (caught) {
       setError(messageFor(caught));
@@ -72,14 +84,20 @@ export function VisionUI({ initialVision }: { initialVision: Vision | null }) {
             Write the direction that makes your yearly, quarterly, and weekly choices coherent.
           </p>
         </div>
-        <button
-          className="btn-primary"
-          type="button"
-          onClick={() => void handleSave()}
-          disabled={isSaving || visionText.trim().length < 3}
-        >
-          {isSaving ? 'Saving...' : 'Save vision'}
-        </button>
+        {reading ? (
+          <button className="btn-secondary" type="button" onClick={() => setEditing(true)}>
+            Edit vision
+          </button>
+        ) : (
+          <button
+            className="btn-primary"
+            type="button"
+            onClick={() => void handleSave()}
+            disabled={isSaving || visionText.trim().length < 3}
+          >
+            {isSaving ? 'Saving...' : 'Save vision'}
+          </button>
+        )}
       </header>
 
       {notice ? (
@@ -95,16 +113,35 @@ export function VisionUI({ initialVision }: { initialVision: Vision | null }) {
 
       <div className="vision-layout">
         <section className="card vision-editor">
-          <label htmlFor="vision" className="editor-label">
+          {reading ? (
+            <>
+              <p className="eyebrow">Vision</p>
+              <p className="vision-statement">{saved}</p>
+              {savedAt ? (
+                <p className="vision-written">
+                  Written{' '}
+                  <time dateTime={savedAt}>
+                    {new Intl.DateTimeFormat('en-US', { dateStyle: 'long' }).format(
+                      new Date(savedAt)
+                    )}
+                  </time>
+                </p>
+              ) : null}
+            </>
+          ) : null}
+          <label htmlFor="vision" className="editor-label" hidden={reading}>
             Vision draft
           </label>
           <textarea
             id="vision"
             className="vision-textarea"
+            hidden={reading}
             value={visionText}
             onChange={(event) => setVisionText(event.target.value)}
             placeholder="Five years from now, my life feels..."
           />
+          {/* Reflection still applies to a vision you are only reading, so the
+              footer stays; only the writing surface goes away. */}
           <div className="editor-footer">
             <span>
               {visionText.trim().split(/\s+/).filter(Boolean).length} words

@@ -1,6 +1,10 @@
 'use client';
 
-/* A real tablist: arrow keys move between tabs, only the selected tab is a tab
+/* Shared, data-agnostic: the caller supplies the class names, so Preview and
+   an authenticated route can render the same control against different
+   stylesheets.
+
+   A real tablist: arrow keys move between tabs, only the selected tab is a tab
    stop, and each tab points at the panel it controls. Used where selecting
    swaps a panel; view switchers that behave like navigation use aria-current
    instead, which is what they actually mean. */

@@ -1,92 +1,79 @@
+/* Every --v2-* name is an alias onto the one global token scale in
+   globals.css. The names survive so the 1150 rules below need no edit, but
+   there is only one palette and one dark theme now: the app themes from
+   <html data-theme>, so no dark block lives in this file any more. */
 .previewRoot {
-  /* ---------- ground ---------- */
-  --v2-canvas: #f7f8f6;
-  --v2-surface: #ffffff;
-  --v2-surface-sub: #f2f4f1;
-  --v2-surface-sunken: #eceeeb;
-  --v2-sidebar: #eff2ef;
-  --v2-sidebar-deep: #e6eae6;
-  --v2-rail: #e5e9e5;
-  --v2-hover: rgba(23, 26, 24, 0.045);
-  --v2-hover-strong: rgba(255, 255, 255, 0.72);
-  --v2-scrim: rgba(24, 38, 30, 0.32);
-  --v2-veil: rgba(255, 255, 255, 0.94);
-  --v2-veil-soft: rgba(255, 255, 255, 0.6);
-  /* chips that sit on cover art keep one appearance in both themes */
-  --v2-media-chip: rgba(23, 26, 24, 0.72);
-  --v2-media-chip-line: rgba(255, 255, 255, 0.65);
-  --v2-on-media: #ffffff;
+  --v2-canvas: var(--canvas);
+  --v2-surface: var(--surface);
+  --v2-surface-sub: var(--surface-sub);
+  --v2-surface-sunken: var(--surface-sunken);
+  --v2-sidebar: var(--experience-sidebar);
+  --v2-sidebar-deep: var(--experience-sidebar-deep);
+  --v2-rail: var(--experience-rail);
+  --v2-hover: var(--hover);
+  --v2-hover-strong: var(--hover-strong);
+  --v2-scrim: var(--scrim);
+  --v2-veil: var(--veil);
+  --v2-veil-soft: var(--veil-soft);
+  --v2-media-chip: var(--media-chip);
+  --v2-media-chip-line: var(--media-chip-line);
+  --v2-on-media: var(--on-media);
+  --v2-text: var(--ink);
+  --v2-text-soft: var(--ink-soft);
+  --v2-muted: var(--muted);
+  --v2-subtle: var(--ink-subtle);
+  --v2-faint: var(--ink-faint);
+  --v2-on-brand: var(--on-brand);
+  --v2-inverse: var(--inverse);
+  --v2-on-inverse: var(--on-inverse);
+  --v2-border: var(--line);
+  --v2-border-soft: var(--line-soft);
+  --v2-border-strong: var(--border-strong);
+  --v2-focus: var(--focus);
+  --v2-shadow-sm: var(--shadow-sm);
+  --v2-shadow-md: var(--shadow-md);
+  --v2-brand: var(--brand);
+  --v2-brand-dark: var(--brand-strong);
+  --v2-brand-soft: var(--brand-soft);
+  --v2-brand-line: var(--brand-line);
+  --v2-link: var(--link);
+  --v2-ai: var(--ai);
+  --v2-ai-soft: var(--ai-soft);
+  --v2-ai-line: var(--ai-line);
+  --v2-success: var(--success);
+  --v2-success-soft: var(--success-soft);
+  --v2-warning: var(--warning);
+  --v2-warning-soft: var(--warning-soft);
+  --v2-danger: var(--danger);
+  --v2-danger-soft: var(--danger-soft);
+  --v2-green: var(--accent-green);
+  --v2-green-soft: var(--accent-green-soft);
+  --v2-blue: var(--accent-blue);
+  --v2-blue-soft: var(--accent-blue-soft);
+  --v2-coral: var(--accent-coral);
+  --v2-coral-soft: var(--accent-coral-soft);
+  --v2-yellow: var(--accent-yellow);
+  --v2-yellow-soft: var(--accent-yellow-soft);
+  --v2-fs-label: var(--fs-label);
+  --v2-fs-body: var(--fs-body);
+  --v2-fs-read: var(--fs-read);
+  --v2-fs-title: var(--fs-title);
+  --v2-fs-page: var(--fs-page);
+  --v2-fs-display: var(--fs-display);
+  --v2-lh-tight: var(--lh-tight);
+  --v2-lh-ui: var(--lh-ui);
+  --v2-lh-read: var(--lh-read);
+  --v2-r-control: var(--r-control);
+  --v2-r-record: var(--r-record);
+  --v2-r-frame: var(--r-frame);
+  --v2-t-feedback: var(--t-feedback);
+  --v2-t-panel: var(--t-panel);
+  --v2-t-spatial: var(--t-spatial);
+  --v2-ease: var(--ease);
+  --v2-font-ui: var(--font-ui);
+  --v2-font-display: var(--font-display);
+  --v2-font-mono: var(--font-mono);
 
-  /* ---------- ink ---------- */
-  --v2-text: #171a18;
-  --v2-text-soft: #424b46;
-  --v2-muted: #626a65;
-  --v2-subtle: #58625c;
-  --v2-faint: #7d8781;
-  --v2-on-brand: #ffffff;
-  --v2-inverse: #24312c;
-  --v2-on-inverse: #ffffff;
-
-  /* ---------- lines ---------- */
-  --v2-border: #d7ddd8;
-  --v2-border-soft: #e3e8e4;
-  --v2-border-strong: #93a099;
-  --v2-focus: #265eb8;
-  --v2-shadow-sm: 0 1px 3px rgba(19, 37, 28, 0.08);
-  --v2-shadow-md: 0 10px 30px rgba(24, 38, 30, 0.12);
-
-  /* ---------- brand ---------- */
-  --v2-brand: #08745a;
-  --v2-brand-dark: #075e4a;
-  --v2-brand-soft: #e5f1ec;
-  --v2-brand-line: #bcd9cd;
-
-  /* ---------- functional (WCAG AA on their own wash) ---------- */
-  --v2-link: #265eb8;
-  --v2-ai: #6a4bc3;
-  --v2-ai-soft: #efeafb;
-  --v2-ai-line: #d8cff4;
-  --v2-success: #16745a;
-  --v2-success-soft: #e5f1ec;
-  --v2-warning: #9a5b00;
-  --v2-warning-soft: #faf1e2;
-  --v2-danger: #b42318;
-  --v2-danger-soft: #fbedeb;
-
-  /* ---------- page accents (ink darkened to 4.5:1 on its own wash) ---------- */
-  --v2-green: #08745a;
-  --v2-green-soft: #e5f1e8;
-  --v2-blue: #406e9c;
-  --v2-blue-soft: #e2edf7;
-  --v2-coral: #a94d39;
-  --v2-coral-soft: #f8e4de;
-  --v2-yellow: #896518;
-  --v2-yellow-soft: #f7edcd;
-
-  /* ---------- type scale (direction doc 14.3: 12 / 14 / 16 / 20 / 28 / 40) ---------- */
-  --v2-fs-label: 12px;
-  --v2-fs-body: 14px;
-  --v2-fs-read: 16px;
-  --v2-fs-title: 20px;
-  --v2-fs-page: 28px;
-  --v2-fs-display: 40px;
-  --v2-lh-tight: 1.25;
-  --v2-lh-ui: 1.45;
-  --v2-lh-read: 1.7;
-
-  /* ---------- radius / motion (14.3, 14.8) ---------- */
-  --v2-r-control: 4px;
-  --v2-r-record: 6px;
-  --v2-r-frame: 8px;
-  --v2-t-feedback: 120ms;
-  --v2-t-panel: 180ms;
-  --v2-t-spatial: 240ms;
-  --v2-ease: cubic-bezier(0.2, 0, 0, 1);
-
-  --v2-font-ui:
-    Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
-  --v2-font-display: 'Source Serif 4', Iowan Old Style, Palatino, Georgia, serif;
-  --v2-font-mono: 'SFMono-Regular', Consolas, 'Liberation Mono', monospace;
   position: fixed;
   inset: 0;
   z-index: 1000;
@@ -101,134 +88,11 @@
   grid-template-rows: 100%;
   min-width: 320px;
   overflow: hidden;
-  background: var(--v2-canvas);
-  color: var(--v2-text);
-  font-family: var(--v2-font-ui);
-  font-size: var(--v2-fs-body);
-  line-height: var(--v2-lh-ui);
-  color-scheme: light;
-}
-
-/* Dark is a separately tuned semantic palette, not inverted light values
-   (docs/product/experience.md). Only the tokens are redefined;
-   no component rule below is aware that a second theme exists. */
-@media (prefers-color-scheme: dark) {
-  .previewRoot:not([data-theme='light']) {
-    color-scheme: dark;
-
-    --v2-canvas: #101310;
-    --v2-surface: #181c19;
-    --v2-surface-sub: #1f241f;
-    --v2-surface-sunken: #151815;
-    --v2-sidebar: #141714;
-    --v2-sidebar-deep: #1b201c;
-    --v2-rail: #0c0e0c;
-    --v2-hover: rgba(231, 235, 231, 0.06);
-    --v2-hover-strong: rgba(231, 235, 231, 0.09);
-    --v2-scrim: rgba(0, 0, 0, 0.58);
-    --v2-veil: rgba(24, 28, 25, 0.94);
-    --v2-veil-soft: rgba(231, 235, 231, 0.06);
-
-    --v2-text: #e7ebe7;
-    --v2-text-soft: #c3ccc5;
-    --v2-muted: #9aa69e;
-    --v2-subtle: #a4b0a8;
-    --v2-faint: #7f8b84;
-    --v2-on-brand: #06231b;
-    --v2-inverse: #e7ebe7;
-    --v2-on-inverse: #101310;
-    --v2-inverse: #e7ebe7;
-    --v2-on-inverse: #101310;
-
-    --v2-border: #2c332d;
-    --v2-border-soft: #232823;
-    --v2-border-strong: #5c665e;
-    --v2-focus: #8fb6f2;
-    --v2-shadow-sm: 0 1px 3px rgba(0, 0, 0, 0.5);
-    --v2-shadow-md: 0 10px 30px rgba(0, 0, 0, 0.62);
-
-    --v2-brand: #5fc0a0;
-    --v2-brand-dark: #7fd3b7;
-    --v2-brand-soft: #16302a;
-    --v2-brand-line: #2c584c;
-
-    --v2-link: #8fb6f2;
-    --v2-ai: #b39cf0;
-    --v2-ai-soft: #241f36;
-    --v2-ai-line: #453a6b;
-    --v2-success: #6fc7a8;
-    --v2-success-soft: #16302a;
-    --v2-warning: #e3ae63;
-    --v2-warning-soft: #2c2417;
-    --v2-danger: #f0958a;
-    --v2-danger-soft: #2f1c19;
-
-    --v2-green: #6fc7a8;
-    --v2-green-soft: #16302a;
-    --v2-blue: #8db6de;
-    --v2-blue-soft: #182633;
-    --v2-coral: #eb9683;
-    --v2-coral-soft: #2f1e19;
-    --v2-yellow: #d9b25f;
-    --v2-yellow-soft: #2b2415;
-  }
-}
-
-/* Explicit choice beats the OS setting in both directions. */
-.previewRoot[data-theme='dark'] {
-  color-scheme: dark;
-
-  --v2-canvas: #101310;
-  --v2-surface: #181c19;
-  --v2-surface-sub: #1f241f;
-  --v2-surface-sunken: #151815;
-  --v2-sidebar: #141714;
-  --v2-sidebar-deep: #1b201c;
-  --v2-rail: #0c0e0c;
-  --v2-hover: rgba(231, 235, 231, 0.06);
-  --v2-hover-strong: rgba(231, 235, 231, 0.09);
-  --v2-scrim: rgba(0, 0, 0, 0.58);
-
-  --v2-text: #e7ebe7;
-  --v2-text-soft: #c3ccc5;
-  --v2-muted: #9aa69e;
-  --v2-subtle: #a4b0a8;
-  --v2-faint: #7f8b84;
-  --v2-on-brand: #06231b;
-  --v2-inverse: #e7ebe7;
-  --v2-on-inverse: #101310;
-
-  --v2-border: #2c332d;
-  --v2-border-soft: #232823;
-  --v2-border-strong: #5c665e;
-  --v2-focus: #8fb6f2;
-  --v2-shadow-sm: 0 1px 3px rgba(0, 0, 0, 0.5);
-  --v2-shadow-md: 0 10px 30px rgba(0, 0, 0, 0.62);
-
-  --v2-brand: #5fc0a0;
-  --v2-brand-dark: #7fd3b7;
-  --v2-brand-soft: #16302a;
-  --v2-brand-line: #2c584c;
-
-  --v2-link: #8fb6f2;
-  --v2-ai: #b39cf0;
-  --v2-ai-soft: #241f36;
-  --v2-ai-line: #453a6b;
-  --v2-success: #6fc7a8;
-  --v2-success-soft: #16302a;
-  --v2-warning: #e3ae63;
-  --v2-warning-soft: #2c2417;
-  --v2-danger: #f0958a;
-  --v2-danger-soft: #2f1c19;
-
-  --v2-green: #6fc7a8;
-  --v2-green-soft: #16302a;
-  --v2-blue: #8db6de;
-  --v2-blue-soft: #182633;
-  --v2-coral: #eb9683;
-  --v2-coral-soft: #2f1e19;
-  --v2-yellow: #d9b25f;
-  --v2-yellow-soft: #2b2415;
+  background: var(--canvas);
+  color: var(--ink);
+  font-family: var(--font-ui);
+  font-size: var(--fs-body);
+  line-height: var(--lh-ui);
 }
 
 /* :where() keeps these resets at zero added specificity, so a component class

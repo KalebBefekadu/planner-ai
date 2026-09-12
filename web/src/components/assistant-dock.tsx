@@ -1,6 +1,14 @@
 'use client';
 
-import { useCallback, useEffect, useRef, useState } from 'react';
+import {
+  createContext,
+  useCallback,
+  useContext,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from 'react';
 import {
   Check,
   History,
@@ -62,7 +70,20 @@ type ConversationResponse = {
   error?: string;
 };
 
-export function AssistantDock({ className }: { className?: string }) {
+type AssistantControls = { open: () => void };
+
+const AssistantContext = createContext<AssistantControls | null>(null);
+
+/* The dock used to be mounted twice -- once in the sidebar footer, once for
+   the mobile header -- with CSS hiding whichever launcher did not apply. Each
+   mount carried its own conversation, so collapsing the sidebar swapped the
+   visible launcher and with it the entire conversation: an in-flight draft
+   simply vanished. Both panels also rendered the same element id, so one of
+   the two conversation pickers had a label bound to the other's control.
+
+   State and the panel live here once. The launcher is a separate button that
+   can appear wherever the frame needs it. */
+export function AssistantProvider({ children }: { children?: React.ReactNode }) {
   const pathname = usePathname();
   const router = useRouter();
   const [open, setOpen] = useState(false);
@@ -248,19 +269,19 @@ export function AssistantDock({ className }: { className?: string }) {
     });
   }
 
+  const controls = useMemo<AssistantControls>(
+    () => ({
+      open: () => {
+        setOpen(true);
+        void loadConversationIndex();
+      },
+    }),
+    [loadConversationIndex]
+  );
+
   return (
-    <>
-      <button
-        className={`assistant-launch${className ? ` ${className}` : ''}`}
-        type="button"
-        onClick={() => {
-          setOpen(true);
-          void loadConversationIndex();
-        }}
-      >
-        <Sparkles size={16} aria-hidden="true" />
-        Ask Planner AI
-      </button>
+    <AssistantContext.Provider value={controls}>
+      {children}
       {open ? (
         <div className="assistant-panel" role="dialog" aria-label="Planner AI assistant">
           <header className="assistant-header">
@@ -477,6 +498,33 @@ export function AssistantDock({ className }: { className?: string }) {
           </div>
         </div>
       ) : null}
-    </>
+    </AssistantContext.Provider>
+  );
+}
+
+/* Rendered wherever the frame wants an entry point. Outside a provider it
+   would be a button that does nothing, so say so rather than fail silently. */
+export function AssistantLauncher({ className }: { className?: string }) {
+  const controls = useContext(AssistantContext);
+  if (!controls) throw new Error('AssistantLauncher must be rendered inside an AssistantProvider');
+  return (
+    <button
+      className={`assistant-launch${className ? ` ${className}` : ''}`}
+      type="button"
+      onClick={controls.open}
+    >
+      <Sparkles size={16} aria-hidden="true" />
+      Ask Planner AI
+    </button>
+  );
+}
+
+/* One provider and one launcher together, for a surface that needs a single
+   self-contained dock. */
+export function AssistantDock({ className }: { className?: string }) {
+  return (
+    <AssistantProvider>
+      <AssistantLauncher className={className} />
+    </AssistantProvider>
   );
 }
