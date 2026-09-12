@@ -10,6 +10,7 @@ export {
 } from './import-limits';
 import { IMPORT_LIMITS, IMPORT_UPLOAD_LIMIT_LABEL, formatImportBytes } from './import-limits';
 import { describeLinkOutcome, resolveInternalLinks } from './import-links';
+import { isSupportedVaultManifest, VAULT_MANIFEST_PATH } from '@/lib/notes/vault-format';
 
 export type ImportSourceFile = {
   path: string;
@@ -95,7 +96,8 @@ const textExtensions = new Set(['.md', '.markdown', '.txt', '.csv']);
 
 // The vault manifest is not a Note, but it must still be readable from a ZIP so
 // that an exported vault re-imports with its own identity and hierarchy.
-const VAULT_MANIFEST_PATH = 'planner-ai-vault.json';
+// The path, the format name and the version all live in vault-format.ts,
+// shared with the writer so the two cannot drift apart.
 
 function safePath(value: string) {
   const normalized = value.normalize('NFC');
@@ -372,12 +374,7 @@ function vaultCandidates(files: ImportSourceFile[]) {
   } catch {
     return null;
   }
-  if (
-    manifest.format !== 'planner-ai-notes-vault' ||
-    manifest.schemaVersion !== 1 ||
-    !Array.isArray(manifest.notes)
-  )
-    return null;
+  if (!isSupportedVaultManifest(manifest) || !Array.isArray(manifest.notes)) return null;
   const byPath = new Map(files.map((file) => [file.path, file]));
   const ids = new Set(manifest.notes.map((note) => note.id));
   if (ids.size !== manifest.notes.length)

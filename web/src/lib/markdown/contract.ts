@@ -5,8 +5,6 @@ import { frontmatterFromMarkdown, frontmatterToMarkdown } from 'mdast-util-front
 import { gfmFromMarkdown, gfmToMarkdown } from 'mdast-util-gfm';
 import { toMarkdown } from 'mdast-util-to-markdown';
 
-export const PLANNER_MARKDOWN_SCHEMA_VERSION = 1 as const;
-
 export type PlannerMarkdownAst = ReturnType<typeof fromMarkdown>;
 
 export type MarkdownDiagnostic = {
