@@ -1,135 +1,171 @@
-# Planner AI Delivery Plan
+# Planner AI Delivery Roadmap
 
-Status: **execution authority.** [Status](status.md) records verified completion; [Product vision](product/vision.md) holds the longer-term direction.
+Status: **execution authority.** [Status](status.md) records verified facts. [Vision](product/vision.md) defines the destination. [Requirements](product/requirements.md) defines product behavior.
 
-## Goal
+The [build manual](build-manual.md) links all detailed GitHub tickets, dependencies, acceptance cases, and verification. GitHub owns ticket status; this roadmap owns delivery order.
 
-Ship one private, deployed Planner AI that its owner can use every day instead of Notion for personal notes and planning.
+## Goal Hierarchy
 
-The personal-dogfood release succeeds when the owner can:
+### Final Product
 
-1. sign in and reach one coherent, branded application;
-2. import a representative Notion export without silent loss;
-3. create, edit, organize, search, export, and restore Markdown notes;
-4. capture work, connect it to direction, plan Today and This Week, and complete a weekly review;
-5. use those workflows when AI is unavailable;
-6. recover the data from a verified backup.
+Planner AI is an AI-native personal operating system that combines:
 
-This is the current delivery goal. The long-term goal remains an AI-native personal operating system with databases, graph, canvas, collaboration, plugins, local-first storage, GenUI, and broad MCP control. Those capabilities do not belong on the critical path to personal dogfood.
+- Obsidian-style Markdown ownership, links, graph, canvas, offline use, and version-control friendliness;
+- Notion-style databases, views, visual customization, forms, dashboards, and collaboration;
+- a coherent Vision-to-Action planning system;
+- a click-first interface plus assistants and external agents that use the same governed Operations.
+
+This is the north star, not the current release scope.
+
+### Current Delivery Goal: Personal MVP
+
+Ship one private, deployed Planner AI that its owner can trust and use every day instead of Notion for personal notes and planning.
+
+The MVP is complete only when the owner can:
+
+1. sign in and use one coherent, branded application on desktop and mobile;
+2. import a representative Notion export with an item-level reconciliation report and no silent loss;
+3. create, edit, organize, search, link, export, and restore Markdown Notes;
+4. capture a thought, connect an Action to a Goal, plan Today and This Week, complete or defer work, and finish Weekly Review;
+5. ask the embedded assistant to perform the critical Note and Planner Operations with confirmation, evidence, Activity, and useful failure recovery;
+6. connect an authenticated external AI client through the approved narrow MCP surface;
+7. continue core work when AI is unavailable; and
+8. recover the product data from a verified backup.
+
+The MVP is for one owner. It is not yet an invite beta, team product, or public launch.
+
+Before declaring Notion replaced, complete [MVP-01](https://github.com/KalebBefekadu/planner-ai/issues/115): inventory the owner's actual workflows. If native databases, formulas, relations, files, or sharing are essential, create a bounded implementation or record an explicitly accepted workaround. CSV converted into Markdown is not equivalent to a working database. An unanswered inventory is an open gate, not an assumption that notes-only is sufficient.
+
+## Four Product States
+
+| State              | Meaning                                                                                                                 | Source of truth                | Rule                                               |
+| ------------------ | ----------------------------------------------------------------------------------------------------------------------- | ------------------------------ | -------------------------------------------------- |
+| **Real app today** | Authenticated canonical routes backed by actual data and Operations; completion is measured by verified workflow gates. | `web/` and [Status](status.md) | All new product behavior lands here.               |
+| **Personal MVP**   | The private Notion replacement and daily-planning finish line defined above.                                            | This roadmap                   | Current delivery target.                           |
+| **Preview app**    | Fixture-backed visual reference for accepted Workspace and Planner patterns.                                            | `/preview`                     | No new product behavior or separate design system. |
+| **Final product**  | The complete customizable, local-first, collaborative, agent-native operating system.                                   | [Vision](product/vision.md)    | Built only through gated post-MVP stages.          |
 
 ## Product Shape
 
-One authenticated application has two modes:
+The real authenticated application has two primary modes:
 
-- **Workspace:** documents, notes, captures, hierarchy, search, imports, and exports.
-- **Planner:** Today, This Week, Calendar, Goals and Horizons, Vision, and Review.
+- **Workspace:** Notes, captures, hierarchy, search, import, export, and knowledge connections.
+- **Planner:** Today, This Week, Calendar, Action Inbox, Goals and Horizons, Vision, and Review.
 
-Both modes share the Planner AI brand, global rail, workspace switcher, command/search entry, top bar, responsive rules, canonical data, and versioned Operations. AI is contextual inside both modes and cannot become a second product or data path.
+They share the Planner AI brand, global rail, contextual navigation, search/command entry, top bar, responsive system, canonical data, and versioned Operations. AI is contextual inside both modes and never becomes a second application or data path.
 
-`/preview` is frozen as a visual reference. It receives no new behavior and stays available until the real routes replace every accepted pattern.
+Onboarding is a dedicated pre-product flow. After completion or skip, the user enters the same real authenticated application.
 
-## Preview Convergence Strategy
+## Preview Policy
 
-Keep the **route separate temporarily**, but unify the **implementation immediately**.
+Keep `/preview` temporarily separate from authenticated routes, but do not maintain it as a second product.
 
-`/preview` currently contains fixture-backed screens. The authenticated product contains the real data, authorization, and Operations. Combining those files directly would make fixture assumptions part of production and slow every later change. Keeping two independent design systems would also keep creating drift.
+- Preview fixtures may satisfy shared typed view models, but they never write production data.
+- Reusable visual tokens and fixture-free components belong in shared production modules.
+- Each real feature ticket includes desktop and mobile comparison with its accepted Preview reference.
+- When a real screen reaches functional, visual, responsive, and accessibility parity, remove its superseded Preview implementation.
+- Delete `/preview` only after both Workspace and Planner pass their MVP workflow and parity gates.
 
-Use this migration pattern:
+The real app is always the eventual single source of truth.
 
-1. Capture desktop and mobile reference screenshots for each accepted Preview screen.
-2. Extract its tokens and reusable, data-agnostic components into the real shared design system.
-3. Define a typed view model for each screen family. Preview fixtures and authenticated loaders may both satisfy that contract, but only authenticated routes can mutate data.
-4. Build the authenticated route with shared components, real loading/error/empty states, and real Operations.
-5. Compare the real route with the reference at desktop and mobile widths; close functional, visual, responsive, and accessibility gaps.
-6. Mark that Preview screen superseded and remove its duplicate fixture implementation.
-7. Delete the `/preview` route only after Workspace and Planner both pass parity and workflow gates.
+## Delivery Sequence
 
-This gives us one visual source of truth without pretending the prototype is production. Preview becomes a temporary component showcase and visual test fixture, not a second application.
+### Stage 0: Foundation
 
-## Critical Path
+Status: **complete.** The canonical schema, RLS, versioned Operations, Activity, undo, recovery-aware workflows, automated quality gates, shared authenticated shell, and core product routes exist.
 
-### 1. Brand And Real Shell
+### Stage 1: Daily Planner Loop
 
-Deliver one reusable authenticated frame, not page-by-page styling.
+Status: **active.** Finish the smallest complete direction-to-action workflow using real data.
 
-- Inventory the Preview frame and map every accepted element to **reuse**, **rebuild**, or **discard**.
-- Lock the Planner AI mark, wordmark, voice, color, typography, spacing, icon, focus, and motion rules.
-- Extract shared, fixture-free components for the global rail, contextual sidebar, workspace switcher, command/search trigger, breadcrumb/top bar, assistant entry, and mobile navigation.
-- Apply the frame to Workspace, Planner, onboarding, import, and settings.
-- Remove old shell variants only after all real routes use the replacement.
+- Keep all daily routes inside Planner navigation.
+- Create or capture an Action directly, connect it to a Goal, and commit it to Today or This Week.
+- Complete, defer, replace, or mark blocked without losing schedule history.
+- Carry deliberate decisions into Weekly Review and Activity.
+- Match the accepted Preview hierarchy and responsive behavior without inventing fixture-only schedule data.
 
-**Done when:** Preview and authenticated routes use the same frame components, the authenticated desktop and mobile application matches the reference design language, and no real route uses the old shell.
+**Exit gate:** the owner completes the full loop through real UI and persisted Operations on desktop and mobile.
 
-### 2. Workspace And Notion Pilot
+### Stage 2: Notion Replacement Pilot
 
-Finish the smallest trustworthy Notion replacement.
+Status: **Notes/import foundations exist; workflow equivalence and owner-data pilot pending.**
 
-- Move real Notes into the new Workspace shell with favorites, hierarchy, search, and document navigation.
-- Complete the real document surface: Markdown editing, autosave state, title, icon, optional cover, properties, links, backlinks, voice capture, and recovery feedback.
-- Keep presentation metadata separate from Markdown and protect it with workspace authorization.
-- Add Notion preflight, dry-run reporting, item-level import results, duplicate handling, retry, and unsupported-content reporting.
-- Prove create, edit, search, export, re-import, and isolated restore on a representative sample.
+- Run preflight and dry-run on a representative Notion export.
+- Reconcile every imported, duplicate, skipped, and unsupported item.
+- Close blocking gaps in hierarchy, Markdown, links, properties, covers/icons, search, export, or restore.
+- Compare the real Workspace with accepted Preview references and remove superseded fixtures.
 
-**Done when:** the owner can safely move a small real Notion workspace into Planner AI and use it without `/preview` or AI.
+**Exit gate:** the owner can move a representative workspace into Planner AI, use it for daily Notes, export it, and restore it without silent loss.
 
-### 3. Daily Planner Loop
+The pilot requires owner data. Stage 1 work continues while that gate is waiting, but the MVP cannot close without it.
 
-Finish one complete direction-to-action workflow.
+### Stage 3: Core AI And MCP
 
-- Use Planner-only contextual navigation for Today, This Week, Calendar, Action Inbox, Review, Goals and Horizons, and Vision.
-- Build Today from real data: limited outcomes, planned time, schedule, completion, deferral, and a visible link to direction.
-- Connect Vision to yearly, quarterly, monthly, and weekly goals without duplicating objects for each view.
-- Complete capture, scheduling, weekly rollover, review, Activity, and undo.
-- Preserve input and useful error states during AI or network failure.
+Status: **foundations implemented; live certification pending.**
 
-**Done when:** the owner can capture an action, connect it to a goal, plan it, complete or defer it, and review the week entirely through the real UI.
+- Verify assistant parity for critical MVP Note, Capture, Action, Goal, Today, and Review Operations.
+- Preserve confirmation, evidence, undo, Activity, and input during provider failure.
+- Certify provider fallback, budgets, retention controls, and deterministic evaluations.
+- Verify authenticated MCP discovery, least-privilege read access, selected reversible writes, revocation, and compatibility with one supported external AI client.
 
-### 4. Private Deployment And Daily Use
+**Exit gate:** AI materially accelerates core workflows but is never required to complete them, and external access cannot exceed the same Operation permissions.
 
-Make the finished core safe enough to depend on.
+### Stage 4: Private Release
 
-- Apply the reviewed production migrations and deploy the canonical application privately.
-- Verify authentication, workspace isolation, Notes, import/export, Planner, backup, and restore in the deployed environment.
-- Run a staged migration: sample first, then a wider import only after reconciliation succeeds.
-- Dogfood the product for seven consecutive days and fix workflow-blocking defects before expanding scope.
+Status: **pending explicit production approval.**
 
-**Done when:** the deployed application completes all six goal outcomes and the owner can recover its data independently.
+- Apply reviewed pending migrations during a recorded maintenance window.
+- Deploy the canonical app behind private access.
+- Verify authentication, workspace isolation, Notes, import/export, Planner, assistant fallback, MCP revocation, backup, and restore in the deployed environment.
+- Establish monitoring, alerts, cron ownership, and off-machine backup custody.
 
-## After Personal Dogfood
+**Exit gate:** all eight MVP outcomes pass in the deployed environment with a documented rollback path.
 
-Only after the four critical-path stages pass:
+### Stage 5: Seven-Day Dogfood
 
-1. finish provider-independent AI, durable conversations, memory controls, evaluations, and graceful fallback;
-2. ship authenticated read-only MCP, then reviewed reversible writes;
-3. add typed databases and alternate views;
-4. add graph and canvas over real relationships;
-5. pursue stronger offline/local-first sync, collaboration, sharing, forms, portals, and plugins.
+Status: **pending private release.**
+
+- Use Planner AI as the primary personal Notes and planning system for seven consecutive days.
+- Record workflow failures as focused defects, not speculative feature expansion.
+- Fix every data-loss, access, recovery, or daily-workflow blocker.
+
+**Exit gate:** seven consecutive days complete with no known severity-one defect and no need to return to Notion for an MVP workflow. This is the personal MVP finish line.
+
+## After The Personal MVP
+
+1. **Invite beta:** custom domain and email, operational security review, accessibility evidence, malware scanning, provider/SLO evidence, and support readiness.
+2. **Structured workspace:** typed databases, relations, formulas, filters, and table/board/calendar/timeline/gallery views.
+3. **Knowledge tools:** graph, canvas, stronger backlinks, and visual composition.
+4. **Local ownership:** stronger offline-first behavior, filesystem/Markdown sync, conflict handling, and Git-friendly workflows.
+5. **Collaboration:** sharing, permissions, real-time editing, forms, portals, comments, and assignments.
+6. **Agent platform:** broader MCP, automations, integrations, sandboxed plugins, and carefully governed generative UI.
+
+Each capability must first exist as a user-facing, authorized Operation before an assistant or external agent may control it.
 
 ## Immediate Queue
 
-Only one ticket is active at a time:
+Only one Codex implementation ticket may be active:
 
-1. audit the current real shell against the two reference screens and identify the exact components and CSS systems to replace;
-2. extract brand tokens and fixture-free frame components that both Preview and authenticated routes can render;
-3. move Workspace and its real Notes workflow into that frame;
-4. complete the Notion pilot and recovery evidence;
-5. move the real Planner daily loop into the frame;
-6. deploy privately and begin seven-day dogfood.
+1. implement `PL-05`: create an Action directly from Today, optionally connect it to a real Goal, schedule it for today, and commit it to focus through existing Operations;
+2. run the Notion pilot as soon as representative owner data is available;
+3. certify critical embedded-assistant Operations and one external MCP client;
+4. close remaining Workspace and Planner Preview parity gaps;
+5. execute the approved private-release gate and begin seven-day dogfood.
 
-The active ticket is **1: real-shell audit**. The next code change must follow that audit; no isolated page polish precedes it.
+Completed convergence work through PR #111 includes the shared shell, Notes-owned tree, focused Note inspector, persistent import report, Planner-scoped Today and Action Inbox, outcome-focused Today hierarchy, and real Goal direction band.
 
-## Definition Of Done
+## Ticket Definition Of Done
 
-A ticket is complete only when it has real data and Operations, authorization, loading/empty/error states, preserved input on failure, keyboard access, desktop and mobile review, and focused automated coverage. A delivery stage also requires its full affected browser journeys and production-build visual checks.
+A ticket is complete only when it uses real data and Operations, enforces authorization, covers loading/empty/error states, preserves input on failure, supports keyboard use, passes desktop and mobile review, and has focused automated coverage. Broad browser and production-build checks run at stage gates or when shared contracts change.
 
-## Speed And Token Rules
+## Delivery Discipline
 
-- Keep this file as the only execution sequence; do not create parallel plans.
-- Keep [status.md](status.md) factual; update it only after evidence changes.
-- Use TokenSave and targeted code reads before broad repository scans.
-- Batch design-system changes by component family instead of making isolated CSS edits.
-- Run formatting, types, and focused tests during a ticket; run broad suites at stage gates or when shared contracts change.
-- Do not repeat product research unless a specific unresolved decision blocks implementation.
-- Do not work in `/preview`, Graph, Canvas, databases, collaboration, plugins, or broad MCP while a critical-path ticket remains.
-- Preview may change only when extracting shared components or removing a screen already replaced by a real route.
-- Report only decisions, changed behavior, verification, and blockers.
+- Keep this file as the only execution sequence and [Status](status.md) as the factual snapshot.
+- Use the linked GitHub issues for detailed scope and evidence; do not duplicate their live checkbox status in local documents.
+- Keep one Codex implementation ticket and at most one non-overlapping external audit active.
+- Use TokenSave and targeted reads before broad scans.
+- Batch shared design changes by component family.
+- Do not repeat product research unless an unresolved decision blocks implementation.
+- Do not build deferred frontier scope while a personal-MVP gate remains open.
+- Do not modify production data, credentials, billing, or deployment settings without explicit approval.
+- Report decisions, changed behavior, verification, and blockers rather than activity narration.

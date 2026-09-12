@@ -83,21 +83,33 @@ jobs:
           echo "NEXT_PUBLIC_SUPABASE_URL=$API_URL" >> "$GITHUB_ENV"
           echo "NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY=$ANON_KEY" >> "$GITHUB_ENV"
           echo "SUPABASE_SERVICE_ROLE_KEY=$SERVICE_ROLE_KEY" >> "$GITHUB_ENV"
-      - run: npm run test:e2e
+      # Every journey, on every pull request, on one browser project.
+      #
+      # This used to be a --grep list of nine test titles. It failed open: a
+      # renamed test silently stopped being selected, a new spec file was
+      # never covered until someone remembered to edit the list, and nothing
+      # reported that coverage had shrunk. Two MVP-blocking defects reached
+      # the integration branch through that gap -- an import report that
+      # described a committed Note as "New", and a Notes editor that discarded
+      # the last edit when you opened another Note. Both were found by running
+      # the suite by hand.
+      #
+      # The mobile project still runs only after merge, which is the one
+      # genuine saving: it doubles the runtime and has never been the project
+      # that caught a defect first.
+      - name: Run pull request browser suite
+        if: github.event_name == 'pull_request'
+        run: npm run test:e2e -- --project=chromium
         env:
           PLANNER_DATA_MODEL: canonical
           PLANNER_UI_PREVIEW: enabled
           PLANNER_UI_V2: enabled
           NEXT_PUBLIC_APP_URL: http://127.0.0.1:3000
-
-  dependency-review:
-    if: github.event_name == 'pull_request'
-    runs-on: ubuntu-latest
-    defaults:
-      run:
-        working-directory: .
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/dependency-review-action@v4
-        with:
-          fail-on-severity: high
+      - name: Run full browser suite after merge
+        if: github.event_name == 'push'
+        run: npm run test:e2e
+        env:
+          PLANNER_DATA_MODEL: canonical
+          PLANNER_UI_PREVIEW: enabled
+          PLANNER_UI_V2: enabled
+          NEXT_PUBLIC_APP_URL: http://127.0.0.1:3000

@@ -35,6 +35,8 @@ const HUMAN_ONLY: Partial<Record<OperationId, string>> = {
   'trash.empty.v1': 'Permanent deletion has no undo, so it stays a human action.',
   'account.deletion.schedule.v1': 'Account deletion is never delegated.',
   'account.deletion.cancel.v1': 'Account deletion is never delegated.',
+  'note.import-cancel.v1':
+    'Deciding not to import a workspace is the owner saying no, which is not a decision to delegate.',
   'conversation.delete.v1': 'Deleting history removes the record of what an agent did.',
   'note.import-preview.v1': 'Bulk import reads the filesystem and is driven from the UI.',
   'note.import-commit.v1': 'Bulk import writes many records at once from a human-supplied file.',
@@ -42,6 +44,8 @@ const HUMAN_ONLY: Partial<Record<OperationId, string>> = {
   'review.complete-period.v1': 'A review is the user reflecting; an agent cannot do it for them.',
   'workspace.preferences.v1': 'Preferences describe how the user wants to be treated.',
   'workspace.onboarding-complete.v1': 'Onboarding completes when the person says it has.',
+  'note.appearance.v1':
+    'How a page looks is a preference about the owner workspace, like workspace.preferences.v1; an agent asked to tidy up must not restyle pages.',
 };
 
 describe('human and agent parity', () => {

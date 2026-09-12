@@ -19,6 +19,7 @@
     "test:ai:live": "node --env-file-if-exists=.env.local ./node_modules/vitest/vitest.mjs run --config vitest.live.config.ts",
     "test:watch": "vitest",
     "test:e2e": "playwright test",
+    "test:e2e:smoke": "playwright test tests/e2e/auth-boundary.spec.ts tests/e2e/keyboard-navigation.spec.ts tests/e2e/security-headers.spec.ts tests/e2e/journey-today.spec.ts --project=chromium",
     "test:db": "supabase test db",
     "types:generate": "supabase gen types typescript --local --schema public > src/types/supabase.generated.ts",
     "backup:production-db": "./scripts/backup-production-db.sh",
@@ -47,7 +48,7 @@
     "mdast-util-to-markdown": "2.1.2",
     "micromark-extension-frontmatter": "2.0.0",
     "micromark-extension-gfm": "3.0.0",
-    "next": "16.3.1",
+    "next": "16.3.4",
     "openai": "7.5.0",
     "react": "19.2.4",
     "react-dom": "19.2.4",
@@ -60,16 +61,19 @@
   "devDependencies": {
     "@axe-core/playwright": "^4.13.0",
     "@playwright/test": "1.58.2",
+    "@testing-library/jest-dom": "^7.0.1",
+    "@testing-library/react": "^16.3.3",
     "@types/node": "^20",
     "@types/react": "^19",
     "@types/react-dom": "^19",
     "@types/yauzl": "^3.4.0",
     "eslint": "^9",
     "eslint-config-next": "16.2.10",
+    "jsdom": "^30.0.1",
     "prettier": "3.8.1",
     "supabase": "2.114.0",
     "typescript": "^5",
-    "vitest": "4.1.10"
+    "vitest": "4.1.11"
   },
   "overrides": {
     "fast-uri": "3.1.7",

@@ -69,6 +69,35 @@ The drill validates the encrypted archive checksum when present, decrypts only t
 
 If validation fails, stop writes, return the deployment to `PLANNER_DATA_MODEL=legacy`, preserve database and application logs, and restore the preflight backup into a separate recovery project first. Do not overwrite the failed database until the recovery copy passes counts, RLS checks, and authenticated smoke tests.
 
+## Application Rollback
+
+The section above rolls back the database. Rolling back the _application_ is a separate action, and until 2026-09-10 it was not written down anywhere -- which meant the fastest recovery step was the one nobody could look up.
+
+Vercel keeps every previous production deployment addressable. Reverting is promoting one of them, not rebuilding:
+
+```bash
+# From the repository root of a checkout linked to the project.
+npx vercel ls planner-ai --prod        # the previous Ready deployment and its age
+npx vercel promote <deployment-url>    # repoint the production alias at it
+```
+
+Promotion is near-instant and changes no code, so it is the correct first move when a release is bad and the cause is not yet known. Diagnose afterwards.
+
+**The order matters, and it is not the same in both directions.**
+
+- Rolling _forward_, apply migrations first and deploy second. Every migration this project ships is additive, so the running application simply does not use the new columns yet.
+- Rolling _back_, promote the old deployment first and leave the database alone. A migration is not undone by reverting the application, and an older build against a newer schema is safe precisely because the schema only ever grew. Reverting the schema to match the application is the dangerous direction: it drops columns that rows now depend on.
+
+Only roll a migration back when the migration itself is the fault, and then restore from the pre-migration backup into a recovery project rather than reversing it in place.
+
+**What to check after promoting**, in this order, because each answers a different question:
+
+1. `npx vercel logs <deployment-url>` while requesting the failing route. A production build strips the message off a Server Component error and leaves only a digest, so the browser cannot tell you the cause and the runtime log can.
+2. Sign in and open one page that reads data. A rendering shell proves the deployment; only a real read proves it can reach the database.
+3. Confirm `lifecycle_job_runs` still records worker runs. A promotion changes which build the crons hit.
+
+**Known divergence, 2026-09-10.** The deployment that first served this application to its owner did not follow the guarded release path in this runbook. Backups were taken with `supabase db dump` rather than `npm run backup:production-db`, so they are unencrypted and on one machine; migrations were applied with `supabase db push` rather than the preflight script; and the deploy ran `vercel --prod` from a worktree rather than from a reviewed release commit. It was verified afterwards -- rehearsed migration against a restored copy, thirteen routes, a capture round trip -- but rehearsal after the fact is not the same as the gate, and off-machine backup custody is still unproven. Recorded here rather than in a commit message because the next person to deploy will read this file and not that commit.
+
 ## Incident Response
 
 | Severity | Definition                                                                               | Initial action                                                                                           |
@@ -101,13 +130,13 @@ Quarterly and before beta, restore the latest Postgres backup and private Storag
 
 ## Evidence Log
 
-| Evidence                                 | State   | Last result                                                                                                                                                                                                   |
-| ---------------------------------------- | ------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Remote database backup and restore       | Partial | Encrypted logical backup and local isolated Supabase restore passed again on 2026-09-07: 55 public tables, all 55 with RLS, and 128 public functions; off-machine custody and hosted recovery-project drill remain open |
-| Private Storage backup and restore       | Pending | Private attachment intake, recovery window, and purge path exist; production backup custody and a restore drill remain open                                                        |
+| Evidence                                 | State   | Last result                                                                                                                                                                                                                                                                                                   |
+| ---------------------------------------- | ------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Remote database backup and restore       | Partial | Encrypted logical backup and local isolated Supabase restore passed again on 2026-09-07: 55 public tables, all 55 with RLS, and 128 public functions; off-machine custody and hosted recovery-project drill remain open                                                                                       |
+| Private Storage backup and restore       | Pending | Private attachment intake, recovery window, and purge path exist; production backup custody and a restore drill remain open                                                                                                                                                                                   |
 | Canonical migrations and pgTAP           | Partial | Migration history and guarded preflight remain aligned through `20260906114500`; fresh backup and local pgTAP pass, while three later local Notes-vault migrations and the local MCP manual-token authentication repair await a recorded cutover window and deployed canonical journeys remain to be verified |
-| Vercel application release               | Partial | Commit `1d570e4` built successfully; the team-scoped production alias is behind Vercel Authentication and `planner-ai.vercel.app` still resolves to the unrelated legacy Telegram-bot site                  |
-| Authenticated canonical browser journeys | Pending | Requires canonical test environment                                                                                                                                                                           |
-| Provider outage drill                    | Pending | Deterministic degradation tests pass                                                                                                                                                                          |
-| Independent security review              | Pending | Reviewer not assigned                                                                                                                                                                                         |
-| Production alerts and schedules          | Pending | Infrastructure not connected                                                                                                                                                                                  |
+| Vercel application release               | Partial | Commit `1d570e4` built successfully; the team-scoped production alias is behind Vercel Authentication and `planner-ai.vercel.app` still resolves to the unrelated legacy Telegram-bot site                                                                                                                    |
+| Authenticated canonical browser journeys | Pending | Requires canonical test environment                                                                                                                                                                                                                                                                           |
+| Provider outage drill                    | Pending | Deterministic degradation tests pass                                                                                                                                                                                                                                                                          |
+| Independent security review              | Pending | Reviewer not assigned                                                                                                                                                                                                                                                                                         |
+| Production alerts and schedules          | Pending | Infrastructure not connected                                                                                                                                                                                                                                                                                  |

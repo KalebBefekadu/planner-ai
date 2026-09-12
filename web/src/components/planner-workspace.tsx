@@ -2,6 +2,7 @@
 
 import { useState, useTransition } from 'react';
 import Link from 'next/link';
+import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import {
   Archive,
   CalendarDays,
@@ -40,11 +41,20 @@ import {
 } from '@/app/actions';
 import { actionFailureMessage } from '@/lib/operations/failure-message';
 import { MeasuredFill } from '@/components/measured-fill';
+import { overlapsPeriod, type HorizonKind } from '@/lib/planning-period';
 
 type ComposerTarget = { type: GoalType; parentId: string; label: string } | null;
 type GoalItem = GoalView;
 type EditTarget = { type: GoalType; item: GoalItem } | null;
 type HorizonFilter = 'all' | GoalType;
+type PeriodFilter = 'current' | 'all';
+
+const horizonKinds: Record<GoalType, HorizonKind> = {
+  yearly: 'year',
+  quarterly: 'quarter',
+  monthly: 'month',
+  weekly: 'week',
+};
 
 const labels: Record<GoalType, string> = {
   yearly: 'Yearly goal',
@@ -57,6 +67,28 @@ const childTypes: Partial<Record<GoalType, GoalType>> = {
   quarterly: 'monthly',
   monthly: 'weekly',
 };
+
+function readableRange(bounds: { startsOn: string; endsOn: string }) {
+  const format = (value: string) =>
+    new Intl.DateTimeFormat('en-US', {
+      month: 'short',
+      day: 'numeric',
+      timeZone: 'UTC',
+    }).format(new Date(`${value}T12:00:00Z`));
+  return `${format(bounds.startsOn)} - ${format(bounds.endsOn)}`;
+}
+
+function periodRangeLabel(
+  horizon: HorizonFilter,
+  periods: Record<HorizonKind, { startsOn: string; endsOn: string }>
+) {
+  if (horizon === 'all') {
+    // With every horizon shown, each row is scoped to its own period, so
+    // naming one range would be wrong for three quarters of the list.
+    return 'Each horizon scoped to its current period';
+  }
+  return readableRange(periods[horizonKinds[horizon]]);
+}
 
 function messageFor(error: unknown) {
   return actionFailureMessage(error, 'Something went wrong. Please try again.');
@@ -75,8 +107,40 @@ export function PlannerWorkspace({
   const [templateEditor, setTemplateEditor] = useState<ActionTemplateView | 'new' | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [horizonFilter, setHorizonFilter] = useState<HorizonFilter>('all');
   const [isPending, startTransition] = useTransition();
+
+  // The two filters live in the URL rather than in component state so a
+  // filtered plan can be bookmarked, shared and reached with browser back and
+  // forward. A filter that only exists in memory silently resets on every
+  // reload, which reads as the plan having changed.
+  const router = useRouter();
+  const pathname = usePathname();
+  const searchParams = useSearchParams();
+  const horizonParam = searchParams.get('horizon');
+  const horizonFilter: HorizonFilter =
+    horizonParam === 'yearly' ||
+    horizonParam === 'quarterly' ||
+    horizonParam === 'monthly' ||
+    horizonParam === 'weekly'
+      ? horizonParam
+      : 'all';
+  // Current period is the default: "This week" that shows every week ever
+  // planned is not a week view, it is a list with a misleading name.
+  const periodFilter: PeriodFilter = searchParams.get('period') === 'all' ? 'all' : 'current';
+
+  function setFilters(next: { horizon?: HorizonFilter; period?: PeriodFilter }) {
+    const params = new URLSearchParams(searchParams.toString());
+    const horizon = next.horizon ?? horizonFilter;
+    const period = next.period ?? periodFilter;
+    if (horizon === 'all') params.delete('horizon');
+    else params.set('horizon', horizon);
+    if (period === 'current') params.delete('period');
+    else params.set('period', period);
+    const query = params.toString();
+    // push, not replace: the ticket asks for browser back and forward to move
+    // between chosen periods, and replace leaves no entry to go back to.
+    router.push(query ? `${pathname}?${query}` : pathname, { scroll: false });
+  }
 
   function openComposer(type: GoalType, parentId: string) {
     setComposer({ type, parentId, label: labels[type] });
@@ -276,7 +340,33 @@ export function PlannerWorkspace({
     );
   }
 
-  const { vision, yearly, quarterly, monthly, weekly } = initialData;
+  const { vision, currentPeriods } = initialData;
+
+  // Filtering by period keeps the items whose horizon overlaps the period the
+  // person is actually in. Anything without a horizon -- legacy rows, and work
+  // that was never given a period -- stays visible in every view rather than
+  // disappearing into a filter it can never satisfy.
+  const inCurrentPeriod = (item: GoalItem, type: GoalType) => {
+    if (periodFilter === 'all') return true;
+    if (!item.horizon_starts_on || !item.horizon_ends_on) return true;
+    return overlapsPeriod(
+      { startsOn: item.horizon_starts_on, endsOn: item.horizon_ends_on },
+      currentPeriods[horizonKinds[type]]
+    );
+  };
+  const scope = (items: GoalItem[], type: GoalType) =>
+    items.filter((item) => inCurrentPeriod(item, type));
+
+  const yearly = scope(initialData.yearly, 'yearly');
+  const quarterly = scope(initialData.quarterly, 'quarterly');
+  const monthly = scope(initialData.monthly, 'monthly');
+  const weekly = scope(initialData.weekly, 'weekly');
+  const hiddenByPeriod =
+    initialData.yearly.length +
+    initialData.quarterly.length +
+    initialData.monthly.length +
+    initialData.weekly.length -
+    (yearly.length + quarterly.length + monthly.length + weekly.length);
   const goalItems = [...yearly, ...quarterly];
   const actionItems = [...monthly, ...weekly];
   const completedItems = [...goalItems, ...actionItems].filter(
@@ -417,6 +507,47 @@ export function PlannerWorkspace({
         </div>
       </header>
 
+      <div className="planner-period-bar">
+        <div className="planner-period-choice" role="group" aria-label="Filter plan by period">
+          <button
+            type="button"
+            aria-pressed={periodFilter === 'current'}
+            className={periodFilter === 'current' ? 'planner-horizon-active' : undefined}
+            onClick={() => setFilters({ period: 'current' })}
+          >
+            This period
+          </button>
+          <button
+            type="button"
+            aria-pressed={periodFilter === 'all'}
+            className={periodFilter === 'all' ? 'planner-horizon-active' : undefined}
+            onClick={() => setFilters({ period: 'all' })}
+          >
+            All time
+          </button>
+        </div>
+        <p className="planner-period-range">
+          {periodFilter === 'current'
+            ? periodRangeLabel(horizonFilter, currentPeriods)
+            : 'Every period on record'}
+        </p>
+      </div>
+
+      {periodFilter === 'current' && hiddenByPeriod > 0 ? (
+        // Work outside the period is filtered, never hidden: the count says
+        // how much, and one control brings all of it back.
+        <p className="planner-period-hidden">
+          {hiddenByPeriod} {hiddenByPeriod === 1 ? 'item is' : 'items are'} outside this period.{' '}
+          <button
+            type="button"
+            className="link-button"
+            onClick={() => setFilters({ period: 'all' })}
+          >
+            Show all time
+          </button>
+        </p>
+      ) : null}
+
       <nav className="planner-horizon-tabs" aria-label="Filter plan by horizon">
         {horizonOptions.map((option) => (
           <button
@@ -424,7 +555,7 @@ export function PlannerWorkspace({
             type="button"
             aria-pressed={horizonFilter === option.id}
             className={horizonFilter === option.id ? 'planner-horizon-active' : undefined}
-            onClick={() => setHorizonFilter(option.id)}
+            onClick={() => setFilters({ horizon: option.id })}
           >
             <span>{option.label}</span>
             <small>{option.count}</small>

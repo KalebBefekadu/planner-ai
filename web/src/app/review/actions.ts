@@ -1,10 +1,11 @@
 'use server';
 
-import { randomUUID } from 'node:crypto';
-import { revalidatePath } from 'next/cache';
+import { revalidatePlannerAndRecords } from '@/lib/planner-revalidation';
+import { periodBounds } from '@/lib/planning-period';
+import { ReviewIntentError, reviewCompletionKey } from '@/lib/reviews/completion-intent';
 import type { CoachingIntensity } from '@/lib/coaching';
 import { dateInTimezone } from '@/lib/date';
-import { executeOperation } from '@/lib/operations';
+import { executeOperation, OperationFailure } from '@/lib/operations';
 import { currentLongReviewPeriod, type LongReviewPeriod } from '@/lib/reviews/periods';
 import { parsePersistedReviewProposal, type ResolvedReviewProposal } from '@/lib/review-proposals';
 import { createClient } from '@/lib/supabase/server';
@@ -122,16 +123,12 @@ function ensureCanonical() {
   }
 }
 
-function currentWeek(timezone: string) {
-  const localDate = new Date(`${dateInTimezone(timezone)}T00:00:00Z`);
-  const day = localDate.getUTCDay();
-  localDate.setUTCDate(localDate.getUTCDate() + (day === 0 ? -6 : 1 - day));
-  const end = new Date(localDate);
-  end.setUTCDate(end.getUTCDate() + 6);
-  return {
-    startsOn: localDate.toISOString().slice(0, 10),
-    endsOn: end.toISOString().slice(0, 10),
-  };
+// The week under review is the person's week, not a hard-coded Monday one.
+// week_starts_on is a stored, editable preference, and reviewing the wrong
+// seven days is not a cosmetic error: it decides which unfinished work the
+// person is asked to resolve.
+function currentWeek(timezone: string, weekStartsOn: number) {
+  return periodBounds('week', dateInTimezone(timezone), weekStartsOn);
 }
 
 async function reviewClient() {
@@ -143,7 +140,7 @@ async function reviewClient() {
   if (!user) throw new Error('Please sign in to continue.');
   const { data: workspace, error } = await supabase
     .from('workspaces')
-    .select('id,timezone,coaching_intensity')
+    .select('id,timezone,week_starts_on,coaching_intensity')
     .eq('owner_user_id', user.id)
     .single();
   if (error || !workspace) throw new Error('Unable to load your workspace.');
@@ -151,63 +148,93 @@ async function reviewClient() {
     supabase,
     workspaceId: workspace.id as string,
     timezone: workspace.timezone as string,
+    weekStartsOn: Number(workspace.week_starts_on),
     coachingIntensity: workspace.coaching_intensity as CoachingIntensity,
   };
 }
 
 export async function getWeeklyReviewData(): Promise<WeeklyReviewData> {
-  const { supabase, workspaceId, timezone, coachingIntensity } = await reviewClient();
-  const { startsOn, endsOn } = currentWeek(timezone);
-  const [actionsResult, reviewsResult, proposalResult, jobResult] = await Promise.all([
-    supabase
-      .from('actions')
-      .select(
-        'id,title,status,version,scheduled_on,planning_horizons!inner(kind,starts_on),goals(title)'
-      )
-      .eq('workspace_id', workspaceId)
-      .eq('planning_horizons.kind', 'week')
-      .lte('planning_horizons.starts_on', endsOn)
-      .in('status', ['open', 'in_progress', 'blocked'])
-      .is('archived_at', null)
-      .is('trashed_at', null)
-      .order('scheduled_on'),
-    supabase
-      .from('reviews')
-      .select('id,completed_at,reflection_markdown,review_action_items(priority)')
-      .eq('workspace_id', workspaceId)
-      .eq('kind', 'weekly')
-      .eq('status', 'completed')
-      .order('completed_at', { ascending: false })
-      .limit(8),
-    supabase
-      .from('review_ai_proposals')
-      .select('id,payload,model_id,prompt_version,created_at')
-      .eq('workspace_id', workspaceId)
-      .eq('kind', 'weekly')
-      .eq('starts_on', startsOn)
-      .eq('status', 'active')
-      .order('created_at', { ascending: false })
-      .limit(1)
-      .maybeSingle(),
-    supabase
-      .from('ai_jobs')
-      .select('id,status,error_code,created_at')
-      .eq('operation', 'review_analysis')
-      .eq('source_review_kind', 'weekly')
-      .eq('source_starts_on', startsOn)
-      .order('created_at', { ascending: false })
-      .limit(1)
-      .maybeSingle(),
-  ]);
-  if (actionsResult.error || reviewsResult.error || proposalResult.error || jobResult.error) {
+  const { supabase, workspaceId, timezone, weekStartsOn, coachingIntensity } = await reviewClient();
+  const { startsOn, endsOn } = currentWeek(timezone, weekStartsOn);
+  const unfinished =
+    'id,title,status,version,scheduled_on,planning_horizons!inner(kind,starts_on),goals(title)';
+  const [weekHorizonResult, scheduledIntoWeekResult, reviewsResult, proposalResult, jobResult] =
+    await Promise.all([
+      supabase
+        .from('actions')
+        .select(unfinished)
+        .eq('workspace_id', workspaceId)
+        .eq('planning_horizons.kind', 'week')
+        .lte('planning_horizons.starts_on', endsOn)
+        .in('status', ['open', 'in_progress', 'blocked'])
+        .is('archived_at', null)
+        .is('trashed_at', null)
+        .order('scheduled_on'),
+      // Work planned at a longer horizon and scheduled into these seven days
+      // is unfinished work of this week. This list and the Operation's own
+      // eligibility rule have to agree exactly -- the Operation rejects a
+      // decision set that is missing an eligible Action or names an
+      // ineligible one -- so the two predicates are deliberately identical.
+      supabase
+        .from('actions')
+        .select(unfinished)
+        .eq('workspace_id', workspaceId)
+        .neq('planning_horizons.kind', 'week')
+        .gte('scheduled_on', startsOn)
+        .lte('scheduled_on', endsOn)
+        .in('status', ['open', 'in_progress', 'blocked'])
+        .is('archived_at', null)
+        .is('trashed_at', null)
+        .order('scheduled_on'),
+      supabase
+        .from('reviews')
+        .select('id,completed_at,reflection_markdown,review_action_items(priority)')
+        .eq('workspace_id', workspaceId)
+        .eq('kind', 'weekly')
+        .eq('status', 'completed')
+        .order('completed_at', { ascending: false })
+        .limit(8),
+      supabase
+        .from('review_ai_proposals')
+        .select('id,payload,model_id,prompt_version,created_at')
+        .eq('workspace_id', workspaceId)
+        .eq('kind', 'weekly')
+        .eq('starts_on', startsOn)
+        .eq('status', 'active')
+        .order('created_at', { ascending: false })
+        .limit(1)
+        .maybeSingle(),
+      supabase
+        .from('ai_jobs')
+        .select('id,status,error_code,created_at')
+        .eq('operation', 'review_analysis')
+        .eq('source_review_kind', 'weekly')
+        .eq('source_starts_on', startsOn)
+        .order('created_at', { ascending: false })
+        .limit(1)
+        .maybeSingle(),
+    ]);
+  if (
+    weekHorizonResult.error ||
+    scheduledIntoWeekResult.error ||
+    reviewsResult.error ||
+    proposalResult.error ||
+    jobResult.error
+  ) {
     throw new Error('Unable to load Weekly Review.');
   }
+  // Two reads, one list. An Action can only be asked about once, and a
+  // duplicate decision is rejected by the Operation as duplicate_review_action.
+  const actionRows = [
+    ...(weekHorizonResult.data ?? []),
+    ...(scheduledIntoWeekResult.data ?? []),
+  ].filter((row, index, rows) => rows.findIndex((other) => other.id === row.id) === index);
   return {
     startsOn,
     endsOn,
     timezone,
     coachingIntensity,
-    actions: (actionsResult.data ?? []).map((action) => {
+    actions: actionRows.map((action) => {
       const horizon = action.planning_horizons as unknown as { starts_on: string };
       const goal = action.goals as unknown as { title: string } | null;
       return {
@@ -240,16 +267,27 @@ export async function completeWeeklyReview(input: {
   endsOn: string;
   reflectionMarkdown: string;
   decisions: WeeklyReviewDecision[];
+  /** Identifies one submission, so a transport retry replays it. */
+  intentId: string;
 }) {
   const { supabase } = await reviewClient();
-  const result = await executeOperation(supabase, 'review.complete-weekly.v1', input, {
-    idempotencyKey: randomUUID(),
+  const { intentId, ...operationInput } = input;
+  let idempotencyKey: string;
+  try {
+    idempotencyKey = reviewCompletionKey('weekly', input.startsOn, intentId);
+  } catch (error) {
+    throw new OperationFailure(
+      'invalid_review_intent',
+      error instanceof ReviewIntentError
+        ? error.message
+        : 'This review cannot be submitted safely. Reload and try again.'
+    );
+  }
+  const result = await executeOperation(supabase, 'review.complete-weekly.v1', operationInput, {
+    idempotencyKey,
     surface: 'ui',
   });
-  revalidatePath('/');
-  revalidatePath('/planner');
-  revalidatePath('/review');
-  revalidatePath('/activity');
+  revalidatePlannerAndRecords();
   return result;
 }
 
@@ -372,13 +410,26 @@ export async function completePeriodReview(input: {
   startsOn: string;
   endsOn: string;
   reflectionMarkdown: string;
+  /** Identifies one submission, so a transport retry replays it. */
+  intentId: string;
 }) {
   const { supabase } = await reviewClient();
-  const result = await executeOperation(supabase, 'review.complete-period.v1', input, {
-    idempotencyKey: randomUUID(),
+  const { intentId, ...operationInput } = input;
+  let idempotencyKey: string;
+  try {
+    idempotencyKey = reviewCompletionKey(input.kind, input.startsOn, intentId);
+  } catch (error) {
+    throw new OperationFailure(
+      'invalid_review_intent',
+      error instanceof ReviewIntentError
+        ? error.message
+        : 'This review cannot be submitted safely. Reload and try again.'
+    );
+  }
+  const result = await executeOperation(supabase, 'review.complete-period.v1', operationInput, {
+    idempotencyKey,
     surface: 'ui',
   });
-  revalidatePath('/review');
-  revalidatePath('/activity');
+  revalidatePlannerAndRecords();
   return result;
 }

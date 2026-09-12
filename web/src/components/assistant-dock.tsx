@@ -20,6 +20,7 @@ import type { AssistantEvidence, ResolvedAssistantClaim } from '@/lib/assistant/
 import { GenUiRenderer } from '@/components/genui-renderer';
 import { parseGenUiSpec, type GenUiParseResult } from '@/lib/genui/schema';
 import { actionFailureMessage } from '@/lib/operations/failure-message';
+import { isPermanentAssistantFailure } from '@/lib/ai/proposal-failures';
 
 type Message = {
   id?: string;
@@ -52,6 +53,7 @@ type AssistantResponse = {
   undoableReceiptId?: string | null;
   conversationClosed?: boolean;
   error?: string;
+  code?: string;
 };
 type ConversationResponse = {
   conversations?: Conversation[];
@@ -123,14 +125,21 @@ export function AssistantDock({ className }: { className?: string }) {
     });
   }, [loadConversationIndex, pathname, selectConversation]);
 
-  async function callAssistant(options: {
-    message?: string;
-    approvedProposalId?: string;
-    dismissedProposalId?: string;
-    undoReceiptId?: string;
-  }) {
+  // `restoreOnFailure` puts back whatever the caller optimistically cleared
+  // before the request. A provider outage should cost a retry, never the thing
+  // the person was about to act on.
+  async function callAssistant(
+    options: {
+      message?: string;
+      approvedProposalId?: string;
+      dismissedProposalId?: string;
+      undoReceiptId?: string;
+    },
+    restoreOnFailure?: (failure: { permanent: boolean }) => void
+  ) {
     setPending(true);
     setError(null);
+    let failureCode: string | null = null;
     try {
       const selectedNoteId =
         pathname === '/notes' ? new URLSearchParams(window.location.search).get('note') : null;
@@ -159,7 +168,10 @@ export function AssistantDock({ className }: { className?: string }) {
         }),
       });
       const data = (await response.json()) as AssistantResponse;
-      if (!response.ok && response.status !== 409) {
+      // A 409 that carries a reply is the legacy data model politely declining
+      // to act; a 409 with only an error is a real failure and must be shown.
+      if (!response.ok && !data.reply) {
+        failureCode = data.code ?? null;
         throw new Error(data.error ?? 'Planner AI could not respond.');
       }
       if (data.reply) {
@@ -190,6 +202,7 @@ export function AssistantDock({ className }: { className?: string }) {
     } catch (caught) {
       setError(actionFailureMessage(caught, 'Planner AI could not respond.'));
       if (options.message) setFailedMessage(options.message);
+      restoreOnFailure?.({ permanent: isPermanentAssistantFailure(failureCode) });
     } finally {
       setPending(false);
     }
@@ -207,23 +220,32 @@ export function AssistantDock({ className }: { className?: string }) {
 
   function approveProposal() {
     if (!proposal || pending) return;
-    const proposalId = proposal.id;
+    const actedOn = proposal;
     setProposal(null);
-    void callAssistant({ approvedProposalId: proposalId });
+    // Putting the card back is what makes a retry possible, but a Proposal the
+    // server has already spent can never be approved, and offering it again is
+    // the approval loop this ticket set out to end.
+    void callAssistant({ approvedProposalId: actedOn.id }, ({ permanent }) => {
+      if (!permanent) setProposal(actedOn);
+    });
   }
 
   function dismissProposal() {
     if (!proposal || pending) return;
-    const proposalId = proposal.id;
+    const actedOn = proposal;
     setProposal(null);
-    void callAssistant({ dismissedProposalId: proposalId });
+    void callAssistant({ dismissedProposalId: actedOn.id }, ({ permanent }) => {
+      if (!permanent) setProposal(actedOn);
+    });
   }
 
   function undoLastOperation() {
     if (!undoableReceiptId || pending) return;
     const receiptId = undoableReceiptId;
     setUndoableReceiptId(null);
-    void callAssistant({ undoReceiptId: receiptId });
+    void callAssistant({ undoReceiptId: receiptId }, ({ permanent }) => {
+      if (!permanent) setUndoableReceiptId(receiptId);
+    });
   }
 
   return (
@@ -369,10 +391,17 @@ export function AssistantDock({ className }: { className?: string }) {
                   <span>{proposal.risk} risk</span>
                 </div>
                 <div>
+                  {/* Disabled while a decision is in flight, for the same
+                      reason Undo already is. Both handlers ignore a second
+                      click, but a control that still looks pressable invites
+                      one at the moment a person most wants to know whether
+                      their decision landed. */}
                   <button
                     className="btn-secondary button-with-icon"
                     type="button"
+                    disabled={pending}
                     onClick={dismissProposal}
+                    aria-busy={pending}
                   >
                     <X size={15} />
                     Dismiss
@@ -380,10 +409,12 @@ export function AssistantDock({ className }: { className?: string }) {
                   <button
                     className="btn-primary button-with-icon"
                     type="button"
+                    disabled={pending}
                     onClick={approveProposal}
+                    aria-busy={pending}
                   >
                     <Check size={15} />
-                    Approve
+                    {pending ? 'Approving…' : 'Approve'}
                   </button>
                 </div>
               </section>
@@ -396,8 +427,9 @@ export function AssistantDock({ className }: { className?: string }) {
                   type="button"
                   onClick={undoLastOperation}
                   disabled={pending}
+                  aria-busy={pending}
                 >
-                  <RotateCcw size={14} /> Undo
+                  <RotateCcw size={14} /> {pending ? 'Undoing…' : 'Undo'}
                 </button>
               </section>
             ) : null}

@@ -2,6 +2,8 @@
 
 import { randomUUID } from 'node:crypto';
 import { revalidatePath } from 'next/cache';
+import { revalidatePlannerAndRecords, revalidatePlannerViews } from '@/lib/planner-revalidation';
+import { periodBounds, type HorizonKind, type PeriodBounds } from '@/lib/planning-period';
 import { dateInTimezone } from '@/lib/date';
 import { executeOperation, OperationFailure } from '@/lib/operations';
 import { createClient } from '@/lib/supabase/server';
@@ -35,6 +37,9 @@ export type GoalView = {
   yearly_id?: string;
   quarterly_id?: string;
   monthly_id?: string;
+  /** Bounds of the Planning Horizon this item belongs to, when it has one. */
+  horizon_starts_on?: string | null;
+  horizon_ends_on?: string | null;
 };
 export type CaptureView = {
   id: string;
@@ -51,6 +56,10 @@ export type GoalsData = {
   quarterly: GoalView[];
   monthly: GoalView[];
   weekly: GoalView[];
+  /** The periods the person is actually in, in their own timezone. */
+  currentPeriods: Record<HorizonKind, PeriodBounds>;
+  localDate: string;
+  weekStartsOn: number;
 };
 export type ActionTemplateView = {
   id: string;
@@ -79,7 +88,7 @@ type CanonicalGoal = {
   created_at: string;
   updated_at: string;
   archived_at: string | null;
-  planning_horizons: { kind: 'year' | 'quarter' };
+  planning_horizons: { kind: 'year' | 'quarter'; starts_on: string | null; ends_on: string | null };
 };
 type CanonicalAction = {
   id: string;
@@ -93,7 +102,7 @@ type CanonicalAction = {
   created_at: string;
   updated_at: string;
   archived_at: string | null;
-  planning_horizons: { kind: 'month' | 'week' };
+  planning_horizons: { kind: 'month' | 'week'; starts_on: string | null; ends_on: string | null };
 };
 
 const canonicalEnabled = process.env.PLANNER_DATA_MODEL === 'canonical';
@@ -125,17 +134,21 @@ async function requireWorkspaceId() {
   const { supabase, user } = await requireUser();
   const { data, error } = await supabase
     .from('workspaces')
-    .select('id')
+    .select('id,timezone,week_starts_on')
     .eq('owner_user_id', user.id)
     .single();
   if (error || !data) throw new Error('Unable to load your workspace.');
-  return { supabase, user, workspaceId: data.id as string };
+  return {
+    supabase,
+    user,
+    workspaceId: data.id as string,
+    timezone: data.timezone as string,
+    weekStartsOn: Number(data.week_starts_on),
+  };
 }
 
 function revalidatePlanner() {
-  revalidatePath('/');
-  revalidatePath('/vision');
-  revalidatePath('/planner');
+  revalidatePlannerViews();
 }
 
 function toGoalStatus(status: CanonicalGoal['status'] | CanonicalAction['status']): GoalStatus {
@@ -262,24 +275,25 @@ export async function getGoalsHierarchy(): Promise<GoalsData | null> {
   if (!vision) return null;
 
   if (canonicalEnabled) {
-    const { supabase, workspaceId } = await requireWorkspaceId();
+    const { supabase, workspaceId, timezone, weekStartsOn } = await requireWorkspaceId();
     const [goalsResult, actionsResult] = await Promise.all([
       supabase
         .from('goals')
-        .select('*, planning_horizons!inner(kind)')
+        .select('*, planning_horizons!inner(kind,starts_on,ends_on)')
         .eq('workspace_id', workspaceId)
         .is('archived_at', null)
         .is('trashed_at', null)
         .order('created_at'),
       supabase
         .from('actions')
-        .select('*, planning_horizons!inner(kind)')
+        .select('*, planning_horizons!inner(kind,starts_on,ends_on)')
         .eq('workspace_id', workspaceId)
         .is('archived_at', null)
         .is('trashed_at', null)
         .order('created_at'),
     ]);
     if (goalsResult.error || actionsResult.error) throw new Error('Unable to load your plan.');
+    const localDate = dateInTimezone(timezone);
     const goals = (goalsResult.data ?? []) as unknown as CanonicalGoal[];
     const actions = (actionsResult.data ?? []) as unknown as CanonicalAction[];
     const mapGoal = (goal: CanonicalGoal): GoalView => ({
@@ -297,6 +311,8 @@ export async function getGoalsHierarchy(): Promise<GoalsData | null> {
       created_at: goal.created_at,
       updated_at: goal.updated_at,
       deleted_at: goal.archived_at,
+      horizon_starts_on: goal.planning_horizons.starts_on ?? null,
+      horizon_ends_on: goal.planning_horizons.ends_on ?? null,
     });
     const mapAction = (action: CanonicalAction): GoalView => ({
       id: action.id,
@@ -311,6 +327,8 @@ export async function getGoalsHierarchy(): Promise<GoalsData | null> {
       created_at: action.created_at,
       updated_at: action.updated_at,
       deleted_at: action.archived_at,
+      horizon_starts_on: action.planning_horizons.starts_on ?? null,
+      horizon_ends_on: action.planning_horizons.ends_on ?? null,
     });
     return {
       vision,
@@ -318,6 +336,14 @@ export async function getGoalsHierarchy(): Promise<GoalsData | null> {
       quarterly: goals.filter((goal) => goal.planning_horizons.kind === 'quarter').map(mapGoal),
       monthly: actions.filter((action) => action.planning_horizons.kind === 'month').map(mapAction),
       weekly: actions.filter((action) => action.planning_horizons.kind === 'week').map(mapAction),
+      localDate,
+      weekStartsOn,
+      currentPeriods: {
+        year: periodBounds('year', localDate, weekStartsOn),
+        quarter: periodBounds('quarter', localDate, weekStartsOn),
+        month: periodBounds('month', localDate, weekStartsOn),
+        week: periodBounds('week', localDate, weekStartsOn),
+      },
     };
   }
 
@@ -353,12 +379,24 @@ export async function getGoalsHierarchy(): Promise<GoalsData | null> {
     throw new Error('Unable to load your plan.');
   const withVersion = (items: readonly Record<string, unknown>[]) =>
     items.map((item) => ({ ...item, version: 1 })) as GoalView[];
+  // The legacy model has no Planning Horizons to bound, so every item reads as
+  // outside the current period and the planner falls back to showing all of
+  // it. That is the honest answer for data that never recorded a period.
+  const legacyDate = new Date().toISOString().slice(0, 10);
   return {
     vision,
     yearly: withVersion(yearly.data),
     quarterly: withVersion(quarterly.data),
     monthly: withVersion(monthly.data),
     weekly: withVersion(weekly.data),
+    localDate: legacyDate,
+    weekStartsOn: 1,
+    currentPeriods: {
+      year: periodBounds('year', legacyDate),
+      quarter: periodBounds('quarter', legacyDate),
+      month: periodBounds('month', legacyDate),
+      week: periodBounds('week', legacyDate),
+    },
   };
 }
 
@@ -680,9 +718,7 @@ export async function updatePlanAction(input: {
     idempotencyKey: randomUUID(),
     surface: 'ui',
   });
-  revalidatePlanner();
-  revalidatePath('/review');
-  revalidatePath('/activity');
+  revalidatePlannerAndRecords();
   return result;
 }
 
@@ -728,9 +764,7 @@ export async function movePlanAction(input: {
     },
     { idempotencyKey: randomUUID(), surface: 'ui' }
   );
-  revalidatePlanner();
-  revalidatePath('/review');
-  revalidatePath('/activity');
+  revalidatePlannerAndRecords();
   return result;
 }
 
@@ -845,7 +879,7 @@ export async function saveTranscript(
       }
       operationReceiptId = receipt.id;
     }
-    revalidatePath('/');
+    revalidatePlannerAndRecords();
     return {
       id: saved.id,
       raw_text: saved.raw_text,
@@ -863,7 +897,7 @@ export async function saveTranscript(
     .select()
     .single();
   if (error) throw new Error('Unable to save your capture.');
-  revalidatePath('/');
+  revalidatePlannerAndRecords();
   return {
     id: data.id,
     raw_text: data.raw_text,

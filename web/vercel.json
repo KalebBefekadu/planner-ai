@@ -1,8 +1,22 @@
 {
   "$schema": "https://openapi.vercel.sh/vercel.json",
+  "framework": "nextjs",
   "crons": [
-    { "path": "/api/internal/notifications", "schedule": "0 13 * * *" },
-    { "path": "/api/internal/account-deletions", "schedule": "17 13 * * *" },
-    { "path": "/api/internal/note-attachment-purge", "schedule": "34 13 * * *" }
+    {
+      "path": "/api/internal/notifications",
+      "schedule": "0 13 * * *"
+    },
+    {
+      "path": "/api/internal/account-deletions",
+      "schedule": "17 13 * * *"
+    },
+    {
+      "path": "/api/internal/note-attachment-purge",
+      "schedule": "34 13 * * *"
+    },
+    {
+      "path": "/api/internal/note-import-purge",
+      "schedule": "51 13 * * *"
+    }
   ]
 }

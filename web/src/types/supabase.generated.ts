@@ -139,6 +139,7 @@ export type Database = {
           description_markdown: string | null;
           goal_id: string | null;
           id: string;
+          monthly_anchor_day: number | null;
           next_occurrence_on: string;
           status: string;
           title: string;
@@ -153,6 +154,7 @@ export type Database = {
           description_markdown?: string | null;
           goal_id?: string | null;
           id?: string;
+          monthly_anchor_day?: number | null;
           next_occurrence_on: string;
           status?: string;
           title: string;
@@ -167,6 +169,7 @@ export type Database = {
           description_markdown?: string | null;
           goal_id?: string | null;
           id?: string;
+          monthly_anchor_day?: number | null;
           next_occurrence_on?: string;
           status?: string;
           title?: string;
@@ -678,6 +681,49 @@ export type Database = {
           uses?: number;
         };
         Relationships: [];
+      };
+      capture_action_links: {
+        Row: {
+          action_id: string;
+          capture_id: string;
+          created_at: string;
+          workspace_id: string;
+        };
+        Insert: {
+          action_id: string;
+          capture_id: string;
+          created_at?: string;
+          workspace_id: string;
+        };
+        Update: {
+          action_id?: string;
+          capture_id?: string;
+          created_at?: string;
+          workspace_id?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: 'capture_action_links_action_id_workspace_id_fkey';
+            columns: ['action_id', 'workspace_id'];
+            isOneToOne: false;
+            referencedRelation: 'actions';
+            referencedColumns: ['id', 'workspace_id'];
+          },
+          {
+            foreignKeyName: 'capture_action_links_capture_id_workspace_id_fkey';
+            columns: ['capture_id', 'workspace_id'];
+            isOneToOne: false;
+            referencedRelation: 'captures';
+            referencedColumns: ['id', 'workspace_id'];
+          },
+          {
+            foreignKeyName: 'capture_action_links_workspace_id_fkey';
+            columns: ['workspace_id'];
+            isOneToOne: false;
+            referencedRelation: 'workspaces';
+            referencedColumns: ['id'];
+          },
+        ];
       };
       capture_note_links: {
         Row: {
@@ -1466,6 +1512,10 @@ export type Database = {
           parent_source_path: string | null;
           reason: string | null;
           sort_order: number;
+          source_cover_key: string | null;
+          source_cover_position: number | null;
+          source_favorited_at: string | null;
+          source_icon_emoji: string | null;
           source_path: string;
           source_sort_key: number | null;
           target_note_id: string | null;
@@ -1484,6 +1534,10 @@ export type Database = {
           parent_source_path?: string | null;
           reason?: string | null;
           sort_order: number;
+          source_cover_key?: string | null;
+          source_cover_position?: number | null;
+          source_favorited_at?: string | null;
+          source_icon_emoji?: string | null;
           source_path: string;
           source_sort_key?: number | null;
           target_note_id?: string | null;
@@ -1502,6 +1556,10 @@ export type Database = {
           parent_source_path?: string | null;
           reason?: string | null;
           sort_order?: number;
+          source_cover_key?: string | null;
+          source_cover_position?: number | null;
+          source_favorited_at?: string | null;
+          source_icon_emoji?: string | null;
           source_path?: string;
           source_sort_key?: number | null;
           target_note_id?: string | null;
@@ -1746,7 +1804,11 @@ export type Database = {
           ai_excluded: boolean;
           archived_at: string | null;
           body_markdown: string;
+          cover_key: string | null;
+          cover_position: number;
           created_at: string;
+          favorited_at: string | null;
+          icon_emoji: string | null;
           id: string;
           parent_note_id: string | null;
           purge_after: string | null;
@@ -1762,7 +1824,11 @@ export type Database = {
           ai_excluded?: boolean;
           archived_at?: string | null;
           body_markdown?: string;
+          cover_key?: string | null;
+          cover_position?: number;
           created_at?: string;
+          favorited_at?: string | null;
+          icon_emoji?: string | null;
           id?: string;
           parent_note_id?: string | null;
           purge_after?: string | null;
@@ -1778,7 +1844,11 @@ export type Database = {
           ai_excluded?: boolean;
           archived_at?: string | null;
           body_markdown?: string;
+          cover_key?: string | null;
+          cover_position?: number;
           created_at?: string;
+          favorited_at?: string | null;
+          icon_emoji?: string | null;
           id?: string;
           parent_note_id?: string | null;
           purge_after?: string | null;
@@ -2677,6 +2747,15 @@ export type Database = {
         };
         Returns: Json;
       };
+      dispatch_trusted_operation_capture_action_base: {
+        Args: {
+          p_idempotency_key: string;
+          p_input: Json;
+          p_operation_id: string;
+          p_surface: string;
+        };
+        Returns: Json;
+      };
       dispatch_trusted_operation_capture_proposal_base: {
         Args: {
           p_idempotency_key: string;
@@ -2687,6 +2766,15 @@ export type Database = {
         Returns: Json;
       };
       dispatch_trusted_operation_conversation_base: {
+        Args: {
+          p_idempotency_key: string;
+          p_input: Json;
+          p_operation_id: string;
+          p_surface: string;
+        };
+        Returns: Json;
+      };
+      dispatch_trusted_operation_note_appearance_base: {
         Args: {
           p_idempotency_key: string;
           p_input: Json;
@@ -2746,6 +2834,24 @@ export type Database = {
       };
       execute_assistant_proposal_conversation_base: {
         Args: { p_proposal_id: string };
+        Returns: Json;
+      };
+      execute_capture_action_filing_operation: {
+        Args: {
+          p_idempotency_key: string;
+          p_input: Json;
+          p_operation_id: string;
+          p_surface: string;
+        };
+        Returns: Json;
+      };
+      execute_capture_action_filing_undo: {
+        Args: {
+          p_idempotency_key: string;
+          p_input: Json;
+          p_operation_id: string;
+          p_surface: string;
+        };
         Returns: Json;
       };
       execute_capture_filing_undo: {
@@ -2847,6 +2953,15 @@ export type Database = {
         };
         Returns: Json;
       };
+      execute_note_appearance_operation: {
+        Args: {
+          p_idempotency_key: string;
+          p_input: Json;
+          p_operation_id: string;
+          p_surface?: string;
+        };
+        Returns: Json;
+      };
       execute_note_import_operation: {
         Args: {
           p_idempotency_key: string;
@@ -2929,6 +3044,15 @@ export type Database = {
         Returns: Json;
       };
       execute_operation_undo_base: {
+        Args: {
+          p_idempotency_key: string;
+          p_input: Json;
+          p_operation_id: string;
+          p_surface: string;
+        };
+        Returns: Json;
+      };
+      execute_operation_undo_capture_action_base: {
         Args: {
           p_idempotency_key: string;
           p_input: Json;
@@ -3214,6 +3338,10 @@ export type Database = {
         Args: { p_action: string; p_conversation_id: string; p_title?: string };
         Returns: undefined;
       };
+      next_monthly_occurrence: {
+        Args: { p_anchor_day: number; p_occurrence_on: string };
+        Returns: string;
+      };
       persist_capture_proposal_analysis: {
         Args: {
           p_analysis: Json;
@@ -3259,6 +3387,10 @@ export type Database = {
           p_starts_on: string;
         };
         Returns: string;
+      };
+      raise_if_period_already_reviewed: {
+        Args: { p_horizon_id: string; p_kind: string; p_workspace_id: string };
+        Returns: undefined;
       };
       read_mcp_oauth_workspace_snapshot: {
         Args: { p_grant_id: string };
@@ -3351,6 +3483,13 @@ export type Database = {
         Returns: undefined;
       };
       release_beta_invite: { Args: { p_invite_id: string }; Returns: undefined };
+      review_week_eligible_actions: {
+        Args: { p_ends_on: string; p_starts_on: string; p_workspace_id: string };
+        Returns: {
+          action_id: string;
+          horizon_kind: string;
+        }[];
+      };
       revoke_mcp_access_token: {
         Args: { p_token_id: string };
         Returns: undefined;

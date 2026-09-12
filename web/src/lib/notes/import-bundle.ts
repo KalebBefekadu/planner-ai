@@ -2,13 +2,14 @@ import path from 'node:path';
 import { parse as parseCsv } from 'csv-parse/sync';
 import yauzl from 'yauzl';
 
-export const IMPORT_LIMITS = {
-  archiveBytes: 25 * 1024 * 1024,
-  expandedBytes: 10 * 1024 * 1024,
-  fileBytes: 200 * 1024,
-  candidates: 500,
-  totalCharacters: 5_000_000,
-} as const;
+export {
+  IMPORT_LIMITS,
+  IMPORT_TOO_LARGE_MESSAGE,
+  IMPORT_UPLOAD_LIMIT_LABEL,
+  formatImportBytes,
+} from './import-limits';
+import { IMPORT_LIMITS, IMPORT_UPLOAD_LIMIT_LABEL, formatImportBytes } from './import-limits';
+import { describeLinkOutcome, resolveInternalLinks } from './import-links';
 
 export type ImportSourceFile = {
   path: string;
@@ -29,7 +30,56 @@ export type NoteImportCandidate = {
   // are normalised to null by candidatesFromVaultOrFiles and fall back to the
   // dependency-safe staging order.
   sourceSortKey?: number | null;
+  // How the owner had this page arranged: its icon, cover, cover position and
+  // whether it was pinned. Only an exported vault carries any of this; files
+  // from any other source are normalised to null, because inventing an
+  // appearance for an imported Notion page would be making a choice on the
+  // owner's behalf and calling it a restore.
+  appearance?: RestorableAppearance | null;
+  // Set when the item is imported but not as a faithful copy of the source.
+  // It is stored as the item's reason so the pre-commit report can say what a
+  // conversion cost, instead of showing a converted row and an intact page
+  // identically. Null for anything carried over unchanged.
+  conversionNotice?: string | null;
 };
+
+/**
+ * A CSV export is a snapshot of a database view, not the database. Planner AI
+ * has no native database, so each row becomes a Note and everything the table
+ * knew about itself is left behind. Naming that here keeps the wording in one
+ * place and keeps it identical in the preview and in the stored report.
+ */
+export type RestorableAppearance = {
+  iconEmoji: string | null;
+  coverKey: string | null;
+  coverPosition: number;
+  favoritedAt: string | null;
+};
+
+/* Read an appearance out of a manifest entry, refusing anything the database
+   would refuse anyway.
+ *
+ * A manifest is a file the owner can edit, and a restore is exactly when a
+ * hand-edited one turns up. Each field falls back to its own absence rather
+ * than to the whole appearance being discarded, so one bad cover position does
+ * not also cost the icon. */
+const COVER_POSITION_DEFAULT = 50;
+
+function restorableAppearance(item: VaultManifestItem): RestorableAppearance {
+  const position = item.coverPosition;
+  return {
+    iconEmoji: typeof item.iconEmoji === 'string' && item.iconEmoji ? item.iconEmoji : null,
+    coverKey: typeof item.coverKey === 'string' && item.coverKey ? item.coverKey : null,
+    coverPosition:
+      typeof position === 'number' && Number.isInteger(position) && position >= 0 && position <= 100
+        ? position
+        : COVER_POSITION_DEFAULT,
+    favoritedAt: typeof item.favoritedAt === 'string' && item.favoritedAt ? item.favoritedAt : null,
+  };
+}
+
+export const CSV_ROW_CONVERSION_NOTICE =
+  'Converted from a CSV row. Column types, formulas, relations, filters and views are not imported.';
 
 // notes.sort_key is numeric(24, 12), so a manifest value has twelve integer
 // digits of headroom. Reordering a Note writes the midpoint between its new
@@ -70,10 +120,52 @@ function decodeText(bytes: Buffer) {
   return text.replace(/^\uFEFF/, '');
 }
 
+/**
+ * Notion appends the page's own 32-character hexadecimal ID to every exported
+ * file and folder name, so a page the owner called "Weekly Review" arrives as
+ * "Weekly Review 5f2c...c81a". That ID is Notion's internal bookkeeping, not
+ * part of the title anyone wrote, and carrying it into the workspace makes an
+ * imported hierarchy read as a dump of another product's internals.
+ *
+ * Stripping is deliberately narrow, because a title is the owner's text and
+ * damaging one is worse than leaving a suffix on:
+ * - exactly 32 hexadecimal characters, no more and no fewer, so a shorter hex
+ *   run (a commit prefix, say) is left alone and a longer one is not truncated
+ *   to 32;
+ * - preceded by a single space, which is the separator Notion uses; a title
+ *   that runs the hex straight on to a word is not a Notion export name;
+ * - only at the very end of the name;
+ * - and never when it would leave nothing behind, so a page whose whole
+ *   exported name is the ID keeps a title rather than becoming blank.
+ *
+ * It is applied only to titles derived from a path. A title taken from the
+ * document's own `# heading` is text the owner wrote inside the page and is
+ * never rewritten.
+ */
+const NOTION_ID_SUFFIX = / [0-9a-f]{32}$/i;
+
+export function stripNotionIdSuffix(title: string) {
+  const stripped = title.replace(NOTION_ID_SUFFIX, '').trim();
+  return stripped || title;
+}
+
 function titleFrom(pathname: string, body: string) {
   const heading = body.match(/^#\s+(.+)$/m)?.[1]?.trim();
-  const fallback = path.posix.basename(pathname, path.posix.extname(pathname));
-  return (heading || fallback || 'Imported Note').slice(0, 300);
+  if (heading) return heading.slice(0, 300);
+  return titleFromPath(pathname);
+}
+
+/* The name a file gets when nothing inside it offers a better one.
+ *
+ * Split out because the failure paths need it too. A Notion database whose CSV
+ * cannot be parsed still has to appear in the report under the name the owner
+ * would recognise -- "Tasks", not "Tasks 5f2c...c81a.csv". Those rows are the
+ * ones a person reads most carefully, because they are the ones that did not
+ * work, and showing them Notion's internal bookkeeping there is the least
+ * useful moment to do it. */
+function titleFromPath(pathname: string) {
+  const stripped = stripNotionIdSuffix(path.posix.basename(pathname, path.posix.extname(pathname)));
+  return (stripped || 'Imported Note').slice(0, 300);
 }
 
 function markdownCell(value: unknown) {
@@ -95,7 +187,7 @@ function csvCandidates(sourcePath: string, body: string, parentSourcePath: strin
     return [
       {
         sourcePath,
-        title: path.posix.basename(sourcePath),
+        title: titleFromPath(sourcePath),
         bodyMarkdown: '',
         parentSourcePath,
         unsupportedReason: 'CSV could not be parsed safely.',
@@ -106,7 +198,7 @@ function csvCandidates(sourcePath: string, body: string, parentSourcePath: strin
     return [
       {
         sourcePath,
-        title: path.posix.basename(sourcePath),
+        title: titleFromPath(sourcePath),
         bodyMarkdown: '',
         parentSourcePath,
         unsupportedReason: 'CSV contains no data rows.',
@@ -128,6 +220,7 @@ function csvCandidates(sourcePath: string, body: string, parentSourcePath: strin
       bodyMarkdown: markdown,
       parentSourcePath,
       unsupportedReason: null,
+      conversionNotice: CSV_ROW_CONVERSION_NOTICE,
     };
   });
 }
@@ -147,11 +240,50 @@ function addFolders(files: ImportSourceFile[], candidates: NoteImportCandidate[]
       : null;
     candidates.push({
       sourcePath: folder,
-      title: path.posix.basename(withoutSlash).slice(0, 300),
+      title: stripNotionIdSuffix(path.posix.basename(withoutSlash)).slice(0, 300),
       bodyMarkdown: '',
       parentSourcePath: parent,
       unsupportedReason: null,
     });
+  }
+}
+
+/**
+ * An exported workspace is a web of pages that link to each other by relative
+ * file path. Those paths mean nothing inside Planner AI, so the links are
+ * rewritten in place to name the item they point at, and the commit turns each
+ * one into the created Note's URL. Resolution is by path rather than by title,
+ * so two pages that share a title still link to the right one.
+ *
+ * Mutates the candidates: their bodies carry the rewritten links, and any item
+ * whose links changed or could not be followed gains a reason saying so before
+ * the owner agrees to the commit.
+ */
+function resolveCandidateLinks(candidates: NoteImportCandidate[]) {
+  const byPath = new Map<string, { sourcePath: string; importable: boolean }>();
+  for (const candidate of candidates) {
+    byPath.set(candidate.sourcePath, {
+      sourcePath: candidate.sourcePath,
+      importable: candidate.unsupportedReason === null,
+    });
+    // A CSV file is not itself a Note: its rows are. A link to the file names
+    // a database view that was not imported as a page, which is a different
+    // answer from "this export does not contain it".
+    const rowSeparator = candidate.sourcePath.lastIndexOf('#row-');
+    if (rowSeparator > 0) {
+      const filePath = candidate.sourcePath.slice(0, rowSeparator);
+      if (!byPath.has(filePath)) byPath.set(filePath, { sourcePath: filePath, importable: false });
+    }
+  }
+  for (const candidate of candidates) {
+    if (candidate.unsupportedReason !== null || !candidate.bodyMarkdown) continue;
+    const outcome = resolveInternalLinks(candidate.bodyMarkdown, candidate.sourcePath, byPath);
+    candidate.bodyMarkdown = outcome.bodyMarkdown;
+    const notice = describeLinkOutcome(outcome);
+    if (!notice) continue;
+    candidate.conversionNotice = candidate.conversionNotice
+      ? `${candidate.conversionNotice} ${notice}`.slice(0, 500)
+      : notice;
   }
 }
 
@@ -201,6 +333,7 @@ export function candidatesFromFiles(files: ImportSourceFile[]) {
       });
     }
   }
+  resolveCandidateLinks(candidates);
   if (candidates.length > IMPORT_LIMITS.candidates) {
     throw new Error(`An import may contain at most ${IMPORT_LIMITS.candidates} Notes.`);
   }
@@ -220,6 +353,14 @@ type VaultManifestItem = {
   path: string;
   title: string;
   sortKey: number;
+  /* Written by every vault this version exports. Older archives predate them,
+     so each is optional and each has a defined absence: no icon, no cover, the
+     default position, not a favourite. An old vault restores exactly as it did
+     before rather than failing to open. */
+  iconEmoji?: string | null;
+  coverKey?: string | null;
+  coverPosition?: number | null;
+  favoritedAt?: string | null;
 };
 
 function vaultCandidates(files: ImportSourceFile[]) {
@@ -267,6 +408,7 @@ function vaultCandidates(files: ImportSourceFile[]) {
       unsupportedReason: null,
       aiExcluded,
       sourceSortKey: note.sortKey,
+      appearance: restorableAppearance(note),
     } satisfies NoteImportCandidate;
   });
 }
@@ -276,6 +418,8 @@ export function candidatesFromVaultOrFiles(files: ImportSourceFile[]) {
   return candidates.map((candidate) => ({
     aiExcluded: false,
     sourceSortKey: null,
+    conversionNotice: null,
+    appearance: null,
     ...candidate,
   }));
 }
@@ -307,7 +451,9 @@ function readEntry(zip: yauzl.ZipFile, entry: yauzl.Entry) {
 }
 
 export async function filesFromZip(buffer: Buffer) {
-  if (buffer.byteLength > IMPORT_LIMITS.archiveBytes) throw new Error('ZIP exceeds 25 MB.');
+  if (buffer.byteLength > IMPORT_LIMITS.archiveBytes) {
+    throw new Error(`ZIP exceeds ${IMPORT_UPLOAD_LIMIT_LABEL}.`);
+  }
   const zip = await openZip(buffer);
   const files: ImportSourceFile[] = [];
   let expandedBytes = 0;
@@ -326,7 +472,9 @@ export async function filesFromZip(buffer: Buffer) {
         }
         expandedBytes += entry.uncompressedSize;
         if (expandedBytes > IMPORT_LIMITS.expandedBytes) {
-          throw new Error('ZIP expands beyond the 10 MB safety limit.');
+          throw new Error(
+            `ZIP expands beyond the ${formatImportBytes(IMPORT_LIMITS.expandedBytes)} safety limit.`
+          );
         }
         if (files.length >= IMPORT_LIMITS.candidates) {
           throw new Error('ZIP contains too many files.');

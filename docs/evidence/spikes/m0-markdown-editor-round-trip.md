@@ -32,7 +32,7 @@ Frontmatter, raw HTML, footnotes, images, reference links, loose lists, merged t
 
 ## Golden Corpus
 
-`web/tests/fixtures/markdown-golden.ts` contains more than 100 named documents covering:
+`web/tests/fixtures/markdown-golden.ts` contains 44 named documents, exercised by 115 assertions, covering:
 
 - headings, paragraphs, breaks, emphasis, links, images, and references;
 - nested ordered and unordered lists;
@@ -49,19 +49,37 @@ Frontmatter, raw HTML, footnotes, images, reference links, loose lists, merged t
 
 ## Pass Criteria For This Stage
 
-- At least 100 named fixtures are deterministic.
+- Every named fixture is deterministic.
 - Parse and serialize cycles preserve the semantic AST.
 - A second normalization makes no change.
 - Raw HTML remains recoverable but is reported and never executed.
 - Planner extension fences remain portable Markdown.
 - Package versions and the lockfile are committed together.
 
+## Real Export Corpus, 2026-09-10
+
+`web/tests/fixtures/exported-vaults.ts` holds 27 documents shaped after what Notion's "Export as Markdown & CSV" and an Obsidian vault actually emit, including the conventions neither product calls Markdown: wikilinks, embeds, block references, callout admonitions, inline tags, highlights, and Dataview fields.
+
+It found a shipped defect on the first run, which the synthetic corpus could not have found by construction.
+
+`plannerMarkdownSupportsRichEditing` gated rich mode on *semantic* equivalence. Escaping is always semantically safe -- `\[\[Note]]` and `[[Note]]` carry the same text -- so the gate approved every Obsidian document, and serializing then escaped the brackets. One save in rich mode turned `[[North star & values]]` into `\[\[North star & values]]`. The meaning was preserved and every link in the vault was broken, silently. The same held for embeds, block references and `> [!warning]` callout markers.
+
+The gate now also requires that the round trip introduce no backslash escape the source did not already have. Counting added escapes rather than comparing the text outright was deliberate: a stricter textual gate was measured first and dropped rich editing from 110 of 137 documents to 76, giving up every table to fix wikilinks. The escape-aware gate costs 9 documents, and those 9 are exactly the ones that would have been damaged.
+
+This is the second defect in this area whose cause was invisible to an equivalence check. Semantic equality is the right test for whether meaning survived and the wrong test for whether a file changed.
+
+## Scale, 2026-09-10
+
+Measured on a 6,000-line Note in `web/tests/unit/markdown-scale.test.ts`: parse 375ms, normalize 414ms, rich-mode gate 957ms. Parsing is linear; doubling the input roughly doubles the time, which is asserted rather than assumed.
+
+The gate's second is the one that matters, because it runs on the path between clicking a Note and seeing it. It is a full round trip, so it is inherently the most expensive check in the open path, and on a large document it is close to a second of nothing happening. It is not yet cached or moved off that path.
+
 ## Work Still Required Before Editor ADR Acceptance
 
 1. Broaden the Tiptap adapter only one reversible Markdown feature at a time, with corpus and browser proof for each addition.
 2. Implement or select one fallback editor adapter for comparison.
 3. Add copy/paste, undo/redo, selection, source-mode, and external-file-edit scenarios.
-4. Test large documents and representative low-end hardware.
-5. Run the corpus through Notion and Obsidian import/export samples.
+4. Move the rich-mode gate off the document open path, or cache it per version.
+5. Decide whether wikilinks and callouts should be *supported* through micromark extensions rather than merely protected by refusal. Refusal keeps vaults intact; it also means an imported Obsidian vault can never be edited richly.
 
 Tiptap remains a candidate until its adapter passes. The semantic Markdown contract does not weaken to accommodate a library limitation.

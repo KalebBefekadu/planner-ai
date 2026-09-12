@@ -7,6 +7,21 @@ import { test, expect, goTo, onboardingSeed } from './support/workspace';
 const committedRegion = 'Committed Actions';
 const openRegion = 'Open Actions';
 
+test('Planner navigation keeps Today inside the planning workflow', async ({ workspace }) => {
+  const { page } = workspace;
+  await goTo(page, '/planner');
+
+  const plannerNavigation = page.getByRole('complementary', { name: 'Planner navigation' });
+  if (!(await plannerNavigation.isVisible())) {
+    await page.getByRole('button', { name: 'Open menu' }).click();
+  }
+  await plannerNavigation.getByRole('link', { name: 'Today', exact: true }).click();
+
+  await expect(page).toHaveURL(/\/planner\/today(?:\?|$)/);
+  await expect(page.getByRole('heading', { name: 'Make today count', exact: true })).toBeVisible();
+  await expect(page.getByRole('navigation', { name: 'Planning views' })).toBeVisible();
+});
+
 test('an Action can be committed to today and shows up in the focus list', async ({
   workspace,
 }) => {
@@ -22,6 +37,9 @@ test('an Action can be committed to today and shows up in the focus list', async
   await expect(committed).toContainText('1 / 5');
   await expect(committed).toContainText(onboardingSeed.action);
   await expect(page.getByRole('region', { name: 'Today summary' })).toContainText('1');
+  await expect(page.getByRole('region', { name: onboardingSeed.goal })).toContainText(
+    'Your focused work advances this goal.'
+  );
 });
 
 test('committing survives a reload, so the day is a decision and not a view state', async ({
@@ -107,4 +125,206 @@ test('the daily cap limits what is highlighted, not what can exist', async ({ wo
   await expect(committed).toContainText('5 / 5');
   await expect(page.getByRole('region', { name: openRegion })).toContainText('Capacity action 5');
   await expect(page.getByRole('button', { name: 'Focus Capacity action 5' })).toBeDisabled();
+});
+
+// PL-05: adding work from Today. The point of the composer is that a person
+// can put something on today without first building a hierarchy or asking the
+// assistant, and that what they see afterwards is the truth about what was
+// saved and what was committed.
+
+test('an Action created from Today survives a reload and can be completed there', async ({
+  workspace,
+}) => {
+  const { page } = workspace;
+  await goTo(page, '/');
+
+  const composer = page.getByRole('region', { name: 'New Action' });
+  await composer.getByRole('textbox', { name: 'What needs doing' }).fill('Book the venue');
+  await composer.getByRole('checkbox', { name: "Commit to today's focus" }).uncheck();
+  await composer.getByRole('button', { name: 'Add Action' }).click();
+
+  await expect(composer).toContainText('"Book the venue" is saved to your open Actions.');
+  await expect(page.getByRole('region', { name: openRegion })).toContainText('Book the venue');
+
+  await page.reload();
+  await expect(page.getByRole('region', { name: openRegion })).toContainText('Book the venue');
+
+  await page.getByRole('button', { name: 'Complete Book the venue' }).click();
+  await expect(page.getByRole('button', { name: 'Complete Book the venue' })).toHaveCount(0);
+});
+
+test('an Action created from Today can be linked to a real Goal and committed at once', async ({
+  workspace,
+}) => {
+  const { page } = workspace;
+  await goTo(page, '/');
+
+  const composer = page.getByRole('region', { name: 'New Action' });
+  await composer.getByRole('textbox', { name: 'What needs doing' }).fill('Draft the invite copy');
+  await composer
+    .getByRole('combobox', { name: 'Goal' })
+    .selectOption({ label: onboardingSeed.goal });
+  await composer.getByRole('button', { name: 'Add Action' }).click();
+
+  const committed = page.getByRole('region', { name: committedRegion });
+  await expect(committed).toContainText('Draft the invite copy');
+  await expect(committed).toContainText('1 / 5');
+
+  await page.reload();
+  await expect(page.getByRole('region', { name: committedRegion })).toContainText(
+    'Draft the invite copy'
+  );
+  // The Goal it was linked to travels with it, so today keeps its line back to
+  // the larger plan.
+  await expect(page.getByRole('region', { name: committedRegion })).toContainText(
+    onboardingSeed.goal
+  );
+});
+
+test('a full focus list keeps the new Action and refuses only the commitment', async ({
+  workspace,
+}) => {
+  const { page } = workspace;
+  await goTo(page, '/');
+
+  const composer = page.getByRole('region', { name: 'New Action' });
+  const committed = page.getByRole('region', { name: committedRegion });
+
+  // Fill the day to its cap using the composer itself.
+  for (let index = 1; index <= 4; index += 1) {
+    await composer.getByRole('textbox', { name: 'What needs doing' }).fill(`Committed ${index}`);
+    await composer.getByRole('button', { name: 'Add Action' }).click();
+    await expect(committed).toContainText(`Committed ${index}`);
+  }
+  await page.getByRole('button', { name: `Focus ${onboardingSeed.action}` }).click();
+  await expect(committed).toContainText('5 / 5');
+
+  await composer.getByRole('textbox', { name: 'What needs doing' }).fill('Overflow work');
+  await composer.getByRole('button', { name: 'Add Action' }).click();
+
+  await expect(composer).toContainText("Today's focus is already full at 5");
+  // Nothing that was already committed was dropped to make room.
+  await expect(committed).toContainText('5 / 5');
+  await expect(committed).toContainText(onboardingSeed.action);
+  await expect(page.getByRole('region', { name: openRegion })).toContainText('Overflow work');
+});
+
+test('a saved Action is written once and the composer clears itself', async ({ workspace }) => {
+  const { page } = workspace;
+  await goTo(page, '/');
+
+  const composer = page.getByRole('region', { name: 'New Action' });
+  const title = composer.getByRole('textbox', { name: 'What needs doing' });
+  await title.fill('Only once');
+  await composer.getByRole('button', { name: 'Add Action' }).click();
+  await expect(composer).toContainText('"Only once" is saved');
+
+  // A cleared title is what stops the next keystroke from resubmitting the
+  // same words, and one reload proves the submission wrote a single row.
+  await expect(title).toHaveValue('');
+  await page.reload();
+  await expect(page.getByRole('button', { name: 'Complete Only once' })).toHaveCount(1);
+});
+
+// PL-06: the same Action shown in more than one place has to tell the same
+// story. Deferral, completion and blocking are decisions about the day, and a
+// route that keeps rendering the old answer is indistinguishable from the
+// decision not having been saved.
+
+test('deferring work releases the commitment it made to today', async ({ workspace }) => {
+  const { page } = workspace;
+  await goTo(page, '/');
+
+  const committed = page.getByRole('region', { name: committedRegion });
+  await page.getByRole('button', { name: `Focus ${onboardingSeed.action}` }).click();
+  await expect(committed).toContainText('1 / 5');
+
+  await page.getByRole('button', { name: `Defer ${onboardingSeed.action} to tomorrow` }).click();
+
+  // The day no longer claims to be spoken for by work that is not scheduled
+  // for it.
+  await expect(committed).toContainText('0 / 5');
+  await expect(page.getByText('is no longer committed to today')).toBeVisible();
+
+  await page.reload();
+  await expect(page.getByRole('region', { name: committedRegion })).toContainText('0 / 5');
+  await expect(page.getByRole('region', { name: openRegion })).toContainText(onboardingSeed.action);
+});
+
+test('a completion made on Today is already true on the Planner route', async ({ workspace }) => {
+  const { page } = workspace;
+  await goTo(page, '/');
+
+  await page.getByRole('button', { name: `Complete ${onboardingSeed.action}` }).click();
+  await expect(page.getByRole('button', { name: `Complete ${onboardingSeed.action}` })).toHaveCount(
+    0
+  );
+
+  // Planner navigation links to the scoped alias, not to '/'. Invalidating
+  // '/planner' alone left this route rendering the completed Action.
+  await goTo(page, '/planner/today');
+  await expect(page.getByRole('region', { name: openRegion })).not.toContainText(
+    onboardingSeed.action
+  );
+  await expect(page.getByRole('region', { name: committedRegion })).toContainText('0 / 5');
+});
+
+test('blocking an Action keeps it on the day rather than hiding it', async ({ workspace }) => {
+  const { page } = workspace;
+  await goTo(page, '/');
+
+  await page.getByRole('button', { name: `Focus ${onboardingSeed.action}` }).click();
+  await page.getByRole('button', { name: `Mark ${onboardingSeed.action} blocked` }).click();
+
+  const committed = page.getByRole('region', { name: committedRegion });
+  await expect(committed).toContainText('Blocked');
+  await expect(committed).toContainText('1 / 5');
+
+  await page.reload();
+  await expect(page.getByRole('region', { name: committedRegion })).toContainText('Blocked');
+
+  // The decision is reversible from the same control.
+  await page.getByRole('button', { name: `Unblock ${onboardingSeed.action}` }).click();
+  await expect(page.getByRole('region', { name: committedRegion })).not.toContainText('Blocked');
+});
+
+test('an edit conflict is readable from inside the dialog and keeps the draft', async ({
+  workspace,
+}) => {
+  const { page } = workspace;
+  await goTo(page, '/');
+
+  // A second tab is the honest way to produce a stale version: the first tab
+  // is holding a version number that is about to stop being current.
+  const other = await page.context().newPage();
+  await other.goto('/');
+  await other.getByRole('button', { name: `Complete ${onboardingSeed.action}` }).click();
+  await expect(
+    other.getByRole('button', { name: `Complete ${onboardingSeed.action}` })
+  ).toHaveCount(0);
+  await other.close();
+
+  await page.getByRole('button', { name: `Edit ${onboardingSeed.action}` }).click();
+  const dialog = page.getByRole('dialog', { name: 'Edit Action' });
+  await dialog.getByRole('textbox', { name: 'Title' }).fill('Edited against a stale version');
+  await dialog.getByRole('button', { name: 'Save Action' }).click();
+
+  // Reported inside the dialog, not behind the backdrop, and the typing
+  // survives so the retry is one click rather than a retype.
+  await expect(dialog.getByRole('alert')).toContainText('changed elsewhere');
+  await expect(dialog.getByRole('textbox', { name: 'Title' })).toHaveValue(
+    'Edited against a stale version'
+  );
+});
+
+test('/today reaches Today instead of a not-found page', async ({ workspace }) => {
+  const { page } = workspace;
+
+  // The address a person is most likely to type or bookmark for the screen
+  // they use every day. It used to return "That page doesn't exist any more",
+  // and the same missing route had already fooled onboarding into calling
+  // revalidatePath('/today') on nothing.
+  await page.goto('/today');
+  await expect(page).toHaveURL(/\/planner\/today(?:\?|$)/);
+  await expect(page.getByRole('heading', { name: 'Make today count', exact: true })).toBeVisible();
 });

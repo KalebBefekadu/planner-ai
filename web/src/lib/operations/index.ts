@@ -167,6 +167,12 @@ const noteOutput = z
     body_markdown: z.string(),
     sort_key: z.union([z.number(), z.string()]),
     ai_excluded: z.boolean(),
+    /* Optional so a receipt replayed from before the appearance migration
+       still parses. The columns are non-null-defaulted going forward. */
+    icon_emoji: z.string().nullable().optional(),
+    cover_key: z.string().nullable().optional(),
+    cover_position: z.union([z.number(), z.string()]).optional(),
+    favorited_at: timestamp.nullable(),
     version,
     created_at: timestamp,
     updated_at: timestamp,
@@ -218,10 +224,13 @@ const noteLinkOutput = z
 const captureFileOutput = z
   .object({ captureId: id, noteId: id, state: z.literal('reviewed') })
   .strict();
+const captureFileActionOutput = z
+  .object({ captureId: id, actionId: id, state: z.literal('reviewed') })
+  .strict();
 const noteImportOutput = z
   .object({
     jobId: id,
-    status: z.enum(['preview', 'committing', 'completed']),
+    status: z.enum(['preview', 'committing', 'completed', 'canceled']),
     totalCount: z.number().int().nonnegative().max(500),
     createCount: z.number().int().nonnegative().max(500),
     duplicateCount: z.number().int().nonnegative().max(500),
@@ -700,6 +709,38 @@ export const operationDefinitions = {
     input: z.object({ id, aiExcluded: z.boolean(), expectedVersion: version }).strict(),
     output: noteOutput,
   },
+  /* Appearance is its own operation rather than three more fields on
+     note.update.v1. That contract is already called by chat and MCP, and it
+     writes a Note revision on every call -- nudging a cover two percent is not
+     an edit to the writing, and it should not push the previous draft into the
+     history panel. */
+  'note.appearance.v1': {
+    summary: 'Set or clear one Note page icon, cover image and cover position.',
+    risk: 'low',
+    exposure: ['ui'],
+    /* No operation_undo_support row backs this, so operation.undo.v1 would
+       have nothing to replay. Reset is offered directly in the document
+       header instead. */
+    reversible: false,
+    input: z
+      .object({
+        id,
+        iconEmoji: z.string().min(1).max(32).nullable(),
+        coverKey: z.enum(['focus', 'north', 'health', 'product']).nullable(),
+        coverPosition: z.number().int().min(0).max(100),
+        expectedVersion: version,
+      })
+      .strict(),
+    output: noteOutput,
+  },
+  'note.favorite.v1': {
+    summary: 'Mark or unmark one Note as a favourite.',
+    risk: 'low',
+    exposure: ['ui', 'chat', 'mcp'],
+    reversible: true,
+    input: z.object({ id, favorite: z.boolean(), expectedVersion: version }).strict(),
+    output: noteOutput,
+  },
   'note.import-preview.v1': {
     summary:
       'Stage a bounded Notes import and report hierarchy, duplicates, and unsupported items.',
@@ -725,6 +766,23 @@ export const operationDefinitions = {
                 // order. The bound is the integer headroom of
                 // notes.sort_key numeric(24, 12).
                 sourceSortKey: z.number().min(-999_999_999_999).max(999_999_999_999).nullable(),
+                // Set when the item is imported but not as a faithful copy of
+                // the source, and stored as the item's reason so the
+                // pre-commit report can say what the conversion cost.
+                conversionNotice: z.string().max(500).nullable(),
+                // How the owner had the page arranged. Only an exported vault
+                // carries any of it; every other source sends null, because
+                // inventing an appearance for an imported Notion page would be
+                // choosing on the owner's behalf and calling it a restore.
+                appearance: z
+                  .object({
+                    iconEmoji: z.string().min(1).max(32).nullable(),
+                    coverKey: z.string().min(1).max(200).nullable(),
+                    coverPosition: z.number().int().min(0).max(100),
+                    favoritedAt: z.string().datetime({ offset: true }).nullable(),
+                  })
+                  .strict()
+                  .nullable(),
               })
               .strict()
           )
@@ -740,6 +798,17 @@ export const operationDefinitions = {
     exposure: ['ui', 'chat'],
     reversible: true,
     input: z.object({ jobId: id, batchSize: z.number().int().min(1).max(50) }).strict(),
+    output: noteImportOutput,
+  },
+  // Deciding not to import something is a decision. Without this the only way
+  // to leave a staged import was to close the dialog, which left the job in
+  // 'preview' and brought it back as unfinished business every time.
+  'note.import-cancel.v1': {
+    summary: 'Record that a reviewed Notes import will not be committed.',
+    risk: 'low',
+    exposure: ['ui'],
+    reversible: false,
+    input: z.object({ jobId: id }).strict(),
     output: noteImportOutput,
   },
   'memory.create.v1': {
@@ -850,6 +919,23 @@ export const operationDefinitions = {
     reversible: true,
     input: z.object({ captureId: id, noteId: id }).strict(),
     output: captureFileOutput,
+  },
+  'capture.file-to-action.v1': {
+    summary:
+      'Create one Action from an immutable Capture, record the link back to it, and mark the Capture reviewed.',
+    risk: 'low',
+    exposure: ['ui', 'chat', 'mcp'],
+    reversible: true,
+    input: z
+      .object({
+        captureId: id,
+        title: z.string().trim().min(3).max(1_000),
+        startsOn: date,
+        endsOn: date,
+        descriptionMarkdown: z.string().max(50_000).nullable(),
+      })
+      .strict(),
+    output: captureFileActionOutput,
   },
   'review.complete-weekly.v1': {
     summary: 'Complete Weekly Review with an explicit decision for every unfinished Action.',
@@ -1027,11 +1113,13 @@ export const undoableOperationIds = [
   'daily-focus.set.v1',
   'capture.create.v1',
   'capture.file-to-note.v1',
+  'capture.file-to-action.v1',
   'note.create.v1',
   'note.update.v1',
   'note.move.v1',
   'note.archive.v1',
   'note.ai-exclusion.v1',
+  'note.favorite.v1',
   'note.import-preview.v1',
   'note.import-commit.v1',
   'note.tags.set.v1',
@@ -1082,6 +1170,18 @@ export class OperationFailure extends Error {
 
 const digestPrefix = /^([a-z0-9_]+): /;
 
+/* The stable code, for the few failures a surface has to react to rather than
+   merely report. The digest carries `<code>: <message>`, so the code has
+   always been there; reading it beats matching on the sentence, which is
+   copy that should be free to change. */
+export function operationFailureCode(error: unknown): string | null {
+  if (error instanceof OperationFailure) return error.code;
+  const digest = (error as { digest?: unknown } | null)?.digest;
+  if (typeof digest !== 'string') return null;
+  const match = digestPrefix.exec(digest);
+  return match ? match[1] : null;
+}
+
 // Reads the message back off whichever side of that boundary it survived on.
 export function operationFailureMessage(error: unknown): string | null {
   if (error instanceof OperationFailure) return error.message;
@@ -1126,6 +1226,12 @@ function stableFailure(message: string) {
     return new OperationFailure(
       'capture_source_is_immutable',
       'A Capture keeps the words you recorded. Save the change as a Note instead.'
+    );
+  }
+  if (message.includes('review_already_completed')) {
+    return new OperationFailure(
+      'review_already_completed',
+      'This period has already been reviewed. Undo the completed review before recording a different one.'
     );
   }
   if (message.includes('vision_required')) {

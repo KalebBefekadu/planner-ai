@@ -1,12 +1,14 @@
 'use client';
 
-import { useMemo, useState, useTransition } from 'react';
+import { useMemo, useRef, useState, useTransition } from 'react';
+import Link from 'next/link';
 import { AlertCircle, CalendarRange, CheckCircle2, Flag, History } from 'lucide-react';
 import {
   completeWeeklyReview,
   type WeeklyReviewData,
   type WeeklyReviewDecision,
 } from '@/app/review/actions';
+import { newReviewIntent } from '@/lib/reviews/completion-intent';
 import { CoachingCue } from '@/components/coaching-cue';
 import { ReviewTabs } from '@/components/review-tabs';
 import { ReviewAiProposal } from '@/components/review-ai-proposal';
@@ -14,6 +16,11 @@ import { weeklyReviewCoachingCue } from '@/lib/coaching';
 import { actionFailureMessage } from '@/lib/operations/failure-message';
 
 type Resolution = WeeklyReviewDecision['resolution'];
+// A decision nobody made is not a decision. The list starts unset so that
+// closing the week requires saying what happens to each unfinished Action --
+// defaulting every row to "leave overdue" made silent rollover the easiest
+// path through a screen whose whole claim is that it prevents one.
+type DraftResolution = Resolution | 'unset';
 
 const resolutionLabels: Record<Resolution, string> = {
   done: 'Completed',
@@ -29,17 +36,23 @@ function errorMessage(error: unknown) {
 
 export function WeeklyReview({ data }: { data: WeeklyReviewData }) {
   const [isPending, startTransition] = useTransition();
+  // Null until this screen submits, and cleared when a submission succeeds, so
+  // the next completion of the same period is recognised as a new decision
+  // rather than a replay of the one that was undone.
+  const intentRef = useRef<string | null>(null);
   const [reflection, setReflection] = useState('');
   const [notice, setNotice] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [decisions, setDecisions] = useState<Record<string, WeeklyReviewDecision>>(() =>
+  const [decisions, setDecisions] = useState<
+    Record<string, Omit<WeeklyReviewDecision, 'resolution'> & { resolution: DraftResolution }>
+  >(() =>
     Object.fromEntries(
       data.actions.map((action) => [
         action.id,
         {
           actionId: action.id,
           expectedVersion: action.version,
-          resolution: 'left_overdue' as const,
+          resolution: 'unset' as DraftResolution,
           reason: null,
           priority: false,
         },
@@ -51,29 +64,43 @@ export function WeeklyReview({ data }: { data: WeeklyReviewData }) {
     [decisions]
   );
 
-  function updateDecision(actionId: string, change: Partial<WeeklyReviewDecision>) {
+  function updateDecision(
+    actionId: string,
+    change: Partial<Omit<WeeklyReviewDecision, 'resolution'> & { resolution: DraftResolution }>
+  ) {
     setDecisions((current) => ({
       ...current,
       [actionId]: { ...current[actionId], ...change },
     }));
   }
 
-  const decisionsValid = Object.values(decisions).every(
-    (decision) =>
-      !['blocked', 'dropped'].includes(decision.resolution) || Boolean(decision.reason?.trim())
+  const undecidedCount = Object.values(decisions).filter(
+    (decision) => decision.resolution === 'unset'
+  ).length;
+  const missingReason = Object.values(decisions).some(
+    (decision) => ['blocked', 'dropped'].includes(decision.resolution) && !decision.reason?.trim()
   );
+  const decisionsValid = undecidedCount === 0 && !missingReason;
 
   function completeReview() {
     setError(null);
     setNotice(null);
     startTransition(async () => {
       try {
+        // The same intent for every send of this submission, so a retry
+        // replays rather than writing a second review. Undoing and completing
+        // again mounts the screen afresh and therefore starts a new intent.
+        intentRef.current ??= newReviewIntent();
         const result = await completeWeeklyReview({
+          intentId: intentRef.current,
           startsOn: data.startsOn,
           endsOn: data.endsOn,
           reflectionMarkdown: reflection,
-          decisions: Object.values(decisions),
+          decisions: Object.values(decisions).filter(
+            (decision): decision is WeeklyReviewDecision => decision.resolution !== 'unset'
+          ),
         });
+        intentRef.current = null;
         setNotice(
           `Review completed. ${result.resolvedCount} actions resolved and ${result.priorityCount} priorities committed.`
         );
@@ -138,9 +165,16 @@ export function WeeklyReview({ data }: { data: WeeklyReviewData }) {
       />
 
       {notice ? (
-        <p className="status-message" role="status">
-          {notice}
-        </p>
+        <div className="status-message review-complete-next" role="status">
+          <p>{notice}</p>
+          {/* Closing a week is only half of a weekly review. The next week has
+              to be somewhere a person can go from here, rather than a route
+              they are expected to remember. */}
+          <p className="review-next-links">
+            <Link href="/planner">Plan next week</Link>
+            <Link href="/">Open Today</Link>
+          </p>
+        </div>
       ) : null}
       {error ? (
         <p className="status-message status-message-error" role="alert">
@@ -175,7 +209,7 @@ export function WeeklyReview({ data }: { data: WeeklyReviewData }) {
                       value={decision.resolution}
                       aria-label={`Decision for ${action.title}`}
                       onChange={(event) => {
-                        const resolution = event.target.value as Resolution;
+                        const resolution = event.target.value as DraftResolution;
                         updateDecision(action.id, {
                           resolution,
                           priority: ['done', 'dropped'].includes(resolution)
@@ -184,6 +218,7 @@ export function WeeklyReview({ data }: { data: WeeklyReviewData }) {
                         });
                       }}
                     >
+                      <option value="unset">Decide what happens</option>
                       {Object.entries(resolutionLabels).map(([value, label]) => (
                         <option key={value} value={value}>
                           {label}
@@ -258,7 +293,13 @@ export function WeeklyReview({ data }: { data: WeeklyReviewData }) {
               {isPending ? 'Completing...' : 'Complete weekly review'}
             </button>
           </div>
-          {!decisionsValid ? (
+          {undecidedCount ? (
+            <p className="review-validation" role="alert">
+              <AlertCircle size={14} aria-hidden="true" /> {undecidedCount}{' '}
+              {undecidedCount === 1 ? 'Action still needs' : 'Actions still need'} a decision before
+              the week can close.
+            </p>
+          ) : missingReason ? (
             <p className="review-validation" role="alert">
               <AlertCircle size={14} aria-hidden="true" /> Add a reason for each blocked or dropped
               Action.

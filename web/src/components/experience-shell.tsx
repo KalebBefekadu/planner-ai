@@ -1,21 +1,22 @@
 'use client';
 
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react';
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
+
+import { ShellQuickCapture } from '@/components/shell-quick-capture';
 import {
   Bell,
   CalendarDays,
   ChevronRight,
+  Cloud,
   FileText,
   Home,
-  Inbox,
   Menu,
   PanelLeftClose,
   PanelLeftOpen,
   Search,
   Settings2,
-  Sparkles,
   X,
 } from 'lucide-react';
 import AuthButton from '@/components/auth-button';
@@ -25,7 +26,11 @@ import { AssistantDock } from '@/components/assistant-dock';
 import { ThemeToggle } from '@/components/theme-toggle';
 import {
   experienceAreaForPath,
+  experienceCommands,
+  experienceNavItems,
+  filterExperienceCommands,
   experienceNavigationForPath,
+  experienceRailItems,
   isExperienceNavItemActive,
   type ExperienceArea,
 } from '@/lib/experience-navigation';
@@ -33,6 +38,29 @@ import {
 const SIDEBAR_DEFAULT = 236;
 const SIDEBAR_MIN = 200;
 const SIDEBAR_MAX = 320;
+const SIDEBAR_OPEN_KEY = 'planner-sidebar-open';
+const SIDEBAR_WIDTH_KEY = 'planner-sidebar-width';
+const SIDEBAR_EVENT = 'planner-sidebar-change';
+
+function subscribeToSidebar(onChange: () => void) {
+  window.addEventListener('storage', onChange);
+  window.addEventListener(SIDEBAR_EVENT, onChange);
+  return () => {
+    window.removeEventListener('storage', onChange);
+    window.removeEventListener(SIDEBAR_EVENT, onChange);
+  };
+}
+
+function sidebarOpenSnapshot() {
+  return window.localStorage.getItem(SIDEBAR_OPEN_KEY) !== 'false';
+}
+
+function sidebarWidthSnapshot() {
+  const stored = Number(window.localStorage.getItem(SIDEBAR_WIDTH_KEY));
+  return Number.isFinite(stored) && stored >= SIDEBAR_MIN && stored <= SIDEBAR_MAX
+    ? stored
+    : SIDEBAR_DEFAULT;
+}
 
 type ExperienceShellProps = {
   children: React.ReactNode;
@@ -57,9 +85,15 @@ export function ExperienceShell({
   unreadNotifications,
 }: ExperienceShellProps) {
   const pathname = usePathname();
+  const standaloneFlow = pathname === '/onboarding';
+  const contentOwnsSidebar = pathname === '/notes';
   const router = useRouter();
-  const [sidebarOpen, setSidebarOpen] = useState(true);
-  const [sidebarWidth, setSidebarWidth] = useState(SIDEBAR_DEFAULT);
+  const sidebarOpen = useSyncExternalStore(subscribeToSidebar, sidebarOpenSnapshot, () => true);
+  const sidebarWidth = useSyncExternalStore(
+    subscribeToSidebar,
+    sidebarWidthSnapshot,
+    () => SIDEBAR_DEFAULT
+  );
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [commandOpen, setCommandOpen] = useState(false);
   const [commandQuery, setCommandQuery] = useState('');
@@ -67,49 +101,14 @@ export function ExperienceShell({
     () => experienceNavigationForPath(pathname, canonical),
     [canonical, pathname]
   );
+  const navigationItems = useMemo(() => experienceNavItems(navigation), [navigation]);
   const currentLabel =
-    navigation.items.find((item) => isExperienceNavItemActive(pathname, item))?.label ??
+    navigationItems.find((item) => isExperienceNavItemActive(pathname, item))?.label ??
     navigation.title;
-
-  const workspaceHref = canonical ? '/notes' : '/inbox';
-  const primaryItems: Array<{
-    area: ExperienceArea;
-    href: string;
-    label: string;
-    count?: number;
-  }> = [
-    { area: 'home', href: '/', label: 'Home' },
-    { area: 'planner', href: '/planner', label: 'Planner' },
-    { area: 'workspace', href: workspaceHref, label: 'Workspace' },
-    { area: 'search', href: '/search', label: 'Search' },
-    ...(canonical
-      ? [
-          {
-            area: 'notifications' as const,
-            href: '/notifications',
-            label: 'Notifications',
-            count: unreadNotifications,
-          },
-        ]
-      : []),
-    { area: 'settings', href: '/settings/security', label: 'Settings' },
-  ];
-  const commands = [
-    { label: 'Today', detail: 'Home', href: '/' },
-    { label: 'Plan', detail: 'Planner', href: '/planner' },
-    ...(canonical
-      ? [
-          { label: 'Calendar', detail: 'Planner', href: '/planner/calendar' },
-          { label: 'Weekly review', detail: 'Planner', href: '/review' },
-          { label: 'Notes', detail: 'Workspace', href: '/notes' },
-        ]
-      : []),
-    { label: 'Capture inbox', detail: 'Workspace', href: '/inbox' },
-    { label: 'Search workspace', detail: 'Search', href: '/search' },
-    { label: 'Settings', detail: 'Account and workspace', href: '/settings/security' },
-  ].filter((command) =>
-    `${command.label} ${command.detail}`.toLowerCase().includes(commandQuery.trim().toLowerCase())
-  );
+  const primaryItems = experienceRailItems(canonical, unreadNotifications);
+  const mainItems = primaryItems.filter((item) => item.placement === 'main');
+  const footerItems = primaryItems.filter((item) => item.placement === 'footer');
+  const commands = filterExperienceCommands(experienceCommands(canonical), commandQuery);
 
   const shellRef = useRef<HTMLDivElement>(null);
 
@@ -120,6 +119,16 @@ export function ExperienceShell({
   useEffect(() => {
     shellRef.current?.style.setProperty('--experience-sidebar-w', `${sidebarWidth}px`);
   }, [sidebarWidth]);
+
+  function toggleSidebar() {
+    window.localStorage.setItem(SIDEBAR_OPEN_KEY, String(!sidebarOpen));
+    window.dispatchEvent(new Event(SIDEBAR_EVENT));
+  }
+
+  function setSidebarWidth(width: number) {
+    window.localStorage.setItem(SIDEBAR_WIDTH_KEY, String(width));
+    window.dispatchEvent(new Event(SIDEBAR_EVENT));
+  }
 
   useEffect(() => {
     function handleShortcut(event: KeyboardEvent) {
@@ -178,41 +187,40 @@ export function ExperienceShell({
         })}
       </nav>
 
-      {navigation.area === 'workspace' ? (
-        <Link
-          className="experience-quick-action"
-          href="/inbox"
-          onClick={() => setMobileMenuOpen(false)}
-        >
-          <Inbox size={15} aria-hidden="true" />
-          Capture a thought
-        </Link>
-      ) : navigation.area === 'planner' ? (
-        <Link
-          className="experience-quick-action"
-          href="/inbox"
-          onClick={() => setMobileMenuOpen(false)}
-        >
-          <Sparkles size={15} aria-hidden="true" />
-          Capture an action
-        </Link>
+      {/* A composer rather than a link. The thought arrives while someone is
+          in the middle of something else, and navigating to /inbox to write it
+          down is the interruption Capture exists to avoid. */}
+      {navigation.area === 'workspace' || navigation.area === 'planner' ? (
+        <ShellQuickCapture
+          label={navigation.area === 'workspace' ? 'Capture a thought' : 'Capture an action'}
+        />
       ) : null}
 
-      <nav className="experience-secondary-nav" aria-label={`${navigation.title} sections`}>
-        <p>{navigation.area === 'planner' ? 'Planning views' : 'Navigate'}</p>
-        {navigation.items.map((item) => (
-          <Link
-            key={`${navigation.area}-${item.href}-${item.label}`}
-            aria-current={isExperienceNavItemActive(pathname, item) ? 'page' : undefined}
-            className={
-              isExperienceNavItemActive(pathname, item) ? 'experience-secondary-active' : undefined
-            }
-            href={item.href}
-            onClick={() => setMobileMenuOpen(false)}
-          >
-            <span>{item.label}</span>
-            <ChevronRight size={14} aria-hidden="true" />
-          </Link>
+      {/* Named "menu" rather than "sections": on /settings the in-page tab bar
+          is already the "Settings sections" landmark, and two navigation
+          landmarks sharing one name leaves a screen-reader user unable to tell
+          the sidebar from the tab bar. */}
+      <nav className="experience-secondary-nav" aria-label={`${navigation.title} menu`}>
+        {navigation.sections.map((section) => (
+          <div className="experience-nav-section" key={`${navigation.area}-${section.label}`}>
+            <p>{section.label}</p>
+            {section.items.map((item) => (
+              <Link
+                key={`${navigation.area}-${item.href}-${item.label}`}
+                aria-current={isExperienceNavItemActive(pathname, item) ? 'page' : undefined}
+                className={
+                  isExperienceNavItemActive(pathname, item)
+                    ? 'experience-secondary-active'
+                    : undefined
+                }
+                href={item.href}
+                onClick={() => setMobileMenuOpen(false)}
+              >
+                <span>{item.label}</span>
+                <ChevronRight size={14} aria-hidden="true" />
+              </Link>
+            ))}
+          </div>
         ))}
       </nav>
 
@@ -238,7 +246,7 @@ export function ExperienceShell({
   return (
     <div
       ref={shellRef}
-      className={`experience-shell${sidebarOpen ? '' : ' experience-sidebar-collapsed'}`}
+      className={`experience-shell${sidebarOpen ? '' : ' experience-sidebar-collapsed'}${standaloneFlow ? ' experience-standalone' : ''}${contentOwnsSidebar ? ' experience-content-sidebar' : ''}`}
       data-experience-area={navigation.area}
     >
       <a className="experience-skip-link" href="#experience-main">
@@ -266,7 +274,7 @@ export function ExperienceShell({
           P
         </Link>
         <div className="experience-rail-main">
-          {primaryItems.slice(0, 4).map((item) => {
+          {mainItems.map((item) => {
             const Icon = areaIcons[item.area];
             const active = experienceAreaForPath(pathname) === item.area;
             return (
@@ -284,7 +292,7 @@ export function ExperienceShell({
           })}
         </div>
         <div className="experience-rail-bottom">
-          {primaryItems.slice(4).map((item) => {
+          {footerItems.map((item) => {
             const Icon = areaIcons[item.area];
             const active = experienceAreaForPath(pathname) === item.area;
             return (
@@ -309,7 +317,7 @@ export function ExperienceShell({
         </div>
       </nav>
 
-      {sidebarOpen ? sidebar : null}
+      {sidebarOpen && !contentOwnsSidebar ? sidebar : null}
       {mobileMenuOpen ? (
         <MobileDrawer onClose={() => setMobileMenuOpen(false)}>{sidebar}</MobileDrawer>
       ) : null}
@@ -321,7 +329,7 @@ export function ExperienceShell({
               className="experience-icon-button experience-desktop-sidebar-toggle"
               type="button"
               aria-label={sidebarOpen ? 'Collapse sidebar' : 'Open sidebar'}
-              onClick={() => setSidebarOpen((current) => !current)}
+              onClick={toggleSidebar}
             >
               {sidebarOpen ? <PanelLeftClose size={17} /> : <PanelLeftOpen size={17} />}
             </button>
@@ -349,13 +357,35 @@ export function ExperienceShell({
               <span>Search</span>
               <kbd>⌘ K</kbd>
             </button>
-            <span className="experience-sync-state">Cloud workspace</span>
+            <span className="experience-sync-state">
+              <Cloud size={13} aria-hidden="true" />
+              Saved
+            </span>
           </div>
         </header>
         <main id="experience-main" className="app-main experience-main">
           {children}
         </main>
       </section>
+
+      <nav className="experience-mobile-bottom-nav" aria-label="Product areas">
+        {mainItems.map((item) => {
+          const Icon = areaIcons[item.area];
+          const active = navigation.area === item.area;
+          return (
+            <Link
+              key={`bottom-${item.area}`}
+              className={active ? 'experience-mobile-bottom-active' : undefined}
+              href={item.href}
+              aria-current={active ? 'page' : undefined}
+              aria-label={item.label}
+            >
+              <Icon size={18} aria-hidden="true" />
+              <span>{item.label}</span>
+            </Link>
+          );
+        })}
+      </nav>
 
       {commandOpen ? (
         <CommandBackdrop onClose={() => setCommandOpen(false)}>
@@ -369,7 +399,6 @@ export function ExperienceShell({
               placeholder="Search or open a destination"
               aria-label="Search commands and workspace"
               maxLength={120}
-              autoFocus
             />
             <button
               className="experience-icon-button"
@@ -383,6 +412,14 @@ export function ExperienceShell({
           </form>
           <div className="experience-command-results">
             <p>Open</p>
+            {/* Announced politely so a filter that matches nothing is heard, not
+                just seen as an empty gap above the search fallback. */}
+            <p className="visually-hidden" role="status">
+              {commands.length === 1 ? '1 destination' : `${commands.length} destinations`}
+            </p>
+            {commands.length === 0 ? (
+              <p className="experience-command-empty">No destination matches that.</p>
+            ) : null}
             {commands.map((command) => (
               <Link
                 href={command.href}

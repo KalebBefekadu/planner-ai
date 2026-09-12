@@ -1,12 +1,14 @@
 'use client';
 
 import {
+  Fragment,
   type KeyboardEvent,
   useCallback,
   useEffect,
   useMemo,
   useRef,
   useState,
+  useSyncExternalStore,
   useTransition,
 } from 'react';
 import {
@@ -30,11 +32,13 @@ import {
   ListTodo,
   Mic,
   NotebookPen,
+  Download,
   Paperclip,
   Plus,
   RotateCcw,
   Search,
   ShieldOff,
+  Star,
   Table2,
   Tags,
   Target,
@@ -53,9 +57,11 @@ import {
   linkNoteGoal,
   linkNote,
   fileNoteUnder,
+  getStoredNote,
   moveNoteToNewParent,
   moveNoteWithinParent,
   restoreNoteRevision,
+  setNoteFavorite,
   setNoteTags,
   setNoteAiExcluded,
   unlinkNote,
@@ -66,12 +72,27 @@ import {
   type NoteView,
 } from '@/app/notes/actions';
 import { nextParentMove, nextSiblingMove, parentCandidateIds } from '@/lib/notes/sibling-order';
+import { operationFailureCode } from '@/lib/operations';
+import {
+  conflictSummary,
+  describeNoteConflict,
+  resolveWith,
+  type ConflictSide,
+} from '@/lib/notes/conflict-resolution';
+import { NoteAppearanceHeader } from '@/components/note-appearance-header';
+import { noteLocationLabel, notePath, orderFavorites } from '@/lib/notes/note-paths';
 import { RichMarkdownEditor } from '@/components/rich-markdown-editor';
 import { useVoiceTranscription } from '@/lib/use-voice-transcription';
 import { extractPlannerMarkdownHeadings } from '@/lib/markdown/contract';
 import { continueMarkdownList, wrapMarkdownSelection } from '@/lib/markdown/editing';
 import { plannerMarkdownSupportsRichEditing } from '@/lib/markdown/rich-editor';
 import { actionFailureMessage } from '@/lib/operations/failure-message';
+import {
+  forgetNoteDraft,
+  noteDraftSnapshot,
+  rememberNoteDraft,
+  subscribeToNoteDrafts,
+} from '@/lib/note-draft-recovery';
 
 function errorMessage(error: unknown) {
   return actionFailureMessage(error, 'Unable to save this Note.');
@@ -100,28 +121,106 @@ export function NoteMarkdownPreview({ markdown }: { markdown: string }) {
   );
 }
 
+export type InspectorView = 'properties' | 'links' | 'history';
+
+type NoteAttachment = NoteKnowledgeContext['attachments'][number];
+
+const attachmentTypeNames: Record<string, string> = {
+  'application/pdf': 'PDF',
+  'image/jpeg': 'JPEG image',
+  'image/png': 'PNG image',
+  'text/markdown': 'Markdown file',
+  'text/plain': 'text file',
+};
+
+function attachmentSize(byteSize: number) {
+  if (byteSize < 1024) return `${byteSize} bytes`;
+  if (byteSize < 1024 * 1024) return `${Math.round(byteSize / 1024)} KB`;
+  return `${(byteSize / (1024 * 1024)).toFixed(1)} MB`;
+}
+
+// What the person is told about a file. "Security review pending" used to be
+// shown for every attachment forever, which described a review that was never
+// going to run and a file that could never be opened. Each state here is
+// something that is actually true of the stored file.
+function attachmentStatus(attachment: NoteAttachment) {
+  if (attachment.scanState === 'rejected') {
+    return `Not available: contents do not match a ${
+      attachmentTypeNames[attachment.mediaType] ?? 'file'
+    }`;
+  }
+  if (attachment.scanState === 'quarantined') return 'Checking this file';
+  return attachmentSize(attachment.byteSize);
+}
+
+function restorableUntil(purgeAfter: string | null) {
+  if (!purgeAfter) return 'Restore is no longer available.';
+  return `Restore by ${new Date(purgeAfter).toLocaleDateString(undefined, {
+    day: 'numeric',
+    month: 'short',
+    year: 'numeric',
+  })}.`;
+}
+
 export function NotesWorkspace({
   notes,
+  favorites,
   selectedId,
   query,
   knowledge,
+  inspectorView,
+  onInspectorViewChange,
   onRequestImport,
 }: {
   notes: NoteView[];
+  favorites: NoteView[];
   selectedId: string | null;
   query: string;
   knowledge: NoteKnowledgeContext | null;
+  inspectorView: InspectorView;
+  onInspectorViewChange: (view: InspectorView) => void;
   onRequestImport: () => void;
 }) {
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
-  const selected = notes.find((note) => note.id === selectedId) ?? null;
+  /* A Note is reachable from two places, and opening it has to work from
+     both. `notes` is the tree, which a search narrows; the favourites list is
+     deliberately not narrowed, because being able to leave a search is the
+     point of keeping a Note close. Resolving the selection from the tree alone
+     meant clicking a favourite while a search was active navigated correctly
+     and then displayed whatever the filtered tree happened to list first --
+     the one moment the list exists for. */
+  const selected =
+    notes.find((note) => note.id === selectedId) ??
+    favorites.find((note) => note.id === selectedId) ??
+    null;
   const activeNoteId = selected?.id ?? null;
   const [title, setTitle] = useState(selected?.title ?? '');
   const [body, setBody] = useState(selected?.bodyMarkdown ?? '');
   const versionRef = useRef(selected?.version ?? 1);
-  const [saveState, setSaveState] = useState<'saved' | 'saving' | 'error'>('saved');
+  // The durable mutation currently in flight, if any. Only whether one is
+  // running matters, not what it returns.
+  const pendingWorkRef = useRef<Promise<unknown> | null>(null);
+  const [saveState, setSaveState] = useState<'saved' | 'unsaved' | 'saving' | 'error'>('saved');
+  const [dismissedDraftFor, setDismissedDraftFor] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  /* Both sides of a refused save, held so the two versions can be compared.
+     Separate from `body`/`title`, which stay exactly as typed -- the editor is
+     never quietly rewritten out from under someone.
+
+     The stored side is captured here rather than read from `notes` when the
+     panel renders. `router.refresh()` is a request for a new render, not a
+     fact: the props can still describe the version the draft was written
+     against when someone reads the comparison and chooses. That showed a
+     person their own pre-conflict text as "the saved version", and then wrote
+     back with its version number, which the server refused a second time --
+     so the panel stayed up and taking the stored version could not complete
+     at all. Capturing the stored side once, at the conflict, makes what is
+     compared and what is written the same version that caused the refusal. */
+  const [conflict, setConflict] = useState<{
+    mine: { title: string; bodyMarkdown: string };
+    theirs: { title: string; bodyMarkdown: string; version: number };
+  } | null>(null);
   const [tagText, setTagText] = useState(knowledge?.tags.join(', ') ?? '');
   const [targetNoteId, setTargetNoteId] = useState('');
   const [filingParentId, setFilingParentId] = useState('');
@@ -132,10 +231,6 @@ export function NotesWorkspace({
   const [editorMode, setEditorMode] = useState<'source' | 'rich' | 'preview'>('source');
   const [richEditor, setRichEditor] = useState<Editor | null>(null);
   const [isUploadingAttachment, setIsUploadingAttachment] = useState(false);
-  const [recentlyRemovedAttachment, setRecentlyRemovedAttachment] = useState<{
-    id: string;
-    originalName: string;
-  } | null>(null);
   const editorRef = useRef<HTMLTextAreaElement>(null);
   const attachmentInputRef = useRef<HTMLInputElement>(null);
   const persistedDraftRef = useRef({
@@ -144,6 +239,41 @@ export function NotesWorkspace({
   });
   const saveInFlightRef = useRef(false);
   const queuedDraftRef = useRef<{ title: string; bodyMarkdown: string } | null>(null);
+  // The autosave pipeline is bound to the Note it belongs to. Switching Notes
+  // used to clear the pending timer and drop whatever had been typed in the
+  // last 800ms, and the draft had no way of naming which Note it came from.
+  const pendingSaveRef = useRef<{
+    noteId: string;
+    draft: { title: string; bodyMarkdown: string };
+  } | null>(null);
+  // A draft left behind by a refused save. Read through the store rather than
+  // mirrored into state, so the server and the first client render agree that
+  // there is nothing to offer until storage has actually been read.
+  const storedDraft = useSyncExternalStore(
+    subscribeToNoteDrafts,
+    () => (activeNoteId ? noteDraftSnapshot(activeNoteId) : null),
+    () => null
+  );
+  const recoverableDraft =
+    storedDraft &&
+    storedDraft.noteId === activeNoteId &&
+    storedDraft.bodyMarkdown !== body &&
+    dismissedDraftFor !== activeNoteId
+      ? storedDraft
+      : null;
+  // Favourites arrive already ordered by the server, but the ordering rule is
+  // shared with the tests and applied here too so a stale or reordered payload
+  // cannot quietly change what a person sees.
+  const favoriteNotes = useMemo(() => orderFavorites(favorites), [favorites]);
+  const isFavorite = favoriteNotes.some((note) => note.id === selectedId);
+  // The breadcrumb is the whole ancestor chain, not just the immediate parent.
+  // A Note three levels down used to report the same one-step location as a
+  // Note one level down, which is no location at all in a deep tree, and the
+  // trail was plain text so there was nothing to click on the way back up.
+  const breadcrumbTrail = useMemo(
+    () => (selectedId ? notePath(notes, selectedId).slice(0, -1) : []),
+    [notes, selectedId]
+  );
   const outline = useMemo(() => extractPlannerMarkdownHeadings(body), [body]);
   const richEditable = useMemo(() => plannerMarkdownSupportsRichEditing(body), [body]);
   const activeEditorMode = editorMode === 'rich' && !richEditable ? 'source' : editorMode;
@@ -172,12 +302,21 @@ export function NotesWorkspace({
 
   function applyMove(move: () => Promise<NoteView | null>) {
     startTransition(async () => {
-      try {
+      // Held so that leaving the page can wait for it. A move is a durable
+      // Operation; losing it to a navigation started a moment later is losing
+      // work the person believes they did.
+      const work = (async () => {
         const moved = await move();
         if (moved) versionRef.current = moved.version;
+      })();
+      pendingWorkRef.current = work;
+      try {
+        await work;
         router.refresh();
       } catch (caught) {
         setError(errorMessage(caught));
+      } finally {
+        if (pendingWorkRef.current === work) pendingWorkRef.current = null;
       }
     });
   }
@@ -203,6 +342,125 @@ export function NotesWorkspace({
   // indentation outright so the hierarchy vanished on a phone. Real nesting
   // carries the structure to assistive technology and to a narrow screen, and
   // it cannot fall out of step with where a Note actually sits.
+  // A search result is not a place in the hierarchy, it is an answer. The tree
+  // is drawn from the roots downwards, so a match nested under a Note that does
+  // not itself match had no rendered ancestor to hang from and was silently
+  // dropped -- the deeper a Note was filed, the less findable it became, which
+  // is the opposite of what search is for. While a query is active the sidebar
+  // shows the matches themselves, flat and in tree order.
+  //
+  // Each result carries where it is filed. Two Notes both called "Notes" were
+  // two identical buttons: the list gave a person no way to tell which one they
+  // were about to open, and opening the wrong one is how notes get written into
+  // the wrong page. Titles are not unique and were never meant to be, so the
+  // path is what makes a result identifiable. The ancestors that supply it are
+  // fetched alongside the matches; they are not results themselves, and listing
+  // them would answer a question nobody asked.
+  function renderSearchResults() {
+    const results = notes
+      .filter((note) => note.matchesQuery !== false)
+      .sort((first, second) => first.sortKey - second.sortKey);
+    if (!results.length) return null;
+    return (
+      <ul className="note-tree-level">
+        {results.map((note) => (
+          <li key={note.id}>{renderNoteButton(note, noteLocationLabel(notes, note.id))}</li>
+        ))}
+      </ul>
+    );
+  }
+
+  function toggleFavorite() {
+    if (!selected) return;
+    const favorite = !isFavorite;
+    startTransition(async () => {
+      try {
+        const saved = await setNoteFavorite(selected.id, favorite, versionRef.current);
+        versionRef.current = saved.version;
+        router.refresh();
+      } catch (caught) {
+        setError(errorMessage(caught));
+      }
+    });
+  }
+
+  // A flat result list drops the one thing that told two identically titled
+  // pages apart, so whatever ancestor chain is in hand is shown underneath the
+  // title: "Notes" under Acme and "Notes" under Globex are distinguishable
+  // before the click rather than after it.
+  /* Taking one side of a conflict.
+   *
+   * Whichever side is chosen, the write goes through the ordinary versioned
+   * Operation against the version now stored, so choosing is itself an
+   * ordinary save -- recorded, undoable, and refused again if someone else
+   * saves in the meantime. Keeping the stored version still writes, rather
+   * than silently dropping the draft, so Activity records that a decision was
+   * made rather than leaving a gap where someone's writing used to be. */
+  async function resolveConflict(side: ConflictSide) {
+    if (!conflict || !selected) return;
+    const chosen = resolveWith(side, conflict.mine, conflict.theirs);
+    setError(null);
+    try {
+      const saved = await updateNote({
+        id: selected.id,
+        title: chosen.title.trim() || 'Untitled',
+        bodyMarkdown: chosen.bodyMarkdown,
+        expectedVersion: conflict.theirs.version,
+      });
+      versionRef.current = saved.version;
+      setTitle(saved.title);
+      setBody(saved.bodyMarkdown);
+      queuedDraftRef.current = null;
+      pendingSaveRef.current = null;
+      persistedDraftRef.current = { title: saved.title, bodyMarkdown: saved.bodyMarkdown };
+      forgetNoteDraft(selected.id);
+      setConflict(null);
+      setSaveState('saved');
+      router.refresh();
+    } catch (caught) {
+      /* Someone saved again while this comparison was on screen. The decision
+         cannot be applied to a version that no longer exists, and reporting a
+         dead end would strand the draft in a panel with no working way out --
+         so the comparison is rebuilt against what is stored now and the choice
+         is offered again. */
+      if (operationFailureCode(caught) === 'version_conflict') {
+        const restated = await captureConflict(selected.id, conflict.mine);
+        if (restated) {
+          setError('This Note changed again while you were choosing. Here is what it holds now.');
+          return;
+        }
+      }
+      setError(errorMessage(caught));
+    }
+  }
+
+  function renderNoteButton(note: NoteView, locationLabel?: string) {
+    return (
+      <button
+        className={`note-tree-item${note.id === selected?.id ? ' note-tree-item-active' : ''}`}
+        type="button"
+        onClick={() => openNoteFromTree(note.id)}
+      >
+        <span>
+          {note.title}
+          {locationLabel ? (
+            <small className="note-tree-item-location">{locationLabel}</small>
+          ) : null}
+        </span>
+        {note.aiExcluded ? <ShieldOff size={13} aria-label="Excluded from AI" /> : null}
+      </button>
+    );
+  }
+
+  // Opening a result must not discard the query that produced it. Dropping it
+  // returned the sidebar to the whole tree on the first click, so a person
+  // reading through several matches had to retype the search each time.
+  function openNoteFromTree(noteId: string) {
+    const search = new URLSearchParams({ note: noteId });
+    if (query) search.set('q', query);
+    router.push(`/notes?${search.toString()}`);
+  }
+
   function renderNoteLevel(parentNoteId: string | null) {
     const level = notes
       .filter((note) => note.parentNoteId === parentNoteId)
@@ -212,14 +470,7 @@ export function NotesWorkspace({
       <ul className="note-tree-level">
         {level.map((note) => (
           <li key={note.id}>
-            <button
-              className={`note-tree-item${note.id === selected?.id ? ' note-tree-item-active' : ''}`}
-              type="button"
-              onClick={() => router.push(`/notes?note=${note.id}`)}
-            >
-              <span>{note.title}</span>
-              {note.aiExcluded ? <ShieldOff size={13} aria-label="Excluded from AI" /> : null}
-            </button>
+            {renderNoteButton(note)}
             {renderNoteLevel(note.id)}
           </li>
         ))}
@@ -262,9 +513,36 @@ export function NotesWorkspace({
   );
   const voice = useVoiceTranscription({ onTranscript: insertTranscript });
 
+  /* Read the version the server actually holds and put both sides on screen.
+     Returns whether the comparison could be built: a Note that has since been
+     archived or deleted has no stored side to offer, and saying so honestly is
+     better than showing a comparison against nothing. */
+  const captureConflict = useCallback(
+    async (noteId: string, mine: { title: string; bodyMarkdown: string }) => {
+      try {
+        const stored = await getStoredNote(noteId);
+        if (!stored) return false;
+        setConflict({
+          mine,
+          theirs: {
+            title: stored.title,
+            bodyMarkdown: stored.bodyMarkdown,
+            version: stored.version,
+          },
+        });
+        return true;
+      } catch {
+        return false;
+      }
+    },
+    []
+  );
+
+  // The Note being saved is passed in rather than read from the closure. The
+  // save that matters most is the one for the Note a person has just left, and
+  // by then activeNoteId already names a different Note.
   const queueAutosave = useCallback(
-    async (draft: { title: string; bodyMarkdown: string }) => {
-      if (!activeNoteId) return;
+    async (noteId: string, draft: { title: string; bodyMarkdown: string }) => {
       queuedDraftRef.current = draft;
       if (saveInFlightRef.current) return;
 
@@ -276,15 +554,46 @@ export function NotesWorkspace({
           queuedDraftRef.current = null;
           try {
             const saved = await updateNote({
-              id: activeNoteId,
+              id: noteId,
               title: nextDraft.title.trim() || 'Untitled',
               bodyMarkdown: nextDraft.bodyMarkdown,
               expectedVersion: versionRef.current,
             });
             versionRef.current = saved.version;
             persistedDraftRef.current = nextDraft;
+            pendingSaveRef.current = null;
+            forgetNoteDraft(noteId);
           } catch (caught) {
             queuedDraftRef.current ??= nextDraft;
+            // A refused save is the moment the words are least safe: they
+            // exist only in this tab. Keep a local copy so a reload, a crash
+            // or a closed laptop does not take them with it.
+            rememberNoteDraft({
+              noteId,
+              title: nextDraft.title,
+              bodyMarkdown: nextDraft.bodyMarkdown,
+              savedAt: Date.now(),
+              expectedVersion: versionRef.current,
+            });
+            /* A version conflict is not an error to report and move on
+               from: the person is now holding two versions of their own
+               writing, and the only advice the copy can give -- refresh -- is
+               the action that discards theirs. Keep the refused draft and show
+               the comparison instead. The stored side is read directly, so
+               the panel is built from the version that caused the refusal
+               rather than from whatever render the page happens to hold;
+               `router.refresh()` then brings the rest of the page up to date
+               without touching the editor. */
+            if (operationFailureCode(caught) === 'version_conflict') {
+              const captured = await captureConflict(noteId, nextDraft);
+              setSaveState('error');
+              if (!captured) {
+                setError(errorMessage(caught));
+                return;
+              }
+              router.refresh();
+              return;
+            }
             setError(errorMessage(caught));
             setSaveState('error');
             return;
@@ -296,7 +605,7 @@ export function NotesWorkspace({
         saveInFlightRef.current = false;
       }
     },
-    [activeNoteId, router]
+    [captureConflict, router]
   );
 
   useEffect(() => {
@@ -307,17 +616,38 @@ export function NotesWorkspace({
     ) {
       return;
     }
+    const noteId = activeNoteId;
+    const draft = { title, bodyMarkdown: body };
+    pendingSaveRef.current = { noteId, draft };
+    setSaveState((current) => (current === 'error' ? current : 'unsaved'));
     const timer = window.setTimeout(() => {
-      void queueAutosave({ title, bodyMarkdown: body });
+      void queueAutosave(noteId, draft);
     }, 800);
+    // Only the timer is cancelled here. This effect re-runs on every
+    // keystroke, so flushing from this cleanup would save on every keystroke
+    // and the debounce would stop debouncing.
     return () => window.clearTimeout(timer);
   }, [activeNoteId, body, queueAutosave, title]);
+
+  // Leaving the Note is the case that matters. The editor is remounted per
+  // Note, so this cleanup runs exactly when a person navigates away or opens
+  // another one -- the moment the pending edit would otherwise be dropped
+  // along with its timer.
+  useEffect(() => {
+    return () => {
+      const pending = pendingSaveRef.current;
+      if (pending) void queueAutosave(pending.noteId, pending.draft);
+    };
+  }, [queueAutosave]);
 
   useEffect(() => {
     if (selected?.version && selected.version > versionRef.current) {
       versionRef.current = selected.version;
     }
   }, [selected?.version]);
+
+  // Offer back anything a refused save left behind, rather than letting a
+  // reload quietly decide the writing never happened.
 
   function newNote(parentNoteId: string | null) {
     startTransition(async () => {
@@ -440,10 +770,6 @@ export function NotesWorkspace({
         response.status === 204 ? null : ((await response.json()) as { error?: string });
       if (!response.ok)
         throw new Error(payload?.error ?? 'Attachment removal could not be completed.');
-      const removed = knowledge?.attachments.find((attachment) => attachment.id === attachmentId);
-      if (removed) {
-        setRecentlyRemovedAttachment({ id: removed.id, originalName: removed.originalName });
-      }
       router.refresh();
     } catch (caught) {
       setError(errorMessage(caught));
@@ -465,7 +791,6 @@ export function NotesWorkspace({
         const payload = (await response.json()) as { error?: string };
         throw new Error(payload.error ?? 'Attachment restoration could not be completed.');
       }
-      setRecentlyRemovedAttachment(null);
       router.refresh();
     } catch (caught) {
       setError(errorMessage(caught));
@@ -473,6 +798,13 @@ export function NotesWorkspace({
       setIsUploadingAttachment(false);
     }
   }
+
+  const liveAttachments = (knowledge?.attachments ?? []).filter(
+    (attachment) => !attachment.removedAt
+  );
+  const removedAttachments = (knowledge?.attachments ?? []).filter(
+    (attachment) => attachment.removedAt
+  );
 
   const availableTargets = notes.filter((note) => note.id !== selected?.id);
   // A Note cannot be filed under itself or under anything hanging beneath it,
@@ -488,6 +820,10 @@ export function NotesWorkspace({
     const allowed = new Set(parentCandidateIds(tree, selected.id));
     return notes.filter((note) => allowed.has(note.id) && note.id !== selected.parentNoteId);
   }, [notes, selected]);
+  const connectionCount =
+    (knowledge?.links.length ?? 0) +
+    (knowledge?.goalLinks.length ?? 0) +
+    (knowledge?.actionLinks.length ?? 0);
   const noteName = (id: string) => notes.find((note) => note.id === id)?.title ?? 'Missing Note';
 
   return (
@@ -523,7 +859,23 @@ export function NotesWorkspace({
             </button>
           </div>
         </div>
-        <form className="notes-search">
+        {/* Searching submits this form, which is a document load, and a document
+            load aborts every request still in flight. A move started a moment
+            earlier -- 'Make child of the note above', say -- then never reached
+            the server: the Note stayed where it was and nothing said so. Under
+            load that swallowed the move about half the time, and a person
+            filing a Note and immediately searching would see the same silent
+            no-op. Durable work finishes before the page is torn down. */}
+        <form
+          className="notes-search"
+          onSubmit={(event) => {
+            const pending = pendingWorkRef.current;
+            if (!pending) return;
+            event.preventDefault();
+            const form = event.currentTarget;
+            void pending.finally(() => form.requestSubmit());
+          }}
+        >
           <Search size={15} aria-hidden="true" />
           <input
             name="q"
@@ -532,13 +884,32 @@ export function NotesWorkspace({
             aria-label="Search notes"
           />
         </form>
+        {favoriteNotes.length ? (
+          <nav className="note-favorites" aria-label="Favorite notes">
+            <h2 className="note-favorites-heading">Favorites</h2>
+            <ul className="note-tree-level">
+              {favoriteNotes.map((note) => (
+                <li key={note.id}>{renderNoteButton(note)}</li>
+              ))}
+            </ul>
+          </nav>
+        ) : null}
         <nav className="note-tree" aria-label="Notes">
           {notes.length ? (
-            renderNoteLevel(null)
+            query ? (
+              renderSearchResults()
+            ) : (
+              renderNoteLevel(null)
+            )
           ) : (
             <div className="note-tree-empty">
               <NotebookPen size={17} aria-hidden="true" />
-              <p>Your pages will appear here.</p>
+              {/*
+               * A search that found nothing and a workspace that holds nothing
+               * look identical unless they are told apart, and the second
+               * message reads as data loss when the first one is true.
+               */}
+              <p>{query ? 'No Notes match this search.' : 'Your pages will appear here.'}</p>
             </div>
           )}
         </nav>
@@ -547,18 +918,39 @@ export function NotesWorkspace({
       <section className="note-editor-pane">
         {selected ? (
           <>
+            {/* WS-03: the accepted /preview document header. It owns its own
+                controls and its own saves, so the editor below is unchanged. */}
+            <NoteAppearanceHeader
+              // Keyed by Note so switching pages starts from that page's own
+              // stored appearance instead of carrying a draft across.
+              key={selected.id}
+              noteId={selected.id}
+              appearance={selected.appearance}
+              versionRef={versionRef}
+              onSaved={(version) => {
+                versionRef.current = version;
+                router.refresh();
+              }}
+              onError={setError}
+            />
             <div className="note-editor-header">
               <div className="note-title-group">
                 <nav className="note-editor-breadcrumb" aria-label="Note location">
                   <span>Workspace</span>
                   <ChevronRight size={13} aria-hidden="true" />
                   <span>Notes</span>
-                  {selected.parentNoteId ? (
-                    <>
+                  {breadcrumbTrail.map((ancestor) => (
+                    <Fragment key={ancestor.id}>
                       <ChevronRight size={13} aria-hidden="true" />
-                      <span>{noteName(selected.parentNoteId)}</span>
-                    </>
-                  ) : null}
+                      <button
+                        className="note-breadcrumb-link"
+                        type="button"
+                        onClick={() => openNoteFromTree(ancestor.id)}
+                      >
+                        {ancestor.title}
+                      </button>
+                    </Fragment>
+                  ))}
                 </nav>
                 <input
                   className="note-title-input"
@@ -586,8 +978,21 @@ export function NotesWorkspace({
                     ? 'Saving'
                     : saveState === 'error'
                       ? 'Not saved'
-                      : 'Saved'}
+                      : saveState === 'unsaved'
+                        ? 'Unsaved changes'
+                        : 'Saved'}
                 </span>
+                <button
+                  className="icon-button"
+                  type="button"
+                  title={isFavorite ? 'Remove from favorites' : 'Add to favorites'}
+                  aria-label={isFavorite ? 'Remove from favorites' : 'Add to favorites'}
+                  aria-pressed={isFavorite}
+                  disabled={isPending}
+                  onClick={toggleFavorite}
+                >
+                  <Star size={16} fill={isFavorite ? 'currentColor' : 'none'} />
+                </button>
                 <label className="ai-exclusion-toggle">
                   <input
                     type="checkbox"
@@ -676,6 +1081,71 @@ export function NotesWorkspace({
                 </button>
               </div>
             </div>
+            {conflict && selected
+              ? (() => {
+                  const comparison = describeNoteConflict(conflict.mine, conflict.theirs);
+                  return (
+                    <section className="note-conflict" role="alert" aria-label="Version conflict">
+                      <p className="note-conflict-summary">{conflictSummary(comparison)}</p>
+                      <p className="note-conflict-help">
+                        Your writing is safe. Read both, then choose which one this Note keeps.
+                      </p>
+                      {comparison.titleDiffers ? (
+                        <dl className="note-conflict-titles">
+                          <dt>Your title</dt>
+                          <dd>{conflict.mine.title || 'Untitled'}</dd>
+                          <dt>Saved title</dt>
+                          <dd>{conflict.theirs.title || 'Untitled'}</dd>
+                        </dl>
+                      ) : null}
+                      {comparison.bodyDiffers ? (
+                        <ol className="note-conflict-diff">
+                          {comparison.lines.map((line, index) => (
+                            <li
+                              key={`${line.kind}-${index}`}
+                              className={`note-conflict-line note-conflict-line-${line.kind}`}
+                            >
+                              <span className="note-conflict-marker" aria-hidden="true">
+                                {line.kind === 'mine'
+                                  ? '+'
+                                  : line.kind === 'theirs'
+                                    ? '\u2212'
+                                    : ' '}
+                              </span>
+                              {/* The screen reader hears which side a line is on;
+                                sighted readers get the colour and the marker. */}
+                              <span className="note-conflict-side">
+                                {line.kind === 'mine'
+                                  ? 'Yours: '
+                                  : line.kind === 'theirs'
+                                    ? 'Saved: '
+                                    : ''}
+                              </span>
+                              <span className="note-conflict-text">{line.text || '\u00a0'}</span>
+                            </li>
+                          ))}
+                        </ol>
+                      ) : null}
+                      <div className="note-conflict-actions">
+                        <button
+                          className="btn-primary"
+                          type="button"
+                          onClick={() => void resolveConflict('mine')}
+                        >
+                          Keep what I wrote
+                        </button>
+                        <button
+                          className="btn-secondary"
+                          type="button"
+                          onClick={() => void resolveConflict('theirs')}
+                        >
+                          Use the saved version
+                        </button>
+                      </div>
+                    </section>
+                  );
+                })()
+              : null}
             {error ? (
               <p className="status-message status-message-error" role="alert">
                 {error}
@@ -685,6 +1155,48 @@ export function NotesWorkspace({
               <p className="status-message status-message-error" role="alert">
                 {voice.error}
               </p>
+            ) : null}
+            {recoverableDraft ? (
+              // A refused save left the only copy of this writing in the
+              // browser. Offer it back rather than deciding for the person
+              // which version wins. Not a live region: this is a prompt to act
+              // on, and the save state is the editor's one status.
+              <section className="note-draft-recovery" aria-label="Recover unsaved changes">
+                <p>
+                  Unsaved changes from{' '}
+                  {new Intl.DateTimeFormat('en-US', {
+                    month: 'short',
+                    day: 'numeric',
+                    hour: 'numeric',
+                    minute: '2-digit',
+                  }).format(new Date(recoverableDraft.savedAt))}{' '}
+                  were kept on this device because a save did not go through.
+                </p>
+                <div className="note-draft-recovery-actions">
+                  <button
+                    className="btn-primary"
+                    type="button"
+                    onClick={() => {
+                      setTitle(recoverableDraft.title);
+                      setBody(recoverableDraft.bodyMarkdown);
+                      setDismissedDraftFor(activeNoteId);
+                    }}
+                  >
+                    Restore them
+                  </button>
+                  <button
+                    className="btn-secondary"
+                    type="button"
+                    onClick={() => {
+                      if (activeNoteId) forgetNoteDraft(activeNoteId);
+                      setDismissedDraftFor(activeNoteId);
+                    }}
+                  >
+                    Discard
+                  </button>
+                </div>
+                <small>Kept on this device for seven days, then removed.</small>
+              </section>
             ) : null}
             <div className="markdown-toolbar" role="toolbar" aria-label="Markdown formatting">
               <div className="markdown-tools">
@@ -878,8 +1390,35 @@ export function NotesWorkspace({
               ) : (
                 <NoteMarkdownPreview markdown={body} />
               )}
-              <aside className="note-inspector" aria-label="Note connections and history">
-                <section className="note-inspector-section">
+              <aside
+                className="note-inspector"
+                aria-label="Note connections and history"
+                data-inspector-view={inspectorView}
+              >
+                <nav className="note-inspector-tabs" aria-label="Note details">
+                  {(['properties', 'links', 'history'] as const).map((view) => (
+                    <button
+                      key={view}
+                      type="button"
+                      aria-pressed={inspectorView === view}
+                      onClick={() => onInspectorViewChange(view)}
+                    >
+                      {view[0].toUpperCase() + view.slice(1)}
+                      {/*
+                       * Nothing outside this pane says a Note has connections,
+                       * so a backlink someone else created was invisible unless
+                       * they thought to look. The count is decoration over the
+                       * label, which stays the button's accessible name.
+                       */}
+                      {view === 'links' && connectionCount ? (
+                        <span className="note-inspector-tab-count" aria-hidden="true">
+                          {connectionCount}
+                        </span>
+                      ) : null}
+                    </button>
+                  ))}
+                </nav>
+                <section className="note-inspector-section" data-inspector-group="history">
                   <h2>
                     <ListTree size={15} aria-hidden="true" />
                     Outline
@@ -901,7 +1440,7 @@ export function NotesWorkspace({
                     <p className="note-inspector-empty">Add headings to create an outline</p>
                   )}
                 </section>
-                <section className="note-inspector-section">
+                <section className="note-inspector-section" data-inspector-group="properties">
                   <h2>
                     <FolderTree size={15} aria-hidden="true" />
                     Filing
@@ -947,7 +1486,7 @@ export function NotesWorkspace({
                     </button>
                   </div>
                 </section>
-                <section className="note-inspector-section">
+                <section className="note-inspector-section" data-inspector-group="properties">
                   <h2>
                     <Paperclip size={15} aria-hidden="true" />
                     Attachments
@@ -973,50 +1512,63 @@ export function NotesWorkspace({
                     {isUploadingAttachment ? 'Uploading' : 'Attach file'}
                   </button>
                   <div className="note-attachment-list">
-                    {knowledge?.attachments.map((attachment) => (
+                    {liveAttachments.map((attachment) => (
+                      <div key={attachment.id} className="note-attachment-row">
+                        <div>
+                          <strong>{attachment.originalName}</strong>
+                          <span className="note-attachment-actions">
+                            {attachment.scanState === 'rejected' ? null : (
+                              <a
+                                className="note-icon-quiet"
+                                href={`/api/notes/attachments?attachmentId=${encodeURIComponent(attachment.id)}`}
+                                title="Download attachment"
+                                aria-label={`Download attachment ${attachment.originalName}`}
+                                role="button"
+                                download
+                              >
+                                <Download size={14} />
+                              </a>
+                            )}
+                            <button
+                              type="button"
+                              className="note-icon-quiet"
+                              title="Remove attachment"
+                              aria-label={`Remove attachment ${attachment.originalName}`}
+                              disabled={isUploadingAttachment}
+                              onClick={() => void removeAttachment(attachment.id)}
+                            >
+                              <Trash2 size={14} />
+                            </button>
+                          </span>
+                        </div>
+                        <span>{attachmentStatus(attachment)}</span>
+                      </div>
+                    ))}
+                    {!liveAttachments.length && !removedAttachments.length ? (
+                      <p className="note-inspector-empty">No attachments</p>
+                    ) : null}
+                    {removedAttachments.map((attachment) => (
                       <div key={attachment.id} className="note-attachment-row">
                         <div>
                           <strong>{attachment.originalName}</strong>
                           <button
                             type="button"
                             className="note-icon-quiet"
-                            title="Remove attachment"
-                            aria-label={`Remove attachment ${attachment.originalName}`}
+                            title="Restore attachment"
+                            aria-label={`Restore attachment ${attachment.originalName}`}
                             disabled={isUploadingAttachment}
-                            onClick={() => void removeAttachment(attachment.id)}
+                            onClick={() => void restoreAttachment(attachment.id)}
                           >
-                            <Trash2 size={14} />
+                            <RotateCcw size={14} />
                           </button>
                         </div>
-                        <span>
-                          {attachment.scanState === 'quarantined'
-                            ? 'Security review pending'
-                            : attachment.scanState}
-                        </span>
+                        <span>Removed. {restorableUntil(attachment.purgeAfter)}</span>
                       </div>
                     ))}
-                    {!knowledge?.attachments.length ? (
-                      <p className="note-inspector-empty">No attachments</p>
-                    ) : null}
-                    {recentlyRemovedAttachment ? (
-                      <div className="note-attachment-row">
-                        <span>{recentlyRemovedAttachment.originalName} removed</span>
-                        <button
-                          type="button"
-                          className="note-icon-quiet"
-                          title="Restore attachment"
-                          aria-label={`Restore attachment ${recentlyRemovedAttachment.originalName}`}
-                          disabled={isUploadingAttachment}
-                          onClick={() => void restoreAttachment(recentlyRemovedAttachment.id)}
-                        >
-                          <RotateCcw size={14} />
-                        </button>
-                      </div>
-                    ) : null}
                   </div>
                 </section>
 
-                <section className="note-inspector-section">
+                <section className="note-inspector-section" data-inspector-group="properties">
                   <h2>
                     <Tags size={15} aria-hidden="true" />
                     Tags
@@ -1058,7 +1610,7 @@ export function NotesWorkspace({
                   )}
                 </section>
 
-                <section className="note-inspector-section">
+                <section className="note-inspector-section" data-inspector-group="properties">
                   <h2>
                     <Target size={15} aria-hidden="true" />
                     Plan connections
@@ -1183,7 +1735,7 @@ export function NotesWorkspace({
                   </div>
                 </section>
 
-                <section className="note-inspector-section">
+                <section className="note-inspector-section" data-inspector-group="links">
                   <h2>
                     <Link2 size={15} aria-hidden="true" />
                     Links
@@ -1270,7 +1822,7 @@ export function NotesWorkspace({
                   </div>
                 </section>
 
-                <section className="note-inspector-section">
+                <section className="note-inspector-section" data-inspector-group="history">
                   <h2>
                     <History size={15} aria-hidden="true" />
                     History
@@ -1324,7 +1876,7 @@ export function NotesWorkspace({
                   </div>
                 </section>
 
-                <section className="note-inspector-section">
+                <section className="note-inspector-section" data-inspector-group="links">
                   <h2>
                     <FileInput size={15} aria-hidden="true" />
                     File captures

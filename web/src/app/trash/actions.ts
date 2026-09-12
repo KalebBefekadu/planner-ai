@@ -2,6 +2,7 @@
 
 import { randomUUID } from 'node:crypto';
 import { revalidatePath } from 'next/cache';
+import { revalidatePlannerAndRecords } from '@/lib/planner-revalidation';
 import { z } from 'zod';
 import { executeOperation } from '@/lib/operations';
 import { createClient } from '@/lib/supabase/server';
@@ -20,10 +21,9 @@ export async function restoreTrashBatchAction(batchId: string): Promise<TrashAct
       { idempotencyKey: randomUUID(), surface: 'ui' }
     );
     revalidatePath('/trash');
-    revalidatePath('/');
     revalidatePath('/notes');
-    revalidatePath('/planner');
     revalidatePath('/settings/memory');
+    revalidatePlannerAndRecords();
     return { ok: true };
   } catch {
     return { ok: false, error: 'Planner AI could not restore this batch.' };

@@ -24,6 +24,7 @@ import {
 import { inboxCoachingCue, type CoachingIntensity } from '@/lib/coaching';
 import { classifyOperationRejection } from '@/lib/operations/journal';
 import { AnalyzeCaptureButton, CaptureProposalQueue } from '@/components/capture-proposal-queue';
+import { CaptureFilingControls } from '@/components/capture-filing-controls';
 import type { CaptureAnalysisJobView, CaptureProposalBatchView } from '@/app/inbox/actions';
 
 type Transcript = CaptureView;
@@ -556,6 +557,10 @@ export function DumpUI({
                     }).format(new Date(transcript.created_at))}
                   </time>
                   <p>{transcript.raw_text}</p>
+                  <CaptureFilingControls
+                    captureId={transcript.id}
+                    captureState={transcript.state}
+                  />
                   {captureProposalsEnabled ? (
                     <AnalyzeCaptureButton
                       captureId={transcript.id}
