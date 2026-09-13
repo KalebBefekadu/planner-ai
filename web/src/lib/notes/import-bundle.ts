@@ -10,6 +10,7 @@ export {
 } from './import-limits';
 import { IMPORT_LIMITS, IMPORT_UPLOAD_LIMIT_LABEL, formatImportBytes } from './import-limits';
 import { describeLinkOutcome, resolveInternalLinks } from './import-links';
+import { convertNotionHtmlBlocks, describeNotionHtmlOutcome } from './import-notion-html';
 import { isSupportedVaultManifest, VAULT_MANIFEST_PATH } from '@/lib/notes/vault-format';
 
 export type ImportSourceFile = {
@@ -419,12 +420,20 @@ export function candidatesFromFiles(files: ImportSourceFile[]) {
     if (extension === '.csv') {
       candidates.push(...csvCandidates(file.path, body, parentSourcePath));
     } else {
+      // Notion writes callouts and toggles as raw HTML. Converting them here,
+      // before anything is stored, keeps the body source-authoritative
+      // Markdown and leaves the renderer nothing it has to refuse.
+      const html = convertNotionHtmlBlocks(body);
+      const htmlNotice = describeNotionHtmlOutcome(html);
       candidates.push({
         sourcePath: file.path,
         title: titleFrom(file.path, body),
-        bodyMarkdown: body,
+        bodyMarkdown: html.markdown,
         parentSourcePath,
         unsupportedReason: null,
+        // Carried only when there is something to say, so a page this changed
+        // nothing about keeps the shape it has always had.
+        ...(htmlNotice ? { conversionNotice: htmlNotice } : {}),
       });
     }
   }

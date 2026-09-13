@@ -69,7 +69,24 @@ export const notionExportFiles: ImportSourceFile[] = [
 
   file(
     `Personal operating system ${PAGE_ID.root}/Research ${PAGE_ID.research}.md`,
-    ['# Research', '', 'Open questions.'].join('\n')
+    [
+      '# Research',
+      '',
+      'Open questions.',
+      '',
+      /* Notion writes a callout as raw HTML, and a toggle as details/summary.
+         Most workspaces lean on both. */
+      '<aside>',
+      'Protect energy before optimizing output.',
+      '</aside>',
+      '',
+      '<details>',
+      '<summary>What matters now</summary>',
+      '',
+      'Focused work, faith, health and meaning.',
+      '',
+      '</details>',
+    ].join('\n')
   ),
 
   /* Two pages called "Notes" in different branches. A filesystem-shaped import

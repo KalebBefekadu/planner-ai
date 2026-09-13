@@ -127,6 +127,18 @@ describe('a Notion export arrives with its shape intact', () => {
     expect(plain.find((c) => c.title === 'Bread')?.parentSourcePath).toBe('Recipes/');
   });
 
+  /* Notion writes callouts as `<aside>` and toggles as `<details>`. Planner AI
+     renders Markdown, not HTML, so both reached the reader as literal tags
+     wrapped around content that was otherwise intact. */
+  it('leaves no raw Notion HTML for the renderer to show as text', () => {
+    const research = byTitle('Research')[0];
+    expect(research.bodyMarkdown).not.toMatch(/<aside>|<details>|<summary>/);
+    expect(research.bodyMarkdown).toContain('> Protect energy before optimizing output.');
+    expect(research.bodyMarkdown).toContain('**What matters now**');
+    expect(research.bodyMarkdown).toContain('Focused work, faith, health and meaning.');
+    expect(research.conversionNotice).toMatch(/callout/);
+  });
+
   it('gives an imported page no Planner AI appearance', () => {
     // Only a vault carries appearance. Inventing one for a Notion page would be
     // deciding on the owner's behalf and calling it a migration.
