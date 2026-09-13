@@ -55,16 +55,76 @@ describe('a Notion export arrives with its shape intact', () => {
     ]);
   });
 
-  it('turns each database row into its own page and says what that cost', () => {
-    const ship = byTitle('Ship the import')[0];
-    expect(ship).toBeDefined();
+  it('turns a database row with no page of its own into a page, and says what that cost', () => {
+    const writeItUp = byTitle('Write it up')[0];
+    expect(writeItUp).toBeDefined();
     // A CSV is a snapshot of a view, not the database. Saying so before the
     // owner commits is what makes the preview a decision rather than a
     // formality.
-    expect(ship.conversionNotice).toMatch(
+    expect(writeItUp.conversionNotice).toMatch(
       /formulas, relations, filters and views are not imported/
     );
-    expect(ship.bodyMarkdown).toContain('In progress');
+    expect(writeItUp.bodyMarkdown).toContain('Not started');
+  });
+
+  /* Notion exports a database twice over: `Tasks <id>.csv`, one row per page,
+     and `Tasks <id>/`, the row pages themselves. Importing both gave every row
+     that someone had actually written in two Notes -- the page, and a stub
+     rebuilt from the row's columns carrying the same title and none of the
+     writing. */
+  it('keeps the page a database row was written on, not a stub of its columns', () => {
+    const ship = byTitle('Ship the import');
+    expect(ship).toHaveLength(1);
+    expect(ship[0].bodyMarkdown).toContain('The CSV path is the one that breaks.');
+    expect(ship[0].sourcePath).not.toContain('#row-');
+    expect(ship[0].conversionNotice).toBeNull();
+  });
+
+  it('files a row that has no page of its own inside the database, not beside it', () => {
+    const writeItUp = byTitle('Write it up')[0];
+    const tasks = candidates().find(
+      (candidate) => candidate.title === 'Tasks' && candidate.sourcePath.endsWith('/')
+    );
+    expect(tasks).toBeDefined();
+    expect(writeItUp.parentSourcePath).toBe(tasks?.sourcePath);
+  });
+
+  /* Notion writes a page that has children as two entries with the same name:
+     the page, `Journal <id>.md`, and a folder, `Journal <id>/`, holding its
+     children. They are one page. Importing them as two produced a duplicate of
+     every page in the workspace that has anything filed under it -- one copy
+     holding the text with no children, and an empty copy beside it holding all
+     of them. On a real workspace that is most of the tree. */
+  it('imports a page that has children once, not as a page and an empty twin', () => {
+    const journals = byTitle('Journal');
+    expect(journals).toHaveLength(1);
+    expect(journals[0].bodyMarkdown).toContain('Daily entries.');
+
+    const roots = byTitle('Personal operating system');
+    expect(roots).toHaveLength(1);
+    expect(roots[0].bodyMarkdown).toContain('A system for deciding what deserves attention.');
+  });
+
+  it('files children under the page itself rather than under its empty twin', () => {
+    const all = candidates();
+    const journal = all.find((candidate) => candidate.title === 'Journal');
+    const monday = all.find((candidate) => candidate.title === 'Monday');
+    expect(monday?.parentSourcePath).toBe(journal?.sourcePath);
+    expect(journal?.sourcePath.endsWith('.md')).toBe(true);
+  });
+
+  /* A folder with no page of the same name beside it is a real container --
+     that is what dragging in a folder of Markdown looks like -- and has to keep
+     becoming a Note of its own. */
+  it('still imports a plain folder of Markdown as a folder', () => {
+    const plain = candidatesFromVaultOrFiles([
+      { path: 'Recipes/Bread.md', bytes: Buffer.from('# Bread\n\nFlour.', 'utf8') },
+      { path: 'Recipes/Soup.md', bytes: Buffer.from('# Soup\n\nStock.', 'utf8') },
+    ]);
+    const recipes = plain.find((candidate) => candidate.title === 'Recipes');
+    expect(recipes).toBeDefined();
+    expect(recipes?.sourcePath).toBe('Recipes/');
+    expect(plain.find((c) => c.title === 'Bread')?.parentSourcePath).toBe('Recipes/');
   });
 
   it('gives an imported page no Planner AI appearance', () => {
