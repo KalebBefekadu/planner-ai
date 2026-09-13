@@ -1210,3 +1210,71 @@ test('a long title is readable at the size the design sets it in', async ({
   await page.reload();
   await expect(page.getByRole('textbox', { name: 'Note title' })).toHaveValue(long);
 });
+
+/* The tree used to render every page at every depth with no way to close a
+   branch, which is fine for a handful of Notes and unusable once a real Notion
+   workspace has been imported. These prove a branch actually closes, that
+   closing it never hides the page being read, and that the choice survives a
+   reload. Open is still the default: a tree that hides nothing is what stops a
+   page filed under another from reading as a page that was lost. */
+test('a page that holds pages can be closed, and stays closed', async ({ workspace }) => {
+  const { page } = workspace;
+  await goTo(page, '/notes');
+  await createRootNote(page, 'Research', 'Where the open questions live.');
+  await createRootNote(page, 'Interview notes', 'What the first conversation surfaced.');
+
+  await openNote(page, 'Interview notes');
+  await page.getByRole('button', { name: 'Make child of the note above' }).click();
+  await expect(page.getByRole('navigation', { name: 'Note location' })).toContainText('Research');
+
+  // Nothing is hidden until someone hides it.
+  await openNote(page, 'Research');
+  const disclosure = page.getByRole('button', { name: 'Collapse Research' });
+  await expect(disclosure).toHaveAttribute('aria-expanded', 'true');
+  await expect(treeNote(page, 'Interview notes')).toBeVisible();
+
+  await disclosure.click();
+  await expect(treeNote(page, 'Interview notes')).toBeHidden();
+  await expect(page.getByRole('button', { name: 'Expand Research' })).toHaveAttribute(
+    'aria-expanded',
+    'false'
+  );
+
+  await page.reload();
+  await expect(treeNote(page, 'Interview notes')).toBeHidden();
+
+  await page.getByRole('button', { name: 'Expand Research' }).click();
+  await expect(treeNote(page, 'Interview notes')).toBeVisible();
+  await page.reload();
+  await expect(treeNote(page, 'Interview notes')).toBeVisible();
+});
+
+/* Closing a branch is a view preference, and a view preference must never be
+   able to hide the page someone is actually reading -- reached from search, a
+   backlink, or a link inside another page. */
+test('a closed branch still opens around the page being read', async ({ workspace }) => {
+  const { page } = workspace;
+  await goTo(page, '/notes');
+  await createRootNote(page, 'Research', 'Where the open questions live.');
+  await createRootNote(page, 'Interview notes', 'What the first conversation surfaced.');
+  await openNote(page, 'Interview notes');
+  await page.getByRole('button', { name: 'Make child of the note above' }).click();
+  await expect(page.getByRole('navigation', { name: 'Note location' })).toContainText('Research');
+  // The address of the page once it is filed inside the branch. Anything that
+  // links to it -- search, a backlink, a link in another page -- arrives here.
+  const childUrl = page.url();
+
+  await openNote(page, 'Research');
+  await page.getByRole('button', { name: 'Collapse Research' }).click();
+  await expect(treeNote(page, 'Interview notes')).toBeHidden();
+
+  await page.goto(childUrl);
+  await expect(treeNote(page, 'Interview notes')).toBeVisible();
+});
+
+test('a page with no pages under it offers no disclosure control', async ({ workspace }) => {
+  const { page } = workspace;
+  await goTo(page, '/notes');
+  await createRootNote(page, 'Standalone', 'Nothing is filed under this.');
+  await expect(page.getByRole('button', { name: /(Expand|Collapse) Standalone/ })).toHaveCount(0);
+});

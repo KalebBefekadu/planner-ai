@@ -327,7 +327,18 @@ a {
 .experience-content-sidebar {
   grid-template-columns: 56px minmax(0, 1fr);
 }
+/* The same element carries .app-main and .experience-main, and .app-main caps
+   it at `width: min(1180px, 100%)` with `margin: 0 auto` -- a reading measure,
+   right for a page of prose and wrong for a route that supplies its own tree
+   and document. On a 1440px window it left 102px of empty canvas down each
+   side of Notes, so the tree began well inside the frame and the document was
+   narrower than the space it had. Clearing the measure here rather than
+   editing .app-main keeps the reading routes as they are; this selector
+   already outranks it. */
 .experience-content-sidebar .experience-main {
+  width: 100%;
+  max-width: none;
+  margin: 0;
   padding: 0;
 }
 .experience-shell button:focus-visible,
@@ -2300,6 +2311,47 @@ button:disabled {
 }
 .note-tree-level .note-tree-level {
   padding-inline-start: 14px;
+}
+/* A page that holds pages gets a disclosure control of its own, kept separate
+   from the page button so opening a branch and opening a page stay two
+   different actions rather than one control guessing which was meant. */
+.note-tree-row {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+}
+.note-tree-disclosure,
+.note-tree-disclosure-placeholder {
+  display: inline-flex;
+  flex: none;
+  width: 18px;
+  height: 18px;
+  align-items: center;
+  justify-content: center;
+}
+.note-tree-disclosure {
+  padding: 0;
+  border: 0;
+  border-radius: 4px;
+  background: transparent;
+  color: var(--muted);
+  cursor: pointer;
+}
+.note-tree-disclosure:hover {
+  background: var(--surface);
+  color: var(--ink);
+}
+.note-tree-disclosure svg {
+  transition: transform 160ms ease;
+}
+.note-tree-disclosure[aria-expanded='true'] svg {
+  transform: rotate(90deg);
+}
+/* The tree indents by nesting, and the row now starts with an 18px control, so
+   a child level only needs the difference to keep its titles aligned under the
+   parent's title rather than under the parent's chevron. */
+.note-tree-row .note-tree-item {
+  padding-inline-start: 4px;
 }
 .note-tree-item {
   display: flex;

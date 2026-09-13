@@ -180,6 +180,77 @@ function restorableUntil(purgeAfter: string | null) {
   })}.`;
 }
 
+/* Which branches the reader has closed, per browser. This is a view
+   preference, not workspace data: it is their own place in their hierarchy and
+   does not belong in an Operation or on another device.
+
+   Closed branches are stored rather than open ones, so the default -- an empty
+   set -- is a tree that hides nothing. Defaulting the other way meant filing a
+   page under another and then returning to Notes found it gone from the tree,
+   which reads as data loss rather than as a closed folder. */
+const NOTE_TREE_COLLAPSED_KEY = 'planner-notes-collapsed';
+
+/* Reading `localStorage` is reading an external store, and the server has no
+   such store, so `useSyncExternalStore` is what models it honestly: the server
+   and hydration both render "nothing open", and the browser's real answer
+   arrives once hydration finishes. Restoring in an effect instead sets state
+   during a second cascading render, which is also what the lint rule against
+   it is protecting.
+
+   Unlike the onboarding draft, this store has a writer -- the disclosure
+   controls -- so `subscribe` is real: a write notifies, and every tree
+   re-reads. `getSnapshot` must return a stable reference or React re-renders
+   forever, so the parsed set is cached against the raw text it came from. */
+const NO_COLLAPSED_NOTES: ReadonlySet<string> = new Set();
+let collapsedListeners: (() => void)[] = [];
+let collapsedRaw: string | null = null;
+let collapsedCache: ReadonlySet<string> = NO_COLLAPSED_NOTES;
+
+function subscribeToCollapsedNotes(onChange: () => void) {
+  collapsedListeners = [...collapsedListeners, onChange];
+  return () => {
+    collapsedListeners = collapsedListeners.filter((listener) => listener !== onChange);
+  };
+}
+
+function collapsedNotesSnapshot(): ReadonlySet<string> {
+  let raw: string | null = null;
+  try {
+    raw = window.localStorage.getItem(NOTE_TREE_COLLAPSED_KEY);
+  } catch {
+    // Private browsing and locked-down profiles throw on access rather than
+    // returning null. Treat that as "nothing remembered".
+    return NO_COLLAPSED_NOTES;
+  }
+  if (raw !== collapsedRaw) {
+    collapsedRaw = raw;
+    try {
+      const parsed: unknown = raw ? JSON.parse(raw) : [];
+      collapsedCache = new Set(Array.isArray(parsed) ? (parsed as string[]) : []);
+    } catch {
+      // Text this key cannot describe is not worth failing a page over.
+      collapsedCache = NO_COLLAPSED_NOTES;
+    }
+  }
+  return collapsedCache;
+}
+
+function serverCollapsedNotesSnapshot(): ReadonlySet<string> {
+  return NO_COLLAPSED_NOTES;
+}
+
+function writeCollapsedNotes(next: ReadonlySet<string>) {
+  try {
+    window.localStorage.setItem(NOTE_TREE_COLLAPSED_KEY, JSON.stringify([...next]));
+  } catch {
+    // Not being able to remember the shape of the tree is not a reason to
+    // refuse to change it, so notify regardless and let this session hold it.
+    collapsedRaw = null;
+    collapsedCache = next;
+  }
+  for (const listener of collapsedListeners) listener();
+}
+
 export function NotesWorkspace({
   notes,
   favorites,
@@ -213,6 +284,65 @@ export function NotesWorkspace({
     favorites.find((note) => note.id === selectedId) ??
     null;
   const activeNoteId = selected?.id ?? null;
+
+  /* The tree rendered every page at every depth, always open. That is fine for
+     the handful of Notes a fresh workspace holds and unusable after a real
+     Notion import, where the whole hierarchy arrives at once and the sidebar
+     becomes a flat wall of titles you have to scroll past to reach anything.
+     Pages that hold pages now open and close.
+
+     Closed is the default, because the alternative is that importing a
+     workspace buries its own top level. The exception is the page being read:
+     its ancestors are forced open at render, so the active page is always
+     reachable in the tree however it was opened -- from search, a backlink, or
+     a link in another page. */
+  const collapsedIds = useSyncExternalStore(
+    subscribeToCollapsedNotes,
+    collapsedNotesSnapshot,
+    serverCollapsedNotesSnapshot
+  );
+
+  const childrenByParent = useMemo(() => {
+    const byParent = new Map<string | null, NoteView[]>();
+    for (const note of notes) {
+      const siblings = byParent.get(note.parentNoteId) ?? [];
+      siblings.push(note);
+      byParent.set(note.parentNoteId, siblings);
+    }
+    for (const siblings of byParent.values()) {
+      siblings.sort((first, second) => first.sortKey - second.sortKey);
+    }
+    return byParent;
+  }, [notes]);
+
+  // The chain above the open page, so reading a deep page reveals where it
+  // lives rather than leaving the tree closed around it.
+  const ancestorsOfActive = useMemo(() => {
+    const chain = new Set<string>();
+    const byId = new Map(notes.map((note) => [note.id, note]));
+    let parentId = activeNoteId ? (byId.get(activeNoteId)?.parentNoteId ?? null) : null;
+    while (parentId && !chain.has(parentId)) {
+      chain.add(parentId);
+      parentId = byId.get(parentId)?.parentNoteId ?? null;
+    }
+    return chain;
+  }, [notes, activeNoteId]);
+
+  function isExpanded(noteId: string) {
+    // A branch the reader closed stays closed -- unless the page being read
+    // lives inside it, in which case hiding it would hide the open page.
+    return !collapsedIds.has(noteId) || ancestorsOfActive.has(noteId);
+  }
+
+  function toggleExpanded(noteId: string) {
+    const next = new Set(collapsedIds);
+    // An ancestor of the open page is forced open, so the stored set can say a
+    // branch is closed while it renders open. Toggling acts on what is on
+    // screen, which is the only state the reader can see.
+    if (isExpanded(noteId)) next.add(noteId);
+    else next.delete(noteId);
+    writeCollapsedNotes(next);
+  }
   const [title, setTitle] = useState(selected?.title ?? '');
   const titleRef = useRef<HTMLTextAreaElement>(null);
 
@@ -492,18 +622,38 @@ export function NotesWorkspace({
   }
 
   function renderNoteLevel(parentNoteId: string | null) {
-    const level = notes
-      .filter((note) => note.parentNoteId === parentNoteId)
-      .sort((first, second) => first.sortKey - second.sortKey);
+    const level = childrenByParent.get(parentNoteId) ?? [];
     if (!level.length) return null;
     return (
       <ul className="note-tree-level">
-        {level.map((note) => (
-          <li key={note.id}>
-            {renderNoteButton(note)}
-            {renderNoteLevel(note.id)}
-          </li>
-        ))}
+        {level.map((note) => {
+          const holdsPages = (childrenByParent.get(note.id) ?? []).length > 0;
+          const expanded = holdsPages && isExpanded(note.id);
+          return (
+            <li key={note.id}>
+              <div className="note-tree-row">
+                {holdsPages ? (
+                  <button
+                    className="note-tree-disclosure"
+                    type="button"
+                    aria-expanded={expanded}
+                    aria-label={`${expanded ? 'Collapse' : 'Expand'} ${note.title}`}
+                    onClick={() => toggleExpanded(note.id)}
+                  >
+                    <ChevronRight size={13} aria-hidden="true" />
+                  </button>
+                ) : (
+                  /* Pages without children keep the same title alignment as
+                     pages with them, so a level reads as one column rather
+                     than a ragged edge. */
+                  <span className="note-tree-disclosure-placeholder" aria-hidden="true" />
+                )}
+                {renderNoteButton(note)}
+              </div>
+              {expanded ? renderNoteLevel(note.id) : null}
+            </li>
+          );
+        })}
       </ul>
     );
   }
