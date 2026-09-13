@@ -2,7 +2,7 @@ name: Planner AI CI
 
 on:
   push:
-    branches: [main]
+    branches: [main, integration/dogfood]
     paths:
       - 'web/**'
       - '.github/workflows/ci.yml'
@@ -103,7 +103,6 @@ jobs:
         env:
           PLANNER_DATA_MODEL: canonical
           PLANNER_UI_PREVIEW: enabled
-          PLANNER_UI_V2: enabled
           NEXT_PUBLIC_APP_URL: http://127.0.0.1:3000
       - name: Run full browser suite after merge
         if: github.event_name == 'push'
@@ -111,5 +110,4 @@ jobs:
         env:
           PLANNER_DATA_MODEL: canonical
           PLANNER_UI_PREVIEW: enabled
-          PLANNER_UI_V2: enabled
           NEXT_PUBLIC_APP_URL: http://127.0.0.1:3000
