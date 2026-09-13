@@ -2781,6 +2781,17 @@ button:disabled {
   font-size: var(--fs-body);
   line-height: 1.75;
 }
+/* The rich editor is fetched on demand, so reserve the height it will take.
+   Without this the document area collapses and then jumps when it arrives. */
+.rich-markdown-editor-loading {
+  min-width: 0;
+  min-height: 520px;
+  padding: 28px clamp(24px, 6vw, 72px);
+  background: var(--surface);
+  color: var(--ink-soft);
+  font-size: var(--fs-body);
+  line-height: 1.75;
+}
 .rich-markdown-editor {
   min-width: 0;
   min-height: 520px;

@@ -1,5 +1,7 @@
 'use client';
 
+import dynamic from 'next/dynamic';
+
 import {
   Fragment,
   type KeyboardEvent,
@@ -81,7 +83,6 @@ import {
 } from '@/lib/notes/conflict-resolution';
 import { NoteAppearanceHeader } from '@/components/note-appearance-header';
 import { noteLocationLabel, notePath, orderFavorites } from '@/lib/notes/note-paths';
-import { RichMarkdownEditor } from '@/components/rich-markdown-editor';
 import { useVoiceTranscription } from '@/lib/use-voice-transcription';
 import { extractPlannerMarkdownHeadings } from '@/lib/markdown/contract';
 import { continueMarkdownList, wrapMarkdownSelection } from '@/lib/markdown/editing';
@@ -93,6 +94,23 @@ import {
   rememberNoteDraft,
   subscribeToNoteDrafts,
 } from '@/lib/note-draft-recovery';
+
+// TipTap and ProseMirror are the largest client dependency in the product, and
+// the editor that needs them is never what a Note opens in: the mode starts at
+// 'source' and is reset to 'source' every time the active Note changes. Loading
+// them statically made every visitor to Notes download an editor most sessions
+// never switch to. Fetch them when the person actually asks for rich editing.
+const RichMarkdownEditor = dynamic(
+  () => import('@/components/rich-markdown-editor').then((m) => m.RichMarkdownEditor),
+  {
+    ssr: false,
+    loading: () => (
+      <div className="rich-markdown-editor-loading" role="status" aria-live="polite">
+        Loading the rich editor...
+      </div>
+    ),
+  }
+);
 
 function errorMessage(error: unknown) {
   return actionFailureMessage(error, 'Unable to save this Note.');
@@ -727,6 +745,13 @@ export function NotesWorkspace({
     });
   }
 
+  // The rich editor arrives asynchronously, so between choosing Rich and the
+  // chunk loading there is a window with no editor to format. Report the
+  // formatting controls as unavailable for that window rather than leaving
+  // buttons that look ready and quietly do nothing.
+  const formattingUnavailable =
+    activeEditorMode === 'preview' || (activeEditorMode === 'rich' && !richEditor);
+
   function formatRichOrSource(sourceEdit: () => void, richEdit: (editor: Editor) => void) {
     if (activeEditorMode === 'rich') {
       if (richEditor) richEdit(richEditor);
@@ -1238,7 +1263,7 @@ export function NotesWorkspace({
                       (editor) => editor.chain().focus().toggleHeading({ level: 2 }).run()
                     )
                   }
-                  disabled={activeEditorMode === 'preview'}
+                  disabled={formattingUnavailable}
                 >
                   <Heading2 size={16} />
                 </button>
@@ -1255,7 +1280,7 @@ export function NotesWorkspace({
                       (editor) => editor.chain().focus().toggleBold().run()
                     )
                   }
-                  disabled={activeEditorMode === 'preview'}
+                  disabled={formattingUnavailable}
                 >
                   <Bold size={16} />
                 </button>
@@ -1272,7 +1297,7 @@ export function NotesWorkspace({
                       (editor) => editor.chain().focus().toggleItalic().run()
                     )
                   }
-                  disabled={activeEditorMode === 'preview'}
+                  disabled={formattingUnavailable}
                 >
                   <Italic size={16} />
                 </button>
@@ -1289,7 +1314,7 @@ export function NotesWorkspace({
                       (editor) => editor.chain().focus().toggleBulletList().run()
                     )
                   }
-                  disabled={activeEditorMode === 'preview'}
+                  disabled={formattingUnavailable}
                 >
                   <List size={16} />
                 </button>
@@ -1306,7 +1331,7 @@ export function NotesWorkspace({
                       (editor) => editor.chain().focus().toggleTaskList().run()
                     )
                   }
-                  disabled={activeEditorMode === 'preview'}
+                  disabled={formattingUnavailable}
                 >
                   <ListTodo size={16} />
                 </button>
@@ -1326,7 +1351,7 @@ export function NotesWorkspace({
                         .run()
                     )
                   }
-                  disabled={activeEditorMode === 'preview'}
+                  disabled={formattingUnavailable}
                 >
                   <Table2 size={16} />
                 </button>
@@ -1336,7 +1361,7 @@ export function NotesWorkspace({
                   aria-label={voice.isRecording ? 'Stop dictation' : 'Start dictation'}
                   aria-pressed={voice.isRecording}
                   onClick={() => (voice.isRecording ? voice.stop() : void voice.start())}
-                  disabled={activeEditorMode === 'preview' || voice.isTranscribing}
+                  disabled={formattingUnavailable || voice.isTranscribing}
                 >
                   <Mic size={16} />
                 </button>
