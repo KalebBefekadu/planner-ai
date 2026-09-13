@@ -6,6 +6,7 @@ import {
   Fragment,
   type KeyboardEvent,
   useCallback,
+  useDeferredValue,
   useEffect,
   useMemo,
   useRef,
@@ -435,7 +436,22 @@ export function NotesWorkspace({
     [notes, selectedId]
   );
   const outline = useMemo(() => extractPlannerMarkdownHeadings(body), [body]);
-  const richEditable = useMemo(() => plannerMarkdownSupportsRichEditing(body), [body]);
+  /* Deciding whether rich mode is safe parses the document, converts it,
+     serialises it back and compares the two. On a Note somebody has actually
+     kept -- a journal, a year of meeting notes -- that is over a second of
+     synchronous work, and `body` changes on every keystroke, so it ran on
+     every character typed. Typing into a long Note was unusable for exactly
+     that reason, and the cost is invisible on the short documents the rest of
+     the tests use.
+
+     The answer only gates whether Rich is offered, so it can lag the draft by
+     a moment: deferring it means the check runs when typing settles instead of
+     between one letter and the next. */
+  const settledBody = useDeferredValue(body);
+  const richEditable = useMemo(
+    () => plannerMarkdownSupportsRichEditing(settledBody),
+    [settledBody]
+  );
   const activeEditorMode = editorMode === 'rich' && !richEditable ? 'source' : editorMode;
   const wordCount = body.trim() ? body.trim().split(/\s+/).length : 0;
   // Which moves are open to this Note, decided by the same functions the server
