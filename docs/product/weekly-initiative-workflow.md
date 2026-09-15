@@ -1,6 +1,59 @@
 # The Weekly Initiative Workflow
 
 Status: **design proposal.** Not yet accepted into [the roadmap](../roadmap.md).
+Every factual claim below is cited to a file and line in this repository. Where
+an earlier draft of this document was wrong, the correction is marked.
+
+## Contents
+
+1. [The objective](#the-objective)
+2. [The ritual being replaced](#the-ritual-being-replaced)
+3. [The ten minutes, decomposed](#the-ten-minutes-decomposed)
+4. [Where this design disagrees with the ask](#where-this-design-disagrees-with-the-ask)
+5. [The system as it stands](#the-system-as-it-stands)
+6. [The five gaps](#the-five-gaps)
+7. [The features asked for](#the-features-asked-for)
+8. [The weekly pass](#the-weekly-pass)
+9. [The screen](#the-screen)
+10. [Build order](#build-order)
+11. [Risks, and how each is contained](#risks-and-how-each-is-contained)
+12. [Open questions, with a recommendation on each](#open-questions-with-a-recommendation-on-each)
+13. [Invariants](#invariants)
+
+## The objective
+
+**The owner must be able to see what they did this week, and decide what next
+week is for, without retyping anything.**
+
+That is the whole feature. Two sentences, and everything in this document exists
+to serve them.
+
+It is not new scope. [The roadmap](../roadmap.md) makes it MVP outcome 4 --
+_"capture a thought, connect an Action to a Goal, plan Today and This Week,
+complete or defer work, and finish Weekly Review"_ -- and Stage 1, the Daily
+Planner Loop, is the active stage. The roadmap also states plainly: _"Do not
+build deferred frontier scope while a personal-MVP gate remains open."_ This
+design must therefore be read as **finishing Stage 1**, not as a feature
+alongside it. Anything here that cannot be justified that way should be deferred.
+
+There is a second reason it belongs now. The roadmap gates Notion replacement on
+[MVP-01](https://github.com/KalebBefekadu/planner-ai/issues/115), an inventory of
+_"the owner's actual workflows"_, and warns against assuming notes-only is
+sufficient. The weekly initiative ritual **is** that inventory's most important
+entry: it is the workflow the owner runs every week, in Notion, today. Designing
+against it is how MVP-01 gets closed rather than assumed away.
+
+Three failure modes would each make the feature worthless, and they are worth
+naming before any design:
+
+- **It costs more than ten minutes.** The current ritual is cheap. A replacement
+  that asks for more decisions loses, however much better its data model is.
+- **It stops working when AI is off.** Roadmap Stage 3 is explicit: AI
+  _"is never required to complete"_ a core workflow. Every number on this screen
+  must be computed from records.
+- **It does not survive the owner falling behind.** Real weeks get skipped. A
+  design that only works when every week is reviewed on time is a design for
+  someone else.
 
 ## The ritual being replaced
 
@@ -34,6 +87,29 @@ Three properties matter and are easy to lose:
    hear back" is meaningless on its own).
 3. **Most of the list survives the week**, and rewriting it is manual labour.
 
+## The ten minutes, decomposed
+
+The ritual is one habit, but it is six distinct moments, and each one lands on a
+different part of the product. Designing against the habit as a single lump is
+how features like this end up as one giant screen that does everything badly.
+
+| #   | Moment                                       | What the owner is doing                                | What must serve it                                 | State today                                        |
+| --- | -------------------------------------------- | ------------------------------------------------------ | -------------------------------------------------- | -------------------------------------------------- |
+| 1   | **Recall** -- "what did I do?"               | Reading back the week to feel it was not wasted        | A record of completions, grouped by project        | **Nothing.** The review reads only unfinished work |
+| 2   | **Reconcile** -- "what is still open?"       | Scanning the surviving list, mostly agreeing with it   | The initiative's open list, with age               | Exists as a flat undifferentiated list             |
+| 3   | **Prune** -- "this is never happening"       | Killing two or three things, with mild guilt           | A visible reason to kill, and a record of the kill | `dropped` + `drop_reason` exist; no prompt         |
+| 4   | **Add** -- "and this came up"                | Typing three or four new lines under the right project | Fast entry, filed and nested in one gesture        | Exists, but not per-project and not nested         |
+| 5   | **Aim** -- "what is next week actually for?" | Choosing the handful that matter                       | A small, capped commitment                         | Exists and is unused: the max-5 priority flag      |
+| 6   | **Close** -- "done, put it away"             | Marking the week finished and leaving                  | One irreversible-feeling act, undoable             | `review.complete-weekly.v1` does exactly this      |
+
+Read down the right column: **moments 1 and 5 are the ones the owner explicitly
+asked for, and they are the two the product serves worst.** Moment 1 has no
+implementation at all. Moment 5 has a complete, correct, tested implementation
+that no screen ever surfaces properly.
+
+That is the whole opportunity, and it reframes the work. This is not mostly a
+build. It is mostly an **exposure** of machinery that already runs.
+
 ## Where this design disagrees with the ask
 
 **Copying last week forward is the wrong mechanism, and it is worth saying so
@@ -41,26 +117,38 @@ before building it.**
 
 The weekly re-creation is not part of the workflow. It is a workaround for
 something Notion cannot do: a Notion page has no idea which of its tasks are
-still open, so the only way to carry work is to copy it by hand. Rebuilding
-that copy step inside a tool that tracks task state would import the workaround
-along with the ritual, and it costs something real.
+still open, so the only way to carry work is to copy it by hand. Rebuilding that
+copy step inside a tool that already tracks task state would import the
+workaround along with the ritual, and it costs something real.
 
-Copying creates a **new record with a new identity**. "Reach out to baily"
-copied into four consecutive weeks is four unrelated rows, and the single most
-useful fact about it -- that it has survived four weeks untouched -- is
-destroyed by the copying. That fact is the one that tells the owner a task is
-never going to happen. Copying also duplicates every subtask beneath it, and
-splits a task's history across records, so the Review can only ever describe
-one week rather than the life of the work.
+Copying creates a **new record with a new identity**. "Reach out to baily" copied
+into four consecutive weeks is four unrelated rows, and the single most useful
+fact about it -- that it has survived four weeks untouched -- is destroyed by the
+copying. That fact is the one that tells the owner a task is never going to
+happen. Copying also duplicates every subtask beneath it, and splits a task's
+history across records, so the Review can only ever describe one week rather than
+the life of the work.
 
-The same outcome, without any of that: **unfinished work simply stays open.**
-An Action belongs to its initiative, not to a week. When a new week starts,
-nothing is copied because nothing moved -- the open list is already there, with
-its own history, its own subtasks, and a count of how many weeks it has been
-carried.
+This is not a theoretical preference. **Planner AI already carries work, and
+already counts the carries.** When a weekly review resolves an Action as
+`next_week`, the completion function moves that same Action into the following
+week's horizon and writes a row to `action_schedule_history` with
+`reason = 'rescheduled'` and the `review_id` that caused it
+(`20260909161000_weekly_review_names_a_finished_week.sql`). The carry count for
+any task is one query:
 
-What "starting from last week" actually asks for then decomposes into three
-different things, which are better kept apart because they behave differently:
+```sql
+select count(*) from action_schedule_history
+where action_id = $1 and reason = 'rescheduled';
+```
+
+Nothing reads it. `action_schedule_history` appears exactly once in the
+application outside generated types: in the account export
+(`web/src/app/api/export/route.ts:45`). The number the owner needs most is being
+written every week and shown to nobody.
+
+What "starting from last week" actually asks for decomposes into three different
+things, which are better kept apart because they behave differently:
 
 | What repeats                                                                        | What it really is | Where it lives                                                  |
 | ----------------------------------------------------------------------------------- | ----------------- | --------------------------------------------------------------- |
@@ -73,52 +161,198 @@ they need new machinery and lose the distinction that makes the week readable:
 what stalled, what came round again, and what is genuinely new.
 
 **The week stops being a container and becomes a checkpoint.** The initiative
-holds a living list; the weekly pass is where the owner marks what is done,
-drops what is dead, and adds what is new. That is the same ten minutes, minus
-the retyping.
+holds a living list; the weekly pass is where the owner marks what is done, drops
+what is dead, and adds what is new. That is the same ten minutes, minus the
+retyping.
 
 ### The one thing copying does better
 
-A deliberate reset. Sometimes the right move is to declare weekly bankruptcy on
-a stalled initiative and rewrite its list from scratch. That is worth an
-explicit action -- clear what is open, with a reason recorded -- rather than a
-copy mechanism used every week to get it.
+A deliberate reset. Sometimes the right move is to declare weekly bankruptcy on a
+stalled initiative and rewrite its list from scratch. That is worth an explicit
+action -- clear what is open, with a reason recorded -- rather than a copy
+mechanism used every week to get it.
 
-## What Planner AI already has
+### The counter-argument already in the code, and how it is answered
 
-More than it looks. The plan is already a hierarchy rooted in direction:
+The existing review screen deliberately refuses to default any decision. The
+comment is unusually direct (`web/src/components/weekly-review.tsx:19`):
+
+> A decision nobody made is not a decision. The list starts unset so that closing
+> the week requires saying what happens to each unfinished Action -- defaulting
+> every row to "leave overdue" made silent rollover the easiest path through a
+> screen whose whole claim is that it prevents one.
+
+That reasoning is correct **under the current model**, and this design must not
+casually undo it. When the week is the only container, silence really is
+invisible: an Action that rolls over unremarked leaves no trace anywhere, and the
+forced decision is the only thing standing between the owner and an infinitely
+growing invisible backlog.
+
+The resolution is not "defaults are fine after all". It is that **the guard
+moves**. Once the carry count is on screen and escalates, rolling over is no
+longer silent -- it is recorded, visible, and gets louder every week. The
+deterrent survives; the per-item tax does not. Concretely:
+
+- staying open is free and requires no interaction, **because the count is shown
+  next to the item**;
+- an item carried three weeks or more is surfaced for an explicit decision,
+  exactly as every item is today;
+- the week cannot be closed while any such item is undecided.
+
+That preserves the invariant the original author was protecting -- no silent
+rollover -- while removing the cost from the 90% of items where the owner's
+answer is "yes, obviously, still doing that."
+
+## The system as it stands
+
+More is built than the feature needs. The problem is almost never missing
+storage; it is that surfaces do not read what storage holds.
+
+### The data spine
 
 ```
-Vision -> yearly Goal -> quarterly Goal -> monthly Action -> weekly Action
+Vision ──< Goal ──< Goal ──< Action ──< Action
+ (1)      (year)  (quarter)  (month)   (week)
 ```
 
-| The ritual                 | Planner AI today                                             | State                      |
-| -------------------------- | ------------------------------------------------------------ | -------------------------- |
-| The weekly folder          | the weekly planning horizon                                  | exists                     |
-| Checking a task off        | `action.status.v1`, `completed_at`                           | exists                     |
-| Cleaning up the week       | Weekly Review, `review.complete-weekly.v1`                   | exists                     |
-| A task's link to direction | `actions.goal_id`, `goals.parent_goal_id`, `goals.vision_id` | exists                     |
-| Nested tasks               | `actions.parent_action_id`                                   | **stored, not reachable**  |
-| The project itself         | nothing durable and ongoing                                  | **missing**                |
-| A suggested breakdown      | `ai_proposals` wrapping `action.create.v1`                   | mechanism exists, no flow  |
-| What the week produced     | `reviews.reflection_markdown`                                | freeform, nothing computed |
-| Definition of done         | `goals.target_value` / `unit`, `description_markdown`        | partial                    |
+The constraints matter more than the shape, because they are what a design has
+to live inside (`20260816000200_canonical_core.sql:71,90,120`):
 
-Two gaps are real. Everything else is a surface on machinery that already runs.
+| Column                     | Nullable | Consequence for this design                                                                 |
+| -------------------------- | -------- | ------------------------------------------------------------------------------------------- |
+| `goals.vision_id`          | **no**   | An initiative cannot exist before a Vision does. Onboarding must guarantee one.             |
+| `goals.horizon_id`         | **no**   | **An initiative must be anchored to a planning period even though it has none.** See Gap 2. |
+| `goals.parent_goal_id`     | yes      | The goal hierarchy is a real tree, already recursive in trash cascades                      |
+| `goals.status`             | --       | `draft, active, paused, achieved, abandoned` -- **`paused` already exists**                 |
+| `actions.goal_id`          | yes      | Work with no initiative is already legal                                                    |
+| `actions.parent_action_id` | yes      | Self-referencing, unconstrained by horizon. Arbitrary nesting is storable                   |
+| `actions.horizon_id`       | **no**   | Every Action belongs to a period, including ones that conceptually do not                   |
+| `actions.status`           | --       | `open, in_progress, blocked, done, dropped`                                                 |
 
-## Gap 1: nesting is stored but unreachable
+Two of these are correction to the earlier draft. `paused` on goals was proposed
+as a new status; it has existed since the first migration. And `goals.horizon_id`
+being NOT NULL is a genuine obstacle the earlier draft missed entirely.
+
+### The operation layer
+
+Every durable mutation goes through a named, versioned Operation
+(`web/src/lib/operations/index.ts`). This is not a convention -- it is enforced
+infrastructure, and it sets the real cost of each step in the build order:
+
+- **`operation_contracts`** stores `risk_class`, `exposures`
+  (`ui | chat | mcp | automation`) and `reversible` per operation id. A new
+  operation that is not registered here cannot be dispatched.
+- **`operation_undo_support`** stores an undo `strategy` per operation
+  (`trash-create`, `snapshot`, ...). Undo is not optional, and a `snapshot`
+  strategy means a before-image is captured on every write.
+- **`operation_receipts`** plus a `pg_advisory_xact_lock` on
+  `workspace + operation + idempotency_key` make every operation replay-safe.
+- Concurrency is **optimistic**: almost every input carries `expectedVersion`,
+  and a mismatch raises `version_conflict_or_not_found` at SQLSTATE `40001`.
+
+The practical rule this produces: **a step that needs no new operation is
+dramatically cheaper than one that does.** Steps 1 and 2 of the build order below
+need none. That is why they come first.
+
+A relevant detail of the existing inputs
+(`web/src/lib/operations/index.ts:382,416`):
+
+- `action.create.v1` takes `horizonKind: 'month' | 'week'` and **already
+  accepts `parentActionId`**. Nested creation is possible today; only the
+  interface declines to offer it.
+- `action.move.v1` takes `goalId` as **non-nullable** and `scheduledOn` as
+  **non-nullable**. Reparenting an Action therefore forces it to have a goal and
+  a date. This will bite when an initiative's backlog wants neither.
+
+### The surfaces, and what each can see
+
+| Surface                   | Reads                                                    | Cannot see                                                 |
+| ------------------------- | -------------------------------------------------------- | ---------------------------------------------------------- |
+| `/planner`                | The full hierarchy, filtered to one of four horizon tabs | Any relationship between an item and its siblings' history |
+| `/today`                  | Actions scheduled today, up to five in focus             | Anything about the week                                    |
+| `/review` (week)          | **Unfinished** actions only, in one flat list            | **What was completed.** Carry counts. Initiatives          |
+| `/review` (month/quarter) | Counts and goal progress                                 | Per-initiative detail                                      |
+| `/notes`                  | The note tree, with links to goals and actions           | Task state on a linked action                              |
+| `/planner/inbox`          | Unfiled actions                                          | --                                                         |
+
+Three things are worth reading off that table.
+
+**The weekly review is the only surface that does not show completed work**, and
+it is the surface whose entire purpose is to look back at a week. `getWeeklyReviewData`
+(`web/src/app/review/actions.ts:156`) filters `.in('status', ['open','in_progress','blocked'])`
+on both of its queries. There is no third query. Nothing about `completed_at` is
+loaded, so nothing about it can be shown.
+
+**`/planner` and `/review` see the same rows through incompatible lenses.** The
+planner renders four separate horizon tabs; the review renders one flat list
+across horizons. Neither groups by goal. A project-shaped ritual has no home in
+either.
+
+**`/goals` is a permanent redirect to `/planner`** (`web/src/app/goals/page.tsx`).
+There is no goal-centric screen in the product at all, which is precisely the
+shape an initiative needs.
+
+### What the review already enforces
+
+`review.complete-weekly.v1` is the most rigorously specified operation in the
+codebase, and most of the weekly pass's rules are already inside it
+(`20260909161000_weekly_review_names_a_finished_week.sql`):
+
+- **The decision set must be exact.** Every eligible Action must be decided and
+  no ineligible one may appear, or the operation raises
+  `review_action_set_changed` at `40001`. Eligibility has a single definition,
+  the SQL function `review_week_eligible_actions`
+  (`20260909120000_weekly_review_includes_scheduled_work.sql:21`), used by both
+  the loader and the writer so the two cannot drift.
+- **`blocked` and `dropped` require a reason.** A blank one raises
+  `invalid_review_decision`.
+- **Priorities are capped at five per week**, and a priority may not be attached
+  to a `done` or `dropped` item -- `too_many_weekly_priorities`.
+- **A week can be reviewed once**, via `raise_if_period_already_reviewed` plus a
+  partial unique index on completed reviews per horizon.
+- **Carrying is a real move, not a copy.** `next_week` sets the Action's horizon
+  to `starts_on + 7` and its `scheduled_on` to the same, then writes the history
+  row.
+
+That fifth bullet is the design already being half-built. That third bullet is
+moment 5 of the ritual -- "what is next week actually for?" -- already
+implemented, already capped at the right number, already validated server-side,
+and never presented as the point of the screen.
+
+### What AI already does here
+
+Correction to the earlier draft, which said the weekly analysis had "nothing
+computed." Half of it exists, and it is the AI half. There is a
+`review_ai_proposals` table, an `ai_jobs` row with `operation = 'review_analysis'`,
+and a validated proposal shape (`web/src/lib/review-proposals.ts:36`): a
+`summary`, up to five `priorityActionIds` checked against the real unfinished
+set, up to eight `recommendations` each carrying up to four evidence references,
+and one to four `reflectionPrompts`.
+
+So the model can already read a week and propose next week's five priorities.
+What is missing is the **deterministic** half -- the record of what happened,
+computed from `completed_at` and `action_schedule_history`, which is the half
+that has to work when AI is off, and the half the owner actually asked for.
+
+This reverses the intuition about ordering. The AI feature is the one that is
+nearly done. The boring count is the one to build.
+
+## The five gaps
+
+### Gap 1: nesting is stored but unreachable
 
 `actions.parent_action_id` is a plain self-referencing foreign key
-(`canonical_core.sql:124,143`) with **no constraint tying a child to a
-different horizon**, and the database already walks it to arbitrary depth --
-`planning_snapshot_undo.sql:264` joins a recursive `descendants` CTE so that
-archiving and undo cascade through a whole subtree.
+(`20260816000200_canonical_core.sql:124,143`) with **no constraint tying a child
+to a different horizon**, and the database already walks it to arbitrary depth:
+`20260905130000_goal_achievement_is_not_archival.sql:480` and
+`20260817001400_planning_snapshot_undo.sql:264` both join a recursive
+`descendants` CTE so archiving and undo cascade through a whole subtree.
 
-The interface is what assumes one level. `app/actions.ts:468` sets
+The interface is what assumes one level. `web/src/app/actions.ts:468` sets
 `parentActionId` only when creating a weekly Action, and only to its monthly
-parent; `actions.ts:342` then reads that same column back as `monthly_id`. So
-the one relationship the schema offers has been spent on the monthly-to-weekly
-rollup, and there is no way to put a task under a task.
+parent; `web/src/app/actions.ts:342` then reads that same column straight back out
+as `monthly_id`. The one relationship the schema offers has been spent on the
+monthly-to-weekly rollup, and there is no way to put a task under a task.
 
 This is the same shape as the Notes tree before it got disclosure controls: the
 storage was always a tree, and the screen flattened it.
@@ -126,17 +360,32 @@ storage was always a tree, and the screen flattened it.
 **Recommendation: stop reading `parent_action_id` as "the monthly one".** It
 already means "this Action sits under that Action". A weekly Action under a
 weekly Action is the same relationship one level further down, and the cascades
-are already recursive. What needs to change is the read path and the interface,
-not the schema:
+are already recursive. What changes is the read path and the interface, not the
+schema:
 
-- derive the monthly rollup by walking up to the nearest ancestor on the
-  monthly horizon rather than assuming the immediate parent is it;
+- derive the monthly rollup by walking up to the nearest ancestor whose horizon
+  kind is `month`, rather than assuming the immediate parent is it;
 - give the planner the same disclosure, indent and outdent controls Notes has,
-  against the same `action.move.v1` that already reparents;
-- bound the depth (four is more than the export uses) so the recursive undo
-  functions keep a predictable cost.
+  against the same `action.move.v1` that already reparents. `renderItem` in
+  `planner-workspace.tsx` already takes a `depth` argument, so the renderer is
+  closer than it looks;
+- bound the depth at four -- more than the owner's export uses -- so the
+  recursive undo functions keep a predictable cost, and enforce it in the
+  operation rather than the component.
 
-## Gap 2: an initiative is not a goal
+Two hazards specific to this change, both real:
+
+- `action.move.v1` requires a non-null `goalId`. Indenting an Action under a
+  parent that has no goal is currently unrepresentable. Either the child inherits
+  the parent's goal (simplest, and matches how weekly creation already copies
+  `goal_id` off the monthly parent at `web/src/app/actions.ts:450`), or the input
+  becomes nullable, which is a new operation version.
+- Nothing stops a cycle. Notes guard against this with a recursive check
+  (`20260816000400_notes_vault.sql:229`); actions have no equivalent. Reparenting
+  must gain the same guard, or an Action can be made its own ancestor and the
+  recursive cascades will not terminate.
+
+### Gap 2: an initiative is not a goal
 
 A Goal in Planner AI is built to be _finished_: it has `due_on`, `achieved_at`,
 `target_value`, and the Review asks whether it was reached. "Real estate agent
@@ -148,49 +397,149 @@ has to reach Today, This Week, and the Review.
 
 **Recommendation: an Initiative is a Goal with a different kind, not a new
 table.** Add `goals.kind` (`outcome` by default, `initiative`), where an
-initiative has no `due_on`, is never `achieved`, and moves between
-`active`, `paused` and `closed`. That inherits, at the cost of one column and
-one migration:
+initiative has no `due_on`, is never `achieved`, and moves between the `active`,
+`paused` and `abandoned` statuses **that already exist**. That inherits, at the
+cost of one column and one migration:
 
-- the whole goal hierarchy and its link to Vision (`vision_id`,
-  `parent_goal_id`);
-- `note_goal_links`, so the project's page and its work are the same thing;
+- the whole goal hierarchy and its link to Vision (`vision_id`, `parent_goal_id`);
+- `note_goal_links` (`20260816000400_notes_vault.sql:81`), so the project's page
+  and its work are the same thing;
 - `actions.goal_id`, so every task already knows its initiative;
 - Horizons, Review and the planner UI, each of which needs only to filter.
 
-A new table would duplicate every one of those.
+A new table would duplicate every one of those, and would need its own RLS
+policies, trash cascade, undo strategy, export entry and generated types.
 
-## The features asked for, against that shape
+**The obstacle the earlier draft missed: `goals.horizon_id` is NOT NULL.** An
+initiative is timeless, and the schema will not let it be. Three options:
+
+1. **Anchor to the current year horizon.** No migration to the constraint, and
+   `planning_horizons` rows for years already exist. The cost is a small lie in
+   the data -- an initiative appears to belong to 2026 -- and a decision every
+   January about whether to re-anchor.
+2. **Make `horizon_id` nullable when `kind = 'initiative'`,** with a check
+   constraint tying the two. Honest, but it touches a column every planner query
+   joins on, and every one of those joins would need auditing for an inner join
+   that would now silently drop initiatives.
+3. **Introduce a `kind = 'standing'` horizon** with a wide date range. Keeps
+   joins intact and the data honest, at the cost of a value in
+   `planning_horizons.kind`'s check constraint that every `kind` switch in the
+   codebase must learn.
+
+**Recommendation: option 1 for the first ticket, option 3 if year-anchoring
+starts producing visible nonsense.** Option 1 is reversible in a single update
+statement and does not touch a constraint; that is worth a small modelling
+compromise while the shape is still being proven against a real week.
+
+### Gap 3: the week never reports what it finished
+
+This is the owner's first request and it has no implementation. The weekly review
+loads two queries, both filtered to `['open','in_progress','blocked']`
+(`web/src/app/review/actions.ts:156`). `completed_at` is never read. The screen
+that exists to look back at a week is structurally incapable of showing the week.
+
+**Recommendation: a third query**, over actions in the same seven days with
+`status = 'done'` and `completed_at` inside the range, grouped by `goal_id`. No
+migration, no operation, no AI. It is the smallest change in this document and it
+is the one the owner asked for first.
+
+The one subtlety: an Action completed this week may have been _created_ in a
+week three months ago, and its `horizon_id` may still point there. Grouping by
+`completed_at` rather than by horizon is what makes the list match what the owner
+remembers doing.
+
+### Gap 4: the carry count is recorded and never read
+
+Covered above. Every ingredient exists: the history row, its `reason`, its
+`review_id`, an index on `(workspace_id, action_id, created_at desc)`. The count
+has never been surfaced.
+
+**Recommendation: read it in the same query that loads the open list**, as a
+lateral count per action. Show nothing at one week, a quiet marker at two, an
+amber marker and a forced decision at three or more.
+
+Why three: it is the first number at which "still doing it" stops being credible
+without a reason, and it matches the existing five-priority discipline in feeling
+-- small, opinionated, and cheap to argue with.
+
+### Gap 5: the review's decision set is unbounded, and capped at 100
+
+This one is a live correctness problem, not a missing feature, and this design
+makes it worse before it makes it better.
+
+`review_week_eligible_actions` includes week-horizon work where
+`horizon.starts_on <= p_ends_on` -- that is, **every unfinished weekly Action from
+every past week, forever**. The completion operation rejects any input with more
+than 100 decisions (`jsonb_array_length(p_input -> 'decisions') > 100` raises
+`invalid_operation_context`).
+
+So an owner who accumulates 101 unfinished weekly Actions can no longer complete
+a weekly review at all, and the failure arrives as a generic invalid-context
+error with no path out. The current forced-decision screen masks this, because it
+pressures the backlog down every week. A design that makes carrying free removes
+that pressure and walks straight into the cap.
+
+**Recommendation: fix this in the same ticket that makes carrying free, not
+after.** The decision set should be bounded by what the screen actually asks
+about: items carried three weeks or more, plus items explicitly touched this
+week. Everything else stays open without appearing in the payload. That requires
+a new eligibility function and therefore `review.complete-weekly.v2` -- the first
+new operation in this design, and the only unavoidable one.
+
+`v1` must keep working. Operations are versioned precisely so that an old
+receipt, an old undo record, and an old MCP client all continue to resolve.
+
+## The features asked for
 
 ### A suggested breakdown when an initiative is created
 
 `ai_proposals` already wraps an `operation_id` with `input_json`, a `batch_id`,
 `status` and `applied_at`, and the capture flow already turns a batch into real
 records atomically. A breakdown is **a batch of proposed `action.create.v1`**
-against the new initiative -- no new machinery, one new prompt and one new
-entry point.
+against the new initiative -- no new machinery, one new prompt and one new entry
+point.
 
 It must stay a proposal. The owner accepts, edits or discards each line before
 anything is written, exactly as capture proposals work today, and it must be
 usable with AI switched off, which means the initiative is fully usable with an
 empty task list.
 
+One constraint makes this less free than it looks. `capture_proposal_batches`
+adds `batch_id` and `sort_order` to `ai_proposals` under a check that a batched
+proposal **must also carry a `source_capture_id`**
+(`20260817003100_capture_proposal_batches.sql:41`). A breakdown originating from
+an initiative has no capture behind it. Either the entry point writes a capture
+first -- which is arguably honest, since "break this down" is a thought the owner
+had -- or the check is relaxed to allow a batch with no capture. **Recommendation:
+write the capture.** It keeps the constraint, gives the proposal a provenance
+record, and makes the breakdown visible in Activity like every other AI write.
+
+Two design notes that decide whether this is useful or annoying:
+
+- **Propose shape, not volume.** Twelve generic tasks are worse than four real
+  ones. The prompt should be bounded to around five top-level items, matching the
+  five-priority and five-focus discipline already in the product.
+- **The best input is the definition of done**, not the title. "Real estate agent
+  business" yields nothing useful. "A signed contract or a clear no by the end of
+  Q3" yields a plan. This is an argument for asking for the definition of done at
+  creation time, before offering the breakdown.
+
 ### Major tasks and subtasks
 
-Gap 1. Nothing else.
+Gap 1, and its two hazards. Nothing else.
 
 ### An analysis of the week
 
-`reviews.reflection_markdown` is freeform: the owner writes the week up by
-hand. Everything needed to compute the other half is already recorded --
-`completed_at`, `status`, `drop_reason`, `blocker_text`, `scheduled_on`, and
-`action_schedule_history`.
+Half exists and is the AI half; see above. What must be built is the
+deterministic record, per initiative: completed, still open with carry counts,
+dropped with reasons, and recurred. Computed from Operations, so it works with AI
+off and cannot be wrong.
 
-The Review should open with what actually happened, per initiative, before it
-asks for a reflection: completed, still open, dropped and why, and carried --
-the count of times a task has been rescheduled, which is the number that
-exposes a task nobody is ever going to do. Computed from Operations, not
-written by a model, so it works with AI off and cannot be wrong.
+The AI summary then has a genuine job rather than a decorative one: it reads the
+computed record and says what the owner would not have noticed -- that one
+initiative absorbed most of the completions, that another has had nothing finish
+in three weeks, that four of the five carried items are all waiting on the same
+person.
 
 ### A definition of done, and the line to direction
 
@@ -201,38 +550,35 @@ in words on either a Goal or an Action.
 For an initiative, "done" is the wrong question -- the right one is **what good
 looks like this quarter**. Proposal: one `definition_of_done` field on goals,
 required for an `outcome` and optional for an `initiative`, shown at the top of
-the initiative and quoted in the Review.
+the initiative and quoted in the Review at the moment a decision to drop is made.
 
 The line to direction already exists and only needs showing: an Action knows its
 Goal, a Goal knows its parent and its Vision. The initiative page should render
-that chain, and the Review should group by it, so the answer to "why am I doing
-this" is on screen rather than reconstructable.
+that chain, and the weekly pass should group by it, so the answer to "why am I
+doing this" is on screen rather than reconstructable.
 
 ## The weekly pass
 
-This is the feature, and everything else exists to make it possible. One screen,
-one initiative at a time:
+One screen, one initiative at a time, four parts:
 
-- **Done this week** -- what completed, with its subtasks.
+- **Done this week** -- what completed, with its subtasks, from `completed_at`.
 - **Still open** -- the carried list, each item showing how many weeks it has
-  been carried. Anything at three or more is offered for dropping first,
-  because that is the number that says nobody is going to do it.
-- **Came round again** -- what the recurrence templates produced.
-- **New** -- one line to add, filed under the initiative, nested where it
-  belongs.
+  been carried. Anything at three or more is offered for dropping first, because
+  that is the number that says nobody is going to do it.
+- **Came round again** -- what the recurrence templates produced, identified by
+  `actions.recurrence_template_id`.
+- **New** -- one line to add, filed under the initiative, nested where it belongs.
 
-Every count is computed from records that already exist. `completed_at` and
-`status` give the first; `action_schedule_history` gives the carry count, and it
-already records `previous_horizon_id`, `new_horizon_id`, `reason` and even
-`review_id`, so a carry made during a Review is already attributable to it.
-Nothing here needs a model, which is what keeps the ritual working with AI off.
+Every count is computed from records that already exist. Nothing here needs a
+model, which is what keeps the ritual working with AI off.
 
 ## The screen
 
 This is a refit of `/review`, not a new surface. That route already lists
-unfinished Actions and asks for a decision on each (`weekly-review.tsx:186`);
-what it has never shown is what the week _finished_, which is the first thing
-the owner wants from it. Mockup: [The Weekly Pass](https://claude.ai/code/artifact/f91b55fe-37ff-4e99-8923-726e4647062e).
+unfinished Actions and asks for a decision on each
+(`web/src/components/weekly-review.tsx:186`); what it has never shown is what the
+week _finished_, which is the first thing the owner wants from it. Mockup:
+[The Weekly Pass](https://claude.ai/code/artifact/f91b55fe-37ff-4e99-8923-726e4647062e).
 
 ### Shape
 
@@ -247,10 +593,10 @@ Week of 8-14 September
 |  Good this quarter: a signed contract,   |  |  would make the   |
 |  or a clear no so the time goes elsewhere|  |  week worth it?   |
 |                                          |  |                   |
-|  FINISHED  3                             |  |  3  TEK Systems   |
-|    the week's completions, quietly       |  |  2  1679          |
-|                                          |  |  1  Planner AI    |
-|  STILL OPEN  2                           |  |  0  Real estate   |
+|  FINISHED  3                             |  |  Priorities 3 / 5 |
+|    the week's completions, quietly       |  |  [x] Call Baily   |
+|                                          |  |  [x] Send invoice |
+|  STILL OPEN  2                           |  |  [x] Ship import  |
 |    Wait for a new start date  [4th week] |  |                   |
 |    > four weeks: waiting is not a task   |  | [Start next week] |
 |                                          |  +-------------------+
@@ -261,75 +607,224 @@ Week of 8-14 September
 ### The decisions that make it cheap
 
 **Finished leads.** Each initiative opens with what closed, then what is still
-open. The order answers the question the owner came to the screen with.
+open. The order answers the question the owner came to the screen with, and it is
+the half the current screen cannot render at all.
 
-**Keep is the default, and most items need no decision at all.** Today's Review
-asks the owner to resolve _every_ unfinished Action, which is the weekly tax
-this design exists to remove. Once work carries rather than being copied,
-staying open is free and silent. Only items carried three weeks or more are put
-in front of the owner for a decision. That single change is most of the saving.
+**Keep is the default, and most items need no decision.** Today's review asks the
+owner to resolve _every_ unfinished Action, which is the weekly tax this design
+exists to remove. Once work carries rather than being copied, and once the carry
+count is visible, staying open is free and silent without being invisible. Only
+items carried three weeks or more are put in front of the owner. That single
+change is most of the saving -- and it is also what forces Gap 5 to be fixed in
+the same ticket.
 
-**The carry count is the primary signal**, quiet at one or two weeks and amber
-at three or more. It is the only number that says nobody is ever going to do
-this, and it exists _because_ nothing is copied.
+**The carry count is the primary signal**, quiet at one or two weeks and amber at
+three or more. It is the only number that says nobody is ever going to do this,
+and it exists _because_ nothing is copied.
 
-**A stalled item gets a reason, not just a flag.** "Wait for a new start date,
-4th week" is worth naming as what it is: waiting is not a task, because it has
-no next action the owner controls. An initiative with weeks of no movement is
-offered **pause** rather than drop -- pausing stops it appearing in the weekly
-pass and keeps everything filed under it. That is the owner's "clean it up"
-step, made explicit and reversible.
+**A stalled item gets a reason, not just a flag.** The operation already requires
+one for `blocked` and `dropped`. "Wait for a new start date, 4th week" is worth
+naming as what it is: waiting is not a task, because it has no next action the
+owner controls. An initiative with weeks of no movement is offered **pause**
+rather than drop -- `goals.status = 'paused'`, which already exists -- so it stops
+appearing in the weekly pass while keeping everything filed under it. That is the
+owner's "clean it up" step, made explicit and reversible.
 
-**Direction is on screen, not one click away.** Each initiative header carries
-its chain -- Vision, yearly Goal, quarterly Goal -- and its definition of done
-in plain words. Dropping something is only defensible when the criterion is
-visible at the moment of dropping.
+**Direction is on screen, not one click away.** Each initiative header carries its
+chain -- Vision, yearly Goal, quarterly Goal -- and its definition of done in
+plain words. Dropping something is only defensible when the criterion is visible
+at the moment of dropping.
 
-**Planning is the exit from reviewing.** The rail is where next week gets its
-one-line intent and its counts; the primary control reads `Start next week - 6
-carried`. There is no separate trip to a planning screen, because the moment
-the owner knows what to plan is the moment they have just finished looking at
-the week.
+**The rail is the existing priority mechanism, finally shown as the point.** The
+five-item cap, the exclusion of completed and dropped work, and the server-side
+validation are all already built and already tested. What the rail adds is
+framing: this is not metadata on a review, it is the answer to "what is next week
+for?". The primary control reads `Start next week - 3 priorities, 6 carried`.
+
+**Planning is the exit from reviewing.** There is no separate trip to a planning
+screen, because the moment the owner knows what to plan is the moment they have
+just finished looking at the week.
 
 ### Still open in the design
 
 - Whether **Finished** collapses to a count once it has been read, or stays
   expanded. It is the answer to the owner's first question, and also the part
   that grows largest.
-- Whether the reflection belongs in the rail or as a full-width final step
-  before the week closes.
+- Whether the reflection belongs in the rail or as a full-width final step before
+  the week closes.
 
 ## Build order
 
-Each step is usable alone and none blocks on AI.
+Seven tickets. Each is usable alone, none blocks on AI, and the sequence is
+chosen so that every step either needs no new operation or is forced by the step
+before it. The roadmap permits one active implementation ticket at a time, so
+this is a queue, not a plan to be parallelised.
 
-1. **Carried work, and the carry count.** Stop treating the weekly horizon as
-   where an Action lives; show an initiative's open list and how long each item
-   has been sitting. This alone removes the retyping, and it is the step the
-   whole design rests on.
-2. **Nesting** -- read the monthly rollup by ancestor walk, then add disclosure,
-   indent and outdent to the planner. Pure interface over `action.move.v1`.
-3. **Initiatives** -- `goals.kind`, the status set, and an initiative page
-   listing its open work against its definition of done.
-4. **The weekly pass** -- the four-part screen above, per initiative.
-5. **Recurring work made visible** -- `action_templates` already generates it;
-   surface and edit it from the initiative, so "every week I invoice" is stated
-   once instead of retyped.
-6. **Definition of done** -- the field, on the initiative page and quoted in the
-   weekly pass, as the criterion for dropping.
-7. **Suggested breakdown** -- a proposal batch of `action.create.v1`, last,
-   because it is the only step that needs a provider. A new initiative with an
-   empty list must be fully usable without it.
+### 1. Show what the week finished
 
-## Open questions
+**Changes:** one additional query in `getWeeklyReviewData`
+(`web/src/app/review/actions.ts:156`) over `status = 'done'` with `completed_at`
+inside the week, grouped by `goal_id`; a `Finished` section above the decision
+list in `weekly-review.tsx`.
 
-- **Priority is not a container.** "Urgent important tasks" and "Not urgent" sit
-  at the same level as the businesses in the export, but they are not projects
-  and modelling them as such would give a task two homes. Priority belongs on
-  the task, and Today's five-item cap is where it should bite. Worth settling
-  before step 4.
-- **What proportion of a week genuinely recurs** versus carries. It changes
-  whether step 5 is a convenience or the main event.
-- **Where a task with no initiative goes.** "Oil change" is real work and
-  belongs to no business. Either a default personal initiative, or Actions keep
-  being allowed a null `goal_id` as they are today.
+**New operations:** none. **Migrations:** none. **Risk:** near zero -- a read.
+
+**Why first:** it is the owner's first request, it is the cheapest thing in this
+document, and it makes the review screen worth opening before anything else
+changes about it.
+
+**Verified by:** a unit test on the grouping, and an e2e test that completes an
+Action, opens `/review`, and sees it.
+
+### 2. Show the carry count
+
+**Changes:** a per-action count of `action_schedule_history` rows with
+`reason = 'rescheduled'`, loaded alongside the open list; a marker on each row;
+sorting the open list by carry count descending.
+
+**New operations:** none. **Migrations:** none (the index exists). **Risk:** low
+-- still a read.
+
+**Why second:** it is the signal the whole design rests on, and it must be proven
+against the owner's real history before anything is built on top of it. If the
+counts come back uninteresting, steps 4 and 6 need rethinking.
+
+**Verified by:** a test that carries an Action across three simulated reviews and
+asserts the count reaches three.
+
+### 3. Bound the review, and make carrying free
+
+**Changes:** a new eligibility function; `review.complete-weekly.v2` registered in
+`operation_contracts` and `operation_undo_support`; the screen stops demanding a
+decision on every row and demands one only for items carried three weeks or more.
+
+**New operations:** one. **Migrations:** one. **Risk:** the highest in this list.
+
+This is the step that removes the weekly tax, and it is also the step that fixes
+Gap 5. They cannot be separated: making carrying free without bounding the
+eligible set walks the owner into the 100-decision cap. `v1` stays dispatchable
+so existing receipts and undo records resolve.
+
+**Verified by:** pgTAP on the new eligibility function, including the case of 150
+carried actions; a test that `v1` still completes; an undo test on `v2`.
+
+### 4. Nesting
+
+**Changes:** read the monthly rollup by ancestor walk rather than immediate
+parent (`web/src/app/actions.ts:342`); disclosure, indent and outdent in the
+planner against `action.move.v1`; a depth bound of four; a cycle guard modelled
+on the one Notes already has (`20260816000400_notes_vault.sql:229`).
+
+**New operations:** possibly one, if `action.move.v1`'s non-nullable `goalId`
+proves too restrictive. Prefer inheriting the parent's goal first.
+
+**Risk:** medium, and concentrated in the read path. Every consumer of
+`monthly_id` must be found before the meaning of `parent_action_id` is widened.
+
+### 5. Initiatives
+
+**Changes:** `goals.kind` with a default of `outcome`; anchor initiatives to the
+current year horizon; `goal.create.v1` and `goal.update.v1` learn the field; an
+initiative page listing open work, grouped, under its direction chain.
+
+**New operations:** none new, two extended -- which still means new versions if
+the input schemas are `.strict()`, and they are.
+
+**Risk:** medium. The horizon anchoring is the part to watch; audit every inner
+join on `planning_horizons` for queries that would now surface or hide
+initiatives unexpectedly.
+
+### 6. The weekly pass
+
+**Changes:** group the review by initiative; add the four sections; wire the rail
+to the existing priority flag and show its cap.
+
+**New operations:** none. This step is composition of steps 1 through 5.
+
+**Why this late:** every part of it is a rearrangement of things already proven in
+isolation. If the earlier steps are right, this is a layout ticket.
+
+### 7. Definition of done, recurrence surfacing, and suggested breakdown
+
+Three small tickets that each improve the pass without changing its shape:
+
+- `definition_of_done` on goals, quoted at the moment of dropping;
+- `action_templates` surfaced and editable from the initiative, so "every week I
+  invoice" is stated once instead of retyped;
+- the AI breakdown, last, because it is the only step that needs a provider. A new
+  initiative with an empty list must be fully usable without it.
+
+### What this order deliberately refuses
+
+- **No new table.** Every gap is closed with a column, a read, or a screen.
+- **No AI before step 7.** Every number is computed.
+- **No change to how work is stored before step 3.** Steps 1 and 2 are pure reads,
+  so they can ship in days and be judged against a real week.
+
+## Risks, and how each is contained
+
+| Risk                                                                     | Why it is plausible                                              | Containment                                                                  |
+| ------------------------------------------------------------------------ | ---------------------------------------------------------------- | ---------------------------------------------------------------------------- |
+| **Free carrying breeds an invisible backlog**                            | The existing screen's author warned about exactly this           | The carry count, escalation at three weeks, and a forced decision there      |
+| **The 100-decision cap is hit**                                          | Eligibility already includes every past week, forever            | Step 3 bounds the set and must ship with the change that makes carrying free |
+| **Widening `parent_action_id` breaks the monthly rollup**                | `monthly_id` is read directly off the column today               | Ancestor walk, and find every consumer before the meaning changes            |
+| **Reparenting creates a cycle**                                          | No guard exists on actions; the cascades are recursive           | Port the Notes cycle check; bound depth at four in the operation             |
+| **Initiatives anchored to a year horizon leak into year-filtered views** | `horizon_id` is inner-joined in most planner queries             | Audit joins in step 5; option 3 (a standing horizon kind) is the escape      |
+| **The feature becomes a second product**                                 | It touches the planner, the review, notes links and AI proposals | It is a refit of `/review` plus one goal-centric page. No new route family   |
+| **Scope grows past Stage 1**                                             | Every gap here suggests three more                               | Steps 1-3 are the Stage 1 exit. Steps 4-7 are justified separately           |
+
+## Open questions, with a recommendation on each
+
+The earlier draft listed these without answers. A plan should take a position.
+
+**Is "Urgent important tasks" a container?** No. It sits at the same level as the
+businesses in the export, but modelling it as a project would give a task two
+homes. Priority belongs on the task, and the product already has the right
+mechanism in two places: the five-item weekly priority flag on
+`review_action_items`, and the five-item daily focus list
+(`daily-focus.set.v1`, `web/src/lib/operations/index.ts:1063`). **Recommendation:
+use them. Do not build a priority container.**
+
+**How much of a week genuinely recurs versus carries?** Unknown, and it decides
+whether step 7's recurrence surfacing is a convenience or the main event.
+**Recommendation: step 2 answers this empirically.** Once carry counts are
+visible against the owner's real history, the ratio is observable rather than
+guessed, and step 7 can be sized properly.
+
+**Where does a task with no initiative go?** "Oil change" is real work and belongs
+to no business. `actions.goal_id` is already nullable, and `/planner/inbox`
+already exists for unfiled work. **Recommendation: leave it nullable.** A default
+personal initiative sounds tidier but creates a second place for the same thing
+and would need to be created during onboarding, which is a migration on a flow
+that is already delicate.
+
+**Should the reflection stay freeform?** Yes, and it should come last. The
+computed record answers "what happened"; the reflection answers "what do I make
+of it", and that is the one part of the week a model should not pre-fill. The
+existing `reflectionPrompts` from the AI proposal are the right level of help.
+
+**What happens to a skipped week?** Unanswered and it matters, because real weeks
+get skipped. Today's eligibility function handles it by accident -- everything
+rolls up into the next review -- and the carry count keeps working because it
+counts reschedules, not weeks. But the `Finished` section would show only the
+current seven days, which is wrong after a two-week gap. **Recommendation: bound
+the `Finished` query by the last completed weekly review's `completed_at` rather
+than the calendar week**, falling back to seven days when there is none. Decide
+this in step 1, because it changes the query.
+
+## Invariants
+
+Rules that must hold regardless of how the design evolves. If a future change
+breaks one of these, it is the change that is wrong.
+
+1. **Nothing is copied.** An Action has one identity for its whole life. Carrying
+   is a move, and the move is recorded.
+2. **Every number on the screen is computed from records.** No count exists
+   because a model said so. The screen is fully functional with AI disabled.
+3. **No silent rollover.** Work may stay open without a decision only while its
+   age is visible and escalates.
+4. **Every durable mutation is a versioned Operation** with a registered
+   contract, an undo strategy, and an idempotency key.
+5. **The week is a checkpoint, not a container.** Work belongs to its initiative.
+6. **Ten minutes.** Any addition that costs the owner more decisions than the
+   Notion ritual has to remove one somewhere else.
