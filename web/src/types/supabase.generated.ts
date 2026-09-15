@@ -3534,7 +3534,10 @@ export type Database = {
         Args: { p_request_id: string };
         Returns: undefined;
       };
-      release_beta_invite: { Args: { p_invite_id: string }; Returns: undefined };
+      release_beta_invite: {
+        Args: { p_invite_id: string; p_token_hash: string };
+        Returns: undefined;
+      };
       remove_note_attachment: {
         Args: { p_attachment_id: string };
         Returns: string;

@@ -13,10 +13,10 @@ const lifecycleAllowlist = [
   'src/app/api/internal/notifications/route.ts',
 ] as const;
 
-// These are migration liabilities, not approved service-role consumers. Remove
-// an entry as soon as its route moves to user-scoped Operations, a restricted
-// worker, or a narrowly granted capability.
-const migrationExceptions = ['src/app/auth/actions.ts'] as const;
+// EH-01 is complete: the admin client is reserved for cron-authenticated
+// lifecycle jobs. Any addition here needs an explicit task contract and a
+// reviewed rationale, and this list is meant to stay empty.
+const migrationExceptions = [] as const;
 
 async function sourceFiles(directory: string): Promise<string[]> {
   const entries = await readdir(directory, { withFileTypes: true });
