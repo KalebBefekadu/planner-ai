@@ -43,54 +43,19 @@ import {
 } from '@/app/actions';
 import { actionFailureMessage } from '@/lib/operations/failure-message';
 import { MeasuredFill } from '@/components/measured-fill';
-import { overlapsPeriod, type HorizonKind } from '@/lib/planning-period';
+import { overlapsPeriod } from '@/lib/planning-period';
+import {
+  childHorizonTypes as childTypes,
+  horizonKinds,
+  horizonLabels as labels,
+  periodRangeLabel,
+  type HorizonFilter,
+} from '@/lib/planner/horizon-labels';
 
 type ComposerTarget = { type: GoalType; parentId: string; label: string } | null;
 type GoalItem = GoalView;
 type EditTarget = { type: GoalType; item: GoalItem } | null;
-type HorizonFilter = 'all' | GoalType;
 type PeriodFilter = 'current' | 'all';
-
-const horizonKinds: Record<GoalType, HorizonKind> = {
-  yearly: 'year',
-  quarterly: 'quarter',
-  monthly: 'month',
-  weekly: 'week',
-};
-
-const labels: Record<GoalType, string> = {
-  yearly: 'Yearly goal',
-  quarterly: 'Quarterly goal',
-  monthly: 'Monthly action',
-  weekly: 'Weekly action',
-};
-const childTypes: Partial<Record<GoalType, GoalType>> = {
-  yearly: 'quarterly',
-  quarterly: 'monthly',
-  monthly: 'weekly',
-};
-
-function readableRange(bounds: { startsOn: string; endsOn: string }) {
-  const format = (value: string) =>
-    new Intl.DateTimeFormat('en-US', {
-      month: 'short',
-      day: 'numeric',
-      timeZone: 'UTC',
-    }).format(new Date(`${value}T12:00:00Z`));
-  return `${format(bounds.startsOn)} - ${format(bounds.endsOn)}`;
-}
-
-function periodRangeLabel(
-  horizon: HorizonFilter,
-  periods: Record<HorizonKind, { startsOn: string; endsOn: string }>
-) {
-  if (horizon === 'all') {
-    // With every horizon shown, each row is scoped to its own period, so
-    // naming one range would be wrong for three quarters of the list.
-    return 'Each horizon scoped to its current period';
-  }
-  return readableRange(periods[horizonKinds[horizon]]);
-}
 
 function messageFor(error: unknown) {
   return actionFailureMessage(error, 'Something went wrong. Please try again.');

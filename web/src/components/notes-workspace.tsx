@@ -74,7 +74,21 @@ import {
   type NoteKnowledgeContext,
   type NoteView,
 } from '@/app/notes/actions';
-import { nextParentMove, nextSiblingMove, parentCandidateIds } from '@/lib/notes/sibling-order';
+import {
+  ancestorIds,
+  availableNoteMoves,
+  childrenByParent as groupChildrenByParent,
+  filingCandidates as filingCandidatesFor,
+  isBranchExpanded,
+  toggleBranch,
+} from '@/lib/notes/note-tree';
+import { attachmentStatus, restorableUntil } from '@/lib/notes/attachment-display';
+import {
+  collapsedNotesSnapshot,
+  serverCollapsedNotesSnapshot,
+  subscribeToCollapsedNotes,
+  writeCollapsedNotes,
+} from '@/lib/notes/collapsed-branches';
 import { operationFailureCode } from '@/lib/operations';
 import {
   conflictSummary,
@@ -86,7 +100,11 @@ import { NoteAppearanceHeader } from '@/components/note-appearance-header';
 import { noteLocationLabel, notePath, orderFavorites } from '@/lib/notes/note-paths';
 import { useVoiceTranscription } from '@/lib/use-voice-transcription';
 import { extractPlannerMarkdownHeadings } from '@/lib/markdown/contract';
-import { continueMarkdownList, wrapMarkdownSelection } from '@/lib/markdown/editing';
+import {
+  continueMarkdownList,
+  insertMarkdownTable as buildMarkdownTable,
+  wrapMarkdownSelection,
+} from '@/lib/markdown/editing';
 import { plannerMarkdownSupportsRichEditing } from '@/lib/markdown/rich-editor';
 import { actionFailureMessage } from '@/lib/operations/failure-message';
 import {
@@ -142,116 +160,6 @@ export function NoteMarkdownPreview({ markdown }: { markdown: string }) {
 
 export type InspectorView = 'properties' | 'links' | 'history';
 
-type NoteAttachment = NoteKnowledgeContext['attachments'][number];
-
-const attachmentTypeNames: Record<string, string> = {
-  'application/pdf': 'PDF',
-  'image/jpeg': 'JPEG image',
-  'image/png': 'PNG image',
-  'text/markdown': 'Markdown file',
-  'text/plain': 'text file',
-};
-
-function attachmentSize(byteSize: number) {
-  if (byteSize < 1024) return `${byteSize} bytes`;
-  if (byteSize < 1024 * 1024) return `${Math.round(byteSize / 1024)} KB`;
-  return `${(byteSize / (1024 * 1024)).toFixed(1)} MB`;
-}
-
-// What the person is told about a file. "Security review pending" used to be
-// shown for every attachment forever, which described a review that was never
-// going to run and a file that could never be opened. Each state here is
-// something that is actually true of the stored file.
-function attachmentStatus(attachment: NoteAttachment) {
-  if (attachment.scanState === 'rejected') {
-    return `Not available: contents do not match a ${
-      attachmentTypeNames[attachment.mediaType] ?? 'file'
-    }`;
-  }
-  if (attachment.scanState === 'quarantined') return 'Checking this file';
-  return attachmentSize(attachment.byteSize);
-}
-
-function restorableUntil(purgeAfter: string | null) {
-  if (!purgeAfter) return 'Restore is no longer available.';
-  return `Restore by ${new Date(purgeAfter).toLocaleDateString(undefined, {
-    day: 'numeric',
-    month: 'short',
-    year: 'numeric',
-  })}.`;
-}
-
-/* Which branches the reader has closed, per browser. This is a view
-   preference, not workspace data: it is their own place in their hierarchy and
-   does not belong in an Operation or on another device.
-
-   Closed branches are stored rather than open ones, so the default -- an empty
-   set -- is a tree that hides nothing. Defaulting the other way meant filing a
-   page under another and then returning to Notes found it gone from the tree,
-   which reads as data loss rather than as a closed folder. */
-const NOTE_TREE_COLLAPSED_KEY = 'planner-notes-collapsed';
-
-/* Reading `localStorage` is reading an external store, and the server has no
-   such store, so `useSyncExternalStore` is what models it honestly: the server
-   and hydration both render "nothing open", and the browser's real answer
-   arrives once hydration finishes. Restoring in an effect instead sets state
-   during a second cascading render, which is also what the lint rule against
-   it is protecting.
-
-   Unlike the onboarding draft, this store has a writer -- the disclosure
-   controls -- so `subscribe` is real: a write notifies, and every tree
-   re-reads. `getSnapshot` must return a stable reference or React re-renders
-   forever, so the parsed set is cached against the raw text it came from. */
-const NO_COLLAPSED_NOTES: ReadonlySet<string> = new Set();
-let collapsedListeners: (() => void)[] = [];
-let collapsedRaw: string | null = null;
-let collapsedCache: ReadonlySet<string> = NO_COLLAPSED_NOTES;
-
-function subscribeToCollapsedNotes(onChange: () => void) {
-  collapsedListeners = [...collapsedListeners, onChange];
-  return () => {
-    collapsedListeners = collapsedListeners.filter((listener) => listener !== onChange);
-  };
-}
-
-function collapsedNotesSnapshot(): ReadonlySet<string> {
-  let raw: string | null = null;
-  try {
-    raw = window.localStorage.getItem(NOTE_TREE_COLLAPSED_KEY);
-  } catch {
-    // Private browsing and locked-down profiles throw on access rather than
-    // returning null. Treat that as "nothing remembered".
-    return NO_COLLAPSED_NOTES;
-  }
-  if (raw !== collapsedRaw) {
-    collapsedRaw = raw;
-    try {
-      const parsed: unknown = raw ? JSON.parse(raw) : [];
-      collapsedCache = new Set(Array.isArray(parsed) ? (parsed as string[]) : []);
-    } catch {
-      // Text this key cannot describe is not worth failing a page over.
-      collapsedCache = NO_COLLAPSED_NOTES;
-    }
-  }
-  return collapsedCache;
-}
-
-function serverCollapsedNotesSnapshot(): ReadonlySet<string> {
-  return NO_COLLAPSED_NOTES;
-}
-
-function writeCollapsedNotes(next: ReadonlySet<string>) {
-  try {
-    window.localStorage.setItem(NOTE_TREE_COLLAPSED_KEY, JSON.stringify([...next]));
-  } catch {
-    // Not being able to remember the shape of the tree is not a reason to
-    // refuse to change it, so notify regardless and let this session hold it.
-    collapsedRaw = null;
-    collapsedCache = next;
-  }
-  for (const listener of collapsedListeners) listener();
-}
-
 export function NotesWorkspace({
   notes,
   favorites,
@@ -303,46 +211,18 @@ export function NotesWorkspace({
     serverCollapsedNotesSnapshot
   );
 
-  const childrenByParent = useMemo(() => {
-    const byParent = new Map<string | null, NoteView[]>();
-    for (const note of notes) {
-      const siblings = byParent.get(note.parentNoteId) ?? [];
-      siblings.push(note);
-      byParent.set(note.parentNoteId, siblings);
-    }
-    for (const siblings of byParent.values()) {
-      siblings.sort((first, second) => first.sortKey - second.sortKey);
-    }
-    return byParent;
-  }, [notes]);
+  const childrenByParent = useMemo(() => groupChildrenByParent(notes), [notes]);
 
   // The chain above the open page, so reading a deep page reveals where it
   // lives rather than leaving the tree closed around it.
-  const ancestorsOfActive = useMemo(() => {
-    const chain = new Set<string>();
-    const byId = new Map(notes.map((note) => [note.id, note]));
-    let parentId = activeNoteId ? (byId.get(activeNoteId)?.parentNoteId ?? null) : null;
-    while (parentId && !chain.has(parentId)) {
-      chain.add(parentId);
-      parentId = byId.get(parentId)?.parentNoteId ?? null;
-    }
-    return chain;
-  }, [notes, activeNoteId]);
+  const ancestorsOfActive = useMemo(() => ancestorIds(notes, activeNoteId), [notes, activeNoteId]);
 
   function isExpanded(noteId: string) {
-    // A branch the reader closed stays closed -- unless the page being read
-    // lives inside it, in which case hiding it would hide the open page.
-    return !collapsedIds.has(noteId) || ancestorsOfActive.has(noteId);
+    return isBranchExpanded(collapsedIds, ancestorsOfActive, noteId);
   }
 
   function toggleExpanded(noteId: string) {
-    const next = new Set(collapsedIds);
-    // An ancestor of the open page is forced open, so the stored set can say a
-    // branch is closed while it renders open. Toggling acts on what is on
-    // screen, which is the only state the reader can see.
-    if (isExpanded(noteId)) next.add(noteId);
-    else next.delete(noteId);
-    writeCollapsedNotes(next);
+    writeCollapsedNotes(toggleBranch(collapsedIds, ancestorsOfActive, noteId));
   }
   const [title, setTitle] = useState(selected?.title ?? '');
   const titleRef = useRef<HTMLTextAreaElement>(null);
@@ -457,24 +337,10 @@ export function NotesWorkspace({
   // Which moves are open to this Note, decided by the same functions the server
   // uses to perform them. Working it out separately here would let the controls
   // offer a move the server then refuses, or hide one it would have allowed.
-  const availableMoves = useMemo(() => {
-    const none = { up: false, down: false, indent: false, outdent: false };
-    if (!selected) return none;
-    const siblings = notes
-      .filter((note) => note.parentNoteId === selected.parentNoteId)
-      .map((note) => ({ id: note.id, sortKey: note.sortKey }));
-    const tree = notes.map((note) => ({
-      id: note.id,
-      parentNoteId: note.parentNoteId,
-      sortKey: note.sortKey,
-    }));
-    return {
-      up: nextSiblingMove(siblings, selected.id, 'up').outcome !== 'edge',
-      down: nextSiblingMove(siblings, selected.id, 'down').outcome !== 'edge',
-      indent: nextParentMove(tree, selected.id, 'indent').outcome !== 'edge',
-      outdent: nextParentMove(tree, selected.id, 'outdent').outcome !== 'edge',
-    };
-  }, [notes, selected]);
+  const availableMoves = useMemo(
+    () => availableNoteMoves(notes, selected?.id ?? null),
+    [notes, selected]
+  );
 
   function applyMove(move: () => Promise<NoteView | null>) {
     startTransition(async () => {
@@ -872,19 +738,11 @@ export function NotesWorkspace({
   function insertMarkdownTable() {
     const editor = editorRef.current;
     if (!editor) return;
-    const start = editor.selectionStart;
-    const end = editor.selectionEnd;
-    const before = body.slice(0, start);
-    const after = body.slice(end);
-    const table = '| Column | Column |\n| --- | --- |\n| Value | Value |';
-    const prefix = before && !before.endsWith('\n') ? '\n\n' : '';
-    const suffix = after && !after.startsWith('\n') ? '\n\n' : '';
-    const nextBody = `${before}${prefix}${table}${suffix}${after}`;
-    const selectionStart = before.length + prefix.length + 2;
-    setBody(nextBody);
+    const edit = buildMarkdownTable(body, editor.selectionStart, editor.selectionEnd);
+    setBody(edit.markdown);
     window.requestAnimationFrame(() => {
       editor.focus();
-      editor.setSelectionRange(selectionStart, selectionStart + 'Column'.length);
+      editor.setSelectionRange(edit.selectionStart, edit.selectionEnd);
     });
   }
 
@@ -1013,16 +871,10 @@ export function NotesWorkspace({
   // A Note cannot be filed under itself or under anything hanging beneath it,
   // because that would take the whole branch out of the tree. Those places are
   // never offered, and the server checks again against the live hierarchy.
-  const filingCandidates = useMemo(() => {
-    if (!selected) return [];
-    const tree = notes.map((note) => ({
-      id: note.id,
-      parentNoteId: note.parentNoteId,
-      sortKey: note.sortKey,
-    }));
-    const allowed = new Set(parentCandidateIds(tree, selected.id));
-    return notes.filter((note) => allowed.has(note.id) && note.id !== selected.parentNoteId);
-  }, [notes, selected]);
+  const filingCandidates = useMemo(
+    () => filingCandidatesFor(notes, selected?.id ?? null),
+    [notes, selected]
+  );
   const connectionCount =
     (knowledge?.links.length ?? 0) +
     (knowledge?.goalLinks.length ?? 0) +

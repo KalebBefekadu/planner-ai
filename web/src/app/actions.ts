@@ -1,5 +1,6 @@
 'use server';
 
+import type { GoalType } from '@/lib/planner/horizon-labels';
 import { selectAll } from '@/lib/supabase/select-all';
 
 import { randomUUID } from 'node:crypto';
@@ -12,7 +13,7 @@ import { executeOperation, OperationFailure } from '@/lib/operations';
 import { createClient } from '@/lib/supabase/server';
 import type { GoalStatus } from '@/types/supabase';
 
-export type GoalType = 'yearly' | 'quarterly' | 'monthly' | 'weekly';
+export type { GoalType };
 export type VisionView = {
   id: string;
   content: string;
