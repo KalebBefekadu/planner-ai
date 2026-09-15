@@ -2,7 +2,7 @@
 
 Roadmap stage: **2 - Workspace, Planner And Delivery Hardening**
 
-## Active Codex task: admin-client boundary
+## Codex handoff ready: admin-client boundary
 
 - **Contract:** `.agents/tasks/admin-client-boundary.md`
 - **Branch:** `codex/admin-client-boundary`
@@ -11,8 +11,9 @@ Roadmap stage: **2 - Workspace, Planner And Delivery Hardening**
 - **Writable paths:** the focused boundary test, engineering register, and
   coordination documents named by the contract.
 - **Foundation:** EH-02 handoff `3bcfc5d` remains ready for review.
-- **Next:** prove the allowlist, then remove migration exceptions in separate
-  least-privilege slices.
+- **Handoff:** `.agents/handoffs/admin-client-boundary.md`
+- **Next:** review `7b8a293`, then remove the health-route migration exception
+  as the first runtime least-privilege change.
 
 ## CI runs again, and integration itself is red
 
