@@ -2,6 +2,18 @@
 
 Roadmap stage: **2 - Workspace, Planner And Delivery Hardening**
 
+## Active Codex task: architecture foundation
+
+- **Contract:** `.agents/tasks/architecture-foundation.md`
+- **Branch:** `codex/architecture-foundation`
+- **Scope:** integrate the accepted two-pillar product shape with the roadmap,
+  record the engineering improvement program, and align Node/Next toolchain
+  versions.
+- **Writable paths:** documentation and package metadata named by the contract;
+  no application source or database migration changes.
+- **Next:** hand off this focused foundation, then activate EH-02 delivery
+  isolation before the least-privilege implementation slices.
+
 ## CI runs again, and integration itself is red
 
 The Actions billing block is cleared. The repository was made public on

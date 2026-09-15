@@ -1,6 +1,6 @@
 # Planner AI Delivery Roadmap
 
-Status: **execution authority.** [Status](status.md) records verified facts. [Vision](product/vision.md) defines the destination. [Requirements](product/requirements.md) defines product behavior.
+Status: **execution authority.** [Status](status.md) records verified facts. [Vision](product/vision.md) defines the destination. [Requirements](product/requirements.md) defines product behavior. [Product shape](product/product-shape.md) defines the accepted two-pillar direction, and the [engineering improvement program](engineering/improvement-program.md) defines its supporting technical outcomes without creating a second delivery order.
 
 The [build manual](build-manual.md) links all detailed GitHub tickets, dependencies, acceptance cases, and verification. GitHub owns ticket status; this roadmap owns delivery order.
 
@@ -38,19 +38,19 @@ Before declaring Notion replaced, complete [MVP-01](https://github.com/KalebBefe
 
 ## Four Product States
 
-| State              | Meaning                                                                                                                 | Source of truth                | Rule                                               |
-| ------------------ | ----------------------------------------------------------------------------------------------------------------------- | ------------------------------ | -------------------------------------------------- |
-| **Real app today** | Authenticated canonical routes backed by actual data and Operations; completion is measured by verified workflow gates. | `web/` and [Status](status.md) | All new product behavior lands here.               |
-| **Personal MVP**   | The private Notion replacement and daily-planning finish line defined above.                                            | This roadmap                   | Current delivery target.                           |
-| **Preview app**    | Fixture-backed visual reference for accepted Workspace and Planner patterns.                                            | `/preview`                     | No new product behavior or separate design system. |
-| **Final product**  | The complete customizable, local-first, collaborative, agent-native operating system.                                   | [Vision](product/vision.md)    | Built only through gated post-MVP stages.          |
+| State              | Meaning                                                                                                                                   | Source of truth                                                           | Rule                                               |
+| ------------------ | ----------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------- | -------------------------------------------------- |
+| **Real app today** | Authenticated canonical routes backed by actual data and Operations; completion is measured by verified workflow gates.                   | `web/` and [Status](status.md)                                            | All new product behavior lands here.               |
+| **Personal MVP**   | The private Notion replacement and daily-planning finish line defined above.                                                              | This roadmap                                                              | Current delivery target.                           |
+| **Preview app**    | Fixture-backed visual reference for accepted Workspace and Planner patterns.                                                              | `/preview`                                                                | No new product behavior or separate design system. |
+| **Final product**  | The customizable two-pillar operating system, with local-first, collaboration, and extensions admitted only through explicit later gates. | [Vision](product/vision.md) and [Product shape](product/product-shape.md) | Built only through gated post-MVP stages.          |
 
 ## Product Shape
 
-The real authenticated application has two primary modes:
+The real authenticated application has two primary pillars:
 
-- **Workspace:** Notes, captures, hierarchy, search, import, export, and knowledge connections.
-- **Planner:** Today, This Week, Calendar, Action Inbox, Goals and Horizons, Vision, and Review.
+- **Knowledge:** Notes, Captures, hierarchy, search, import, export, and knowledge connections. Current routes may still call this Workspace while the authenticated product converges.
+- **Planning:** Today, This Week, Calendar, Action Inbox, Goals and Horizons, Vision, and Review. Current routes call this Planner.
 
 They share the Planner AI brand, global rail, contextual navigation, search/command entry, top bar, responsive system, canonical data, and versioned Operations. AI is contextual inside both modes and never becomes a second application or data path.
 
@@ -133,14 +133,22 @@ Status: **pending private release.**
 
 ## After The Personal MVP
 
-1. **Invite beta:** custom domain and email, operational security review, accessibility evidence, malware scanning, provider/SLO evidence, and support readiness.
-2. **Structured workspace:** typed databases, relations, formulas, filters, and table/board/calendar/timeline/gallery views.
-3. **Knowledge tools:** graph, canvas, stronger backlinks, and visual composition.
-4. **Local ownership:** stronger offline-first behavior, filesystem/Markdown sync, conflict handling, and Git-friendly workflows.
-5. **Collaboration:** sharing, permissions, real-time editing, forms, portals, comments, and assignments.
-6. **Agent platform:** broader MCP, automations, integrations, sandboxed plugins, and carefully governed generative UI.
+1. **Invite readiness:** custom domain and email, operational security review, accessibility evidence, malware scanning, provider/SLO evidence, and support readiness.
+2. **Make the pillars visible:** make Knowledge the front door while preserving Planning as a co-equal pillar over the same data and Operations.
+3. **Simple shared Workspaces:** introduce owner plus one flat member role immediately after dogfood and before adding more Workspace-scoped schema. Do not add guests, page-level permissions, approval chains, or a role matrix.
+4. **Shared spine:** surface page-to-Action links, stronger backlinks, graph, and unified search without collapsing the explicit Note and planning entities.
+5. **Structured Knowledge:** typed page properties, relations, filters, and saved table/board/calendar views. Formulas and rollups wait for verified owner workflows.
+6. **Ownership guarantee:** prove zero-loss vault export and re-import, then evaluate an opt-in read-only folder mirror. Postgres remains authoritative for this program.
+7. **Gated frontier:** true local-first editing, richer collaboration, native clients, broader MCP, automations, integrations, canvas, and sandboxed extensions require their own accepted architecture and evidence gates.
 
 Each capability must first exist as a user-facing, authorized Operation before an assistant or external agent may control it.
+
+The personal-MVP hardening sequence incorporates the release-critical parts of
+the [engineering improvement program](engineering/improvement-program.md):
+reproducible delivery, stack alignment, least-privilege server access, and
+content-free production observability. Broader module, dispatcher, declarative
+schema, and durable-job refactors remain focused tickets and do not displace an
+open MVP workflow gate.
 
 ## Immediate Queue
 
