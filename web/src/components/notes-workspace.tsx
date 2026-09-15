@@ -435,19 +435,19 @@ export function NotesWorkspace({
     () => (selectedId ? notePath(notes, selectedId).slice(0, -1) : []),
     [notes, selectedId]
   );
-  const outline = useMemo(() => extractPlannerMarkdownHeadings(body), [body]);
-  /* Deciding whether rich mode is safe parses the document, converts it,
-     serialises it back and compares the two. On a Note somebody has actually
-     kept -- a journal, a year of meeting notes -- that is over a second of
-     synchronous work, and `body` changes on every keystroke, so it ran on
-     every character typed. Typing into a long Note was unusable for exactly
-     that reason, and the cost is invisible on the short documents the rest of
-     the tests use.
+  /* Two things parse the whole document: the outline, and the check deciding
+     whether rich mode is safe. Both were bound to `body`, which changes on
+     every keystroke, so together they ran nearly a second and a half of
+     synchronous work between one letter and the next on a Note somebody has
+     actually kept -- 305ms and 1.16s at 6,000 lines. Typing into a long Note
+     was unusable, and neither cost shows up on the short documents the rest
+     of the tests use.
 
-     The answer only gates whether Rich is offered, so it can lag the draft by
-     a moment: deferring it means the check runs when typing settles instead of
-     between one letter and the next. */
+     Neither answer is part of writing: one is a map of the Note, the other
+     gates whether Rich is offered. Both can lag the draft by a moment, so
+     both read a deferred copy and run when typing settles instead. */
   const settledBody = useDeferredValue(body);
+  const outline = useMemo(() => extractPlannerMarkdownHeadings(settledBody), [settledBody]);
   const richEditable = useMemo(
     () => plannerMarkdownSupportsRichEditing(settledBody),
     [settledBody]
