@@ -8,19 +8,20 @@ Every week the owner creates a folder for each project or business they have
 running, writes that week's tasks underneath it, checks them off as the week
 goes, and cleans the whole thing up at the end of the week.
 
-From the Notion export the structure is:
+**Most of that work repeats.** The owner's own description of what they want is
+to start each week from the previous one as a template, update what has moved,
+and add what is new.
+
+The exported structure -- rough notes rather than a specification -- looks like:
 
 ```
 Weekly
-  Urgent important tasks          <- a grouping, not a project
+  Urgent important tasks          <- a priority grouping, not a project
   TEK Systems - Amazon            <- an ongoing concern
     Wait for new start date
     Reach out to baily
       wait to hear back           <- depth 2
   1679
-    1679 Insurance
-      Create invoice for engineering document
-        Reach out to the company I spoke about   <- depth 3
   Planner AI
   Real estate agent business
 ```
@@ -29,10 +30,59 @@ Three properties matter and are easy to lose:
 
 1. **The container outlives the week.** "Real estate agent business" is not
    finished; it recurs every week with new work under it.
-2. **Work nests, three or four deep**, and the nesting is how a task keeps its
-   context ("wait to hear back" is meaningless on its own).
-3. **The week is a snapshot, not the home.** Tasks are rewritten each week; the
-   project is the durable thing.
+2. **Work nests**, and the nesting is how a task keeps its context ("wait to
+   hear back" is meaningless on its own).
+3. **Most of the list survives the week**, and rewriting it is manual labour.
+
+## Where this design disagrees with the ask
+
+**Copying last week forward is the wrong mechanism, and it is worth saying so
+before building it.**
+
+The weekly re-creation is not part of the workflow. It is a workaround for
+something Notion cannot do: a Notion page has no idea which of its tasks are
+still open, so the only way to carry work is to copy it by hand. Rebuilding
+that copy step inside a tool that tracks task state would import the workaround
+along with the ritual, and it costs something real.
+
+Copying creates a **new record with a new identity**. "Reach out to baily"
+copied into four consecutive weeks is four unrelated rows, and the single most
+useful fact about it -- that it has survived four weeks untouched -- is
+destroyed by the copying. That fact is the one that tells the owner a task is
+never going to happen. Copying also duplicates every subtask beneath it, and
+splits a task's history across records, so the Review can only ever describe
+one week rather than the life of the work.
+
+The same outcome, without any of that: **unfinished work simply stays open.**
+An Action belongs to its initiative, not to a week. When a new week starts,
+nothing is copied because nothing moved -- the open list is already there, with
+its own history, its own subtasks, and a count of how many weeks it has been
+carried.
+
+What "starting from last week" actually asks for then decomposes into three
+different things, which are better kept apart because they behave differently:
+
+| What repeats                                                                        | What it really is | Where it lives                                                  |
+| ----------------------------------------------------------------------------------- | ----------------- | --------------------------------------------------------------- |
+| Work still not finished                                                             | **carried**       | the same Action, untouched, with a carry count                  |
+| Work that genuinely resets each period -- invoicing, a weekly review, an oil change | **recurring**     | `action_templates` (`cadence`, `next_occurrence_on`, `goal_id`) |
+| The projects themselves                                                             | **standing**      | the initiative, which is an entity and never needs copying      |
+
+All three already have somewhere to live. Rolled together into "copy last week"
+they need new machinery and lose the distinction that makes the week readable:
+what stalled, what came round again, and what is genuinely new.
+
+**The week stops being a container and becomes a checkpoint.** The initiative
+holds a living list; the weekly pass is where the owner marks what is done,
+drops what is dead, and adds what is new. That is the same ten minutes, minus
+the retyping.
+
+### The one thing copying does better
+
+A deliberate reset. Sometimes the right move is to declare weekly bankruptcy on
+a stalled initiative and rewrite its list from scratch. That is worth an
+explicit action -- clear what is open, with a reason recorded -- rather than a
+copy mechanism used every week to get it.
 
 ## What Planner AI already has
 
@@ -158,28 +208,56 @@ Goal, a Goal knows its parent and its Vision. The initiative page should render
 that chain, and the Review should group by it, so the answer to "why am I doing
 this" is on screen rather than reconstructable.
 
+## The weekly pass
+
+This is the feature, and everything else exists to make it possible. One screen,
+one initiative at a time:
+
+- **Done this week** -- what completed, with its subtasks.
+- **Still open** -- the carried list, each item showing how many weeks it has
+  been carried. Anything at three or more is offered for dropping first,
+  because that is the number that says nobody is going to do it.
+- **Came round again** -- what the recurrence templates produced.
+- **New** -- one line to add, filed under the initiative, nested where it
+  belongs.
+
+Every count is computed from records that already exist. `completed_at` and
+`status` give the first; `action_schedule_history` gives the carry count, and it
+already records `previous_horizon_id`, `new_horizon_id`, `reason` and even
+`review_id`, so a carry made during a Review is already attributable to it.
+Nothing here needs a model, which is what keeps the ritual working with AI off.
+
 ## Build order
 
 Each step is usable alone and none blocks on AI.
 
-1. **Nesting** -- read the monthly rollup by ancestor walk, then add disclosure,
+1. **Carried work, and the carry count.** Stop treating the weekly horizon as
+   where an Action lives; show an initiative's open list and how long each item
+   has been sitting. This alone removes the retyping, and it is the step the
+   whole design rests on.
+2. **Nesting** -- read the monthly rollup by ancestor walk, then add disclosure,
    indent and outdent to the planner. Pure interface over `action.move.v1`.
-2. **Initiatives** -- `goals.kind`, the status set, and an initiative page
-   listing its open work.
-3. **The weekly roll-forward** -- carry an initiative's unfinished work into the
-   new week as one reviewed step, which is the manual part of the ritual.
-4. **Computed review** -- what each initiative completed, dropped and carried,
-   above the reflection.
-5. **Definition of done** -- the field, on the initiative page and in the Review.
-6. **Suggested breakdown** -- a proposal batch of `action.create.v1`, last,
-   because it is the only step that needs a provider.
+3. **Initiatives** -- `goals.kind`, the status set, and an initiative page
+   listing its open work against its definition of done.
+4. **The weekly pass** -- the four-part screen above, per initiative.
+5. **Recurring work made visible** -- `action_templates` already generates it;
+   surface and edit it from the initiative, so "every week I invoice" is stated
+   once instead of retyped.
+6. **Definition of done** -- the field, on the initiative page and quoted in the
+   weekly pass, as the criterion for dropping.
+7. **Suggested breakdown** -- a proposal batch of `action.create.v1`, last,
+   because it is the only step that needs a provider. A new initiative with an
+   empty list must be fully usable without it.
 
 ## Open questions
 
-- **"Urgent important tasks" and "Not urgent" are not projects**, they are a
-  priority grouping sitting at the same level as the businesses. Whether that
-  becomes a real axis on an Action or stays a personal initiative is worth
-  deciding from more of the export.
-- **How much of a week is recurring work** versus new: `action_templates` and
-  `recurrence_template_id` already exist, and if most weekly tasks repeat, step
-  3 matters more than step 6.
+- **Priority is not a container.** "Urgent important tasks" and "Not urgent" sit
+  at the same level as the businesses in the export, but they are not projects
+  and modelling them as such would give a task two homes. Priority belongs on
+  the task, and Today's five-item cap is where it should bite. Worth settling
+  before step 4.
+- **What proportion of a week genuinely recurs** versus carries. It changes
+  whether step 5 is a convenience or the main event.
+- **Where a task with no initiative goes.** "Oil change" is real work and
+  belongs to no business. Either a default personal initiative, or Actions keep
+  being allowed a null `goal_id` as they are today.
