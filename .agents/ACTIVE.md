@@ -2,18 +2,17 @@
 
 Roadmap stage: **2 - Workspace, Planner And Delivery Hardening**
 
-## Codex handoff ready: reproducible delivery
+## Active Codex task: admin-client boundary
 
-- **Contract:** `.agents/tasks/reproducible-delivery.md`
-- **Branch:** `codex/reproducible-delivery`
-- **Scope:** serialize local Supabase use across worktrees and make database/type
-  verification begin from a clean migration reset.
-- **Writable paths:** delivery scripts, their focused tests, CI, package scripts,
-  and coordination documents named by the contract.
-- **Foundation:** architecture handoff `da8f2fb` remains ready for review.
-- **Handoff:** `.agents/handoffs/reproducible-delivery.md`
-- **Next:** review `c81c042`, then activate the first EH-01 least-privilege
-  server-access slice.
+- **Contract:** `.agents/tasks/admin-client-boundary.md`
+- **Branch:** `codex/admin-client-boundary`
+- **Scope:** freeze the current service-role surface, distinguish lifecycle jobs
+  from migration exceptions, and fail CI if access expands.
+- **Writable paths:** the focused boundary test, engineering register, and
+  coordination documents named by the contract.
+- **Foundation:** EH-02 handoff `3bcfc5d` remains ready for review.
+- **Next:** prove the allowlist, then remove migration exceptions in separate
+  least-privilege slices.
 
 ## CI runs again, and integration itself is red
 
