@@ -1,6 +1,5 @@
 import { NextResponse } from 'next/server';
 import { selectAll } from '@/lib/supabase/select-all';
-import { createAdminClient } from '@/lib/supabase/admin';
 import { resolveAttachment } from '@/lib/notes/attachment-availability';
 import {
   type AttachmentExportResult,
@@ -15,8 +14,11 @@ import { createClient } from '@/lib/supabase/server';
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 
-async function exportAttachment(attachment: ExportAttachment): Promise<AttachmentExportResult> {
-  const resolved = await resolveAttachment(createAdminClient(), attachment);
+async function exportAttachment(
+  reader: Parameters<typeof resolveAttachment>[0],
+  attachment: ExportAttachment
+): Promise<AttachmentExportResult> {
+  const resolved = await resolveAttachment(reader, attachment);
   return resolved.state === 'approved'
     ? { available: true, bytes: resolved.bytes }
     : { available: false, reason: resolved.state };
@@ -108,7 +110,7 @@ export async function GET() {
     const archive = await zipNotes(
       (notesResult.data ?? []) as ExportNote[],
       (attachmentsResult.data ?? []) as ExportAttachment[],
-      exportAttachment,
+      (attachment) => exportAttachment(supabase, attachment),
       {
         tags: (
           (tagsResult.data ?? []) as unknown as Array<{

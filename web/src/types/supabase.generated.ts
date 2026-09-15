@@ -1415,6 +1415,7 @@ export type Database = {
           purge_after: string | null;
           removed_at: string | null;
           scan_state: string;
+          upload_state: string;
           workspace_id: string;
         };
         Insert: {
@@ -1429,6 +1430,7 @@ export type Database = {
           purge_after?: string | null;
           removed_at?: string | null;
           scan_state?: string;
+          upload_state?: string;
           workspace_id: string;
         };
         Update: {
@@ -1443,6 +1445,7 @@ export type Database = {
           purge_after?: string | null;
           removed_at?: string | null;
           scan_state?: string;
+          upload_state?: string;
           workspace_id?: string;
         };
         Relationships: [
@@ -2644,6 +2647,10 @@ export type Database = {
       [_ in never]: never;
     };
     Functions: {
+      abandon_note_attachment: {
+        Args: { p_attachment_id: string };
+        Returns: undefined;
+      };
       action_ancestor_depth: {
         Args: { p_action_id: string; p_workspace_id: string };
         Returns: number;
@@ -3361,6 +3368,10 @@ export type Database = {
         Args: { p_error_code: string; p_job_id: string };
         Returns: undefined;
       };
+      finalize_note_attachment: {
+        Args: { p_attachment_id: string };
+        Returns: undefined;
+      };
       generate_workspace_notifications: {
         Args: { p_workspace_id: string };
         Returns: number;
@@ -3506,12 +3517,35 @@ export type Database = {
         };
         Returns: Json;
       };
+      record_note_attachment_scan: {
+        Args: { p_attachment_id: string; p_scan_state: string };
+        Returns: undefined;
+      };
       refresh_all_workspace_notifications: { Args: never; Returns: number };
       release_ai_quota_reservation: {
         Args: { p_request_id: string };
         Returns: undefined;
       };
       release_beta_invite: { Args: { p_invite_id: string }; Returns: undefined };
+      remove_note_attachment: {
+        Args: { p_attachment_id: string };
+        Returns: string;
+      };
+      reserve_note_attachment: {
+        Args: {
+          p_byte_size: number;
+          p_checksum_sha256: string;
+          p_media_type: string;
+          p_note_id: string;
+          p_original_name: string;
+          p_scan_state: string;
+        };
+        Returns: Json;
+      };
+      restore_note_attachment: {
+        Args: { p_attachment_id: string };
+        Returns: undefined;
+      };
       review_max_required_actions: { Args: never; Returns: number };
       review_stalled_after_checkpoints: { Args: never; Returns: number };
       review_week_eligible_actions: {

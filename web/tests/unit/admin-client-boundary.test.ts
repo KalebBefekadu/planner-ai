@@ -16,11 +16,7 @@ const lifecycleAllowlist = [
 // These are migration liabilities, not approved service-role consumers. Remove
 // an entry as soon as its route moves to user-scoped Operations, a restricted
 // worker, or a narrowly granted capability.
-const migrationExceptions = [
-  'src/app/api/notes/attachments/route.ts',
-  'src/app/api/notes/export/route.ts',
-  'src/app/auth/actions.ts',
-] as const;
+const migrationExceptions = ['src/app/auth/actions.ts'] as const;
 
 async function sourceFiles(directory: string): Promise<string[]> {
   const entries = await readdir(directory, { withFileTypes: true });
