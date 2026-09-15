@@ -30,6 +30,12 @@ export type WeeklyReviewAction = {
    * -- an Action created on Friday has survived nothing by Sunday.
    */
   weeksCarried: number;
+  /**
+   * This came round again rather than being new work nobody did. Left in the
+   * open list rather than pulled into a section of its own -- it still needs
+   * acting on, and splitting it out makes the week look emptier than it was.
+   */
+  fromTemplate: boolean;
 };
 
 /**
@@ -70,6 +76,20 @@ export type WeeklyReviewFinishedAction = {
   completedAt: string;
   goalId: string | null;
   goalTitle: string | null;
+  fromTemplate: boolean;
+};
+
+/**
+ * Work that resets every period rather than being carried. Stated once as a
+ * template instead of retyped every week, which is one of the three different
+ * things "start from last week" was asking for.
+ */
+export type WeeklyReviewRecurrence = {
+  id: string;
+  title: string;
+  cadence: 'weekly' | 'monthly';
+  nextOccurrenceOn: string;
+  goalId: string | null;
 };
 
 export type WeeklyReviewData = {
@@ -88,6 +108,7 @@ export type WeeklyReviewData = {
   /** True when that boundary is the calendar week because no Review exists yet. */
   finishedSinceIsFallback: boolean;
   goals: WeeklyReviewGoal[];
+  recurring: WeeklyReviewRecurrence[];
   recentReviews: Array<{
     id: string;
     completedAt: string;
@@ -248,12 +269,13 @@ export async function getWeeklyReviewData(): Promise<WeeklyReviewData> {
   const finishedSince = finishedSinceIsFallback ? `${startsOn}T00:00:00.000Z` : checkpoints[0];
 
   const unfinished =
-    'id,title,status,version,scheduled_on,created_at,planning_horizons!inner(kind,starts_on),goals(id,title,version,kind,status,definition_of_done,parent_goal_id)';
+    'id,title,status,version,scheduled_on,created_at,recurrence_template_id,planning_horizons!inner(kind,starts_on),goals(id,title,version,kind,status,definition_of_done,parent_goal_id)';
   const [
     weekHorizonResult,
     scheduledIntoWeekResult,
     finishedResult,
     momentumResult,
+    recurringResult,
     goalTreeResult,
     reviewsResult,
     proposalResult,
@@ -290,7 +312,7 @@ export async function getWeeklyReviewData(): Promise<WeeklyReviewData> {
     // part of this week's work, and its horizon still says June.
     supabase
       .from('actions')
-      .select('id,title,completed_at,goals(id,title)')
+      .select('id,title,completed_at,recurrence_template_id,goals(id,title)')
       .eq('workspace_id', workspaceId)
       .eq('status', 'done')
       .gte('completed_at', finishedSince)
@@ -315,6 +337,13 @@ export async function getWeeklyReviewData(): Promise<WeeklyReviewData> {
       .limit(FINISHED_LIST_LIMIT),
     // Every Goal, so an ancestor chain can be walked without a recursive query.
     // A personal workspace has tens of these, not thousands.
+    supabase
+      .from('action_templates')
+      .select('id,title,cadence,next_occurrence_on,goal_id')
+      .eq('workspace_id', workspaceId)
+      .eq('status', 'active')
+      .is('archived_at', null)
+      .order('next_occurrence_on'),
     supabase
       .from('goals')
       .select('id,title,parent_goal_id')
@@ -354,6 +383,7 @@ export async function getWeeklyReviewData(): Promise<WeeklyReviewData> {
     scheduledIntoWeekResult.error ||
     finishedResult.error ||
     momentumResult.error ||
+    recurringResult.error ||
     goalTreeResult.error ||
     reviewsResult.error ||
     proposalResult.error ||
@@ -434,6 +464,13 @@ export async function getWeeklyReviewData(): Promise<WeeklyReviewData> {
     finishedSince,
     finishedSinceIsFallback,
     goals: [...goals.values()],
+    recurring: (recurringResult.data ?? []).map((row) => ({
+      id: String(row.id),
+      title: String(row.title),
+      cadence: row.cadence as 'weekly' | 'monthly',
+      nextOccurrenceOn: String(row.next_occurrence_on),
+      goalId: (row.goal_id as string | null) ?? null,
+    })),
     actions: actionRows.map((action) => {
       const horizon = action.planning_horizons as unknown as { starts_on: string };
       const goal = action.goals as unknown as { id: string; title: string } | null;
@@ -447,6 +484,7 @@ export async function getWeeklyReviewData(): Promise<WeeklyReviewData> {
         goalId: goal?.id ?? null,
         goalTitle: goal?.title ?? null,
         weeksCarried: countCheckpointsSince(checkpoints, String(action.created_at)),
+        fromTemplate: Boolean(action.recurrence_template_id),
       };
     }),
     finished: (finishedResult.data ?? []).map((action) => {
@@ -457,6 +495,7 @@ export async function getWeeklyReviewData(): Promise<WeeklyReviewData> {
         completedAt: String(action.completed_at),
         goalId: goal?.id ?? null,
         goalTitle: goal?.title ?? null,
+        fromTemplate: Boolean(action.recurrence_template_id),
       };
     }),
     recentReviews: (reviewsResult.data ?? []).map((review) => {

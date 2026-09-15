@@ -2,7 +2,7 @@
 
 import { useCallback, useMemo, useRef, useState, useSyncExternalStore, useTransition } from 'react';
 import Link from 'next/link';
-import { AlertCircle, CalendarRange, CheckCircle2, Flag, History } from 'lucide-react';
+import { AlertCircle, CalendarRange, CheckCircle2, Flag, History, RotateCw } from 'lucide-react';
 import {
   completeWeeklyReview,
   pauseInitiative,
@@ -201,6 +201,16 @@ export function WeeklyReview({ data }: { data: WeeklyReviewData }) {
     () => groupByGoal(data.finished).sort((a, b) => b.items.length - a.items.length),
     [data.finished]
   );
+  const recurringByGoal = useMemo(() => {
+    const byGoal = new Map<string, typeof data.recurring>();
+    for (const template of data.recurring) {
+      const key = template.goalId ?? UNFILED;
+      const existing = byGoal.get(key);
+      if (existing) existing.push(template);
+      else byGoal.set(key, [template]);
+    }
+    return byGoal;
+  }, [data.recurring]);
   const goalsById = useMemo(() => new Map(data.goals.map((goal) => [goal.id, goal])), [data.goals]);
   // Oldest work first. The list is ordered by the one number that says nobody
   // is going to do this, so the items that need an answer are never below the
@@ -297,6 +307,11 @@ export function WeeklyReview({ data }: { data: WeeklyReviewData }) {
               line is noise. The status is an enum and reads better
               capitalised; nothing the owner wrote may be. */}
           <span>
+            {action.fromTemplate ? (
+              <span className="review-recurs" title="Came round again">
+                <RotateCw size={11} aria-hidden="true" /> Recurring
+              </span>
+            ) : null}
             <span className="enum-label">{action.status.replace('_', ' ')}</span>
           </span>
         </div>
@@ -618,6 +633,31 @@ export function WeeklyReview({ data }: { data: WeeklyReviewData }) {
                       <div className="review-action-list">
                         {group.items.map((action) => renderOpenRow(action))}
                       </div>
+                      {/* Stated once instead of retyped every week. Work that
+                          genuinely resets is a different thing from work that
+                          is carried, and keeping them apart is what makes the
+                          week readable. */}
+                      {(recurringByGoal.get(group.key) ?? []).length ? (
+                        <div className="review-recurring">
+                          <h4>Comes round again</h4>
+                          <ul>
+                            {(recurringByGoal.get(group.key) ?? []).map((template) => (
+                              <li key={template.id}>
+                                <RotateCw size={12} aria-hidden="true" />
+                                <span>{template.title}</span>
+                                <em>
+                                  {template.cadence === 'weekly' ? 'Every week' : 'Every month'} ·
+                                  next{' '}
+                                  {new Intl.DateTimeFormat('en-US', {
+                                    month: 'short',
+                                    day: 'numeric',
+                                  }).format(new Date(`${template.nextOccurrenceOn}T12:00:00Z`))}
+                                </em>
+                              </li>
+                            ))}
+                          </ul>
+                        </div>
+                      ) : null}
                     </CollapsibleSection>
                   );
                 })}

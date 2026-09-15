@@ -167,6 +167,46 @@ test('what good looks like is on screen at the moment work is dropped', async ({
   );
 });
 
+test('work that comes round again is stated once, not retyped', async ({ workspace }) => {
+  const { page } = workspace;
+
+  await goTo(page, '/planner');
+  await page.getByRole('button', { name: 'Add yearly goal' }).last().click();
+  const composer = page.locator('section.goal-composer');
+  await expect(composer).toBeVisible();
+  await composer.locator('textarea').fill('1679');
+  await composer.locator('input[type=checkbox]').check();
+  await composer.getByRole('button', { name: 'Save initiative' }).click();
+  await expect(page.getByText('1679 is now an initiative')).toBeVisible();
+
+  // "Every week I invoice" is a third thing, distinct from work that is carried
+  // and from the project itself. It has always had somewhere to live and has
+  // never been visible from the week it recurs in.
+  await page.getByRole('button', { name: 'Create recurring Action' }).click();
+  const recurrence = page.getByRole('dialog', { name: 'Create template' });
+  await recurrence.getByRole('textbox', { name: 'Title' }).fill('Weekly claim status check');
+  await recurrence.getByRole('combobox', { name: 'Repeats' }).selectOption('weekly');
+  await recurrence.getByRole('combobox', { name: 'Goal' }).selectOption({ label: '1679' });
+  await recurrence.getByRole('button', { name: /^Save/ }).click();
+  await expect(recurrence).toHaveCount(0);
+
+  await goTo(page, '/');
+  const today = page.getByRole('region', { name: 'New Action' });
+  await today.getByRole('textbox', { name: 'What needs doing' }).fill('Create the invoice');
+  await today.getByRole('combobox', { name: 'Goal' }).selectOption({ label: '1679' });
+  await today.getByRole('button', { name: 'Add Action' }).click();
+  await expect(today).toContainText('"Create the invoice" is saved');
+
+  await goTo(page, '/review');
+  const recurring = page.locator('.review-recurring');
+  await expect(recurring).toContainText('Weekly claim status check');
+  await expect(recurring).toContainText('Every week');
+
+  // It sits under the initiative it belongs to, not in a list of its own.
+  const group = page.getByRole('button', { name: /^Initiative 1679/ });
+  await expect(group).toBeVisible();
+});
+
 test('a completed review survives navigation and appears in the history', async ({ workspace }) => {
   const { page } = workspace;
   await goTo(page, '/');

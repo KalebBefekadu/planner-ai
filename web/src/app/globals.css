@@ -3694,6 +3694,64 @@ button:disabled {
   font-weight: 400;
 }
 
+/* Work that resets rather than being carried. Marked in place rather than
+   pulled into its own list: it still needs doing, and moving it out makes the
+   week look emptier than it was. */
+.review-recurs {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  margin-right: 7px;
+  padding: 0 7px 0 5px;
+  border-radius: 999px;
+  background: var(--surface-sunken);
+  color: var(--muted);
+  font-size: 10.5px;
+  font-weight: 600;
+}
+.review-recurring {
+  margin-top: 12px;
+  padding-top: 10px;
+  border-top: 1px dashed var(--line);
+}
+.review-recurring h4 {
+  margin: 0 0 6px;
+  color: var(--muted);
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.09em;
+  text-transform: uppercase;
+}
+.review-recurring ul {
+  display: grid;
+  gap: 3px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.review-recurring li {
+  display: flex;
+  align-items: baseline;
+  gap: 7px;
+  color: var(--ink-soft);
+  font-size: 13px;
+}
+.review-recurring svg {
+  flex: none;
+  color: var(--muted);
+  transform: translateY(2px);
+}
+.review-recurring li span {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+.review-recurring li em {
+  flex: none;
+  color: var(--muted);
+  font-size: 11.5px;
+  font-style: normal;
+}
+
 /* Direction, on screen rather than one click away. */
 .review-goal-direction {
   display: grid;
