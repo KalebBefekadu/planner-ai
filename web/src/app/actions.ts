@@ -4,6 +4,7 @@ import { selectAll } from '@/lib/supabase/select-all';
 
 import { randomUUID } from 'node:crypto';
 import { revalidatePath } from 'next/cache';
+import { ancestorDepth, indexActions, nearestMonthlyAncestor } from '@/lib/planner/nesting';
 import { revalidatePlannerAndRecords, revalidatePlannerViews } from '@/lib/planner-revalidation';
 import { periodBounds, type HorizonKind, type PeriodBounds } from '@/lib/planning-period';
 import { dateInTimezone } from '@/lib/date';
@@ -35,6 +36,8 @@ export type GoalView = {
   unit?: string | null;
   scheduled_on?: string | null;
   parent_action_id?: string | null;
+  /** How many Actions this one sits under. Zero for a root. */
+  depth?: number;
   vision_id?: string;
   /**
    * 'initiative' is a standing concern that never finishes -- a business, a
@@ -351,6 +354,17 @@ export async function getGoalsHierarchy(): Promise<GoalsData | null> {
       horizon_starts_on: goal.planning_horizons.starts_on ?? null,
       horizon_ends_on: goal.planning_horizons.ends_on ?? null,
     });
+    // parent_action_id now means "sits under", at any depth, so the monthly
+    // rollup has to be walked to rather than read off the column. Reading it
+    // directly reported a sibling task as the month the moment a weekly Action
+    // had a weekly parent.
+    const actionIndex = indexActions(
+      actions.map((action) => ({
+        id: action.id,
+        parentActionId: action.parent_action_id,
+        horizonKind: action.planning_horizons.kind,
+      }))
+    );
     const mapAction = (action: CanonicalAction): GoalView => ({
       id: action.id,
       content: action.title,
@@ -360,7 +374,8 @@ export async function getGoalsHierarchy(): Promise<GoalsData | null> {
       scheduled_on: action.scheduled_on,
       parent_action_id: action.parent_action_id,
       quarterly_id: action.goal_id ?? undefined,
-      monthly_id: action.parent_action_id ?? undefined,
+      monthly_id: nearestMonthlyAncestor(action.id, actionIndex) ?? undefined,
+      depth: ancestorDepth(action.id, actionIndex),
       created_at: action.created_at,
       updated_at: action.updated_at,
       deleted_at: action.archived_at,
@@ -767,12 +782,13 @@ export async function movePlanAction(input: {
   type: 'monthly' | 'weekly';
   id: string;
   expectedVersion: number;
-  targetParentId: string;
+  /** Null moves a weekly Action back to the top level, which is where Today puts it. */
+  targetParentId: string | null;
 }) {
   if (!canonicalEnabled) throw new Error('Action moving requires the canonical data model.');
   const { supabase, user } = await requireUser();
   const range = input.type === 'monthly' ? rangeFor('monthly') : rangeFor('weekly');
-  let goalId = input.targetParentId;
+  let goalId: string | null = input.targetParentId;
   let parentActionId: string | null = null;
   if (input.type === 'weekly') {
     const workspace = await supabase
@@ -780,16 +796,18 @@ export async function movePlanAction(input: {
       .select('id')
       .eq('owner_user_id', user.id)
       .single();
-    const parent = await supabase
+    // A child inherits its parent's Goal, including not having one. Outdenting
+    // to the top has no parent to inherit from, so the Action keeps its own.
+    const source = await supabase
       .from('actions')
       .select('goal_id')
-      .eq('id', input.targetParentId)
+      .eq('id', input.targetParentId ?? input.id)
       .eq('workspace_id', workspace.data?.id)
       .is('archived_at', null)
       .is('trashed_at', null)
-      .single();
-    if (!parent.data?.goal_id) throw new Error('The destination monthly Action is unavailable.');
-    goalId = parent.data.goal_id as string;
+      .maybeSingle();
+    if (!source.data) throw new Error('The destination Action is unavailable.');
+    goalId = (source.data.goal_id as string | null) ?? null;
     parentActionId = input.targetParentId;
   }
   const result = await executeOperation(

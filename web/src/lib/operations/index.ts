@@ -429,7 +429,7 @@ export const operationDefinitions = {
     output: actionOutput,
   },
   'action.move.v1': {
-    summary: 'Move an Action to another Goal, parent Action, and planning horizon.',
+    summary: 'Move an Action under another Action, Goal, and planning horizon.',
     risk: 'low',
     exposure: ['ui', 'chat', 'mcp'],
     reversible: true,
@@ -437,7 +437,9 @@ export const operationDefinitions = {
       .object({
         id,
         expectedVersion: version,
-        goalId: id,
+        // Nullable since 20260915130000: this operation now carries indent and
+        // outdent, and unfiled work has to be able to nest with unfiled work.
+        goalId: id.nullable(),
         parentActionId: id.nullable(),
         horizonKind: z.enum(['month', 'week']),
         startsOn: date,

@@ -7,6 +7,8 @@ import {
   Archive,
   CalendarDays,
   CalendarPlus,
+  ChevronLeft,
+  ChevronRight,
   CircleCheckBig,
   Compass,
   Layers3,
@@ -152,6 +154,53 @@ export function PlannerWorkspace({
     setContent('');
     setIsInitiative(false);
     setError(null);
+  }
+
+  /**
+   * Reparent one weekly Action. `targetParentId` of null is not expressible
+   * through action.move.v1 -- it takes a non-null parent for weekly work -- so
+   * outdenting to the top hands the Action back to its monthly ancestor, which
+   * is where a weekly Action sat before nesting existed.
+   */
+  function nestAction(item: GoalItem, targetParentId: string | null) {
+    setError(null);
+    startTransition(async () => {
+      try {
+        await movePlanAction({
+          type: 'weekly',
+          id: item.id,
+          expectedVersion: item.version,
+          targetParentId,
+        });
+        setNotice(`${item.content} moved.`);
+      } catch (caught) {
+        setError(messageFor(caught));
+      }
+    });
+  }
+
+  /**
+   * Weekly work, as the tree it has always been stored as. Siblings are the
+   * Actions sharing a parent, which is what indent needs: the one directly
+   * above becomes the new parent.
+   */
+  function renderWeeklyTree(
+    items: GoalItem[],
+    parentId: string | null,
+    depth: number,
+    grandParentId: string | null
+  ): React.ReactNode[] {
+    const siblings = items.filter((item) => (item.parent_action_id ?? null) === parentId);
+    return siblings.map((item, index) => (
+      <div key={item.id}>
+        {renderItem(item, 'weekly', depth, {
+          indentTo: index > 0 ? siblings[index - 1].id : null,
+          outdentTo: grandParentId,
+          canOutdent: true,
+        })}
+        {renderWeeklyTree(items, item.id, depth + 1, parentId)}
+      </div>
+    ));
   }
 
   function createItem() {
@@ -412,7 +461,19 @@ export function PlannerWorkspace({
   /* Reports drift and stops there. AGENTS.md's coaching stance is to surface
      it and let the person decide what it is worth — never to quietly fix it. */
   const drift = summariseDrift([...yearly, ...quarterly]);
-  const renderItem = (item: GoalItem, type: GoalType, depth: number) => {
+  /**
+   * Where indent and outdent would put this Action, or null where the move is
+   * not available. Indent makes it a child of the sibling directly above it,
+   * which is the gesture every outliner uses; outdent hands it to its parent's
+   * parent. Both go through action.move.v1, which enforces the depth bound and
+   * refuses a move into the Action's own subtree.
+   */
+  const renderItem = (
+    item: GoalItem,
+    type: GoalType,
+    depth: number,
+    nesting?: { indentTo: string | null; outdentTo: string | null; canOutdent: boolean }
+  ) => {
     const childType = childTypes[type];
     return (
       <div className={`plan-item plan-depth-${depth}`} key={item.id}>
@@ -466,6 +527,30 @@ export function PlannerWorkspace({
           ) : null}
         </div>
         <div className="plan-actions">
+          {nesting ? (
+            <span className="plan-nesting">
+              <button
+                className="icon-button"
+                type="button"
+                onClick={() => nestAction(item, nesting.outdentTo)}
+                disabled={isPending || !nesting.canOutdent}
+                aria-label={`Outdent ${item.content}`}
+                title="Outdent"
+              >
+                <ChevronLeft size={15} />
+              </button>
+              <button
+                className="icon-button"
+                type="button"
+                onClick={() => nesting.indentTo && nestAction(item, nesting.indentTo)}
+                disabled={isPending || !nesting.indentTo}
+                aria-label={`Indent ${item.content} under the Action above it`}
+                title="Indent"
+              >
+                <ChevronRight size={15} />
+              </button>
+            </span>
+          ) : null}
           {childType ? (
             <button
               className="text-button"
@@ -859,7 +944,26 @@ export function PlannerWorkspace({
         ) : horizonFilter === 'monthly' ? (
           monthly.map((item) => renderItem(item, 'monthly', 0))
         ) : horizonFilter === 'weekly' ? (
-          weekly.map((item) => renderItem(item, 'weekly', 0))
+          // A root here is any weekly Action whose parent is not also on this
+          // tab -- its monthly rollup, or nothing at all.
+          (() => {
+            const weeklyIds = new Set(weekly.map((item) => item.id));
+            const roots = weekly.filter(
+              (item) => !item.parent_action_id || !weeklyIds.has(item.parent_action_id)
+            );
+            return roots.map((root, index) => (
+              <div key={root.id}>
+                {renderItem(root, 'weekly', 0, {
+                  indentTo: index > 0 ? roots[index - 1].id : null,
+                  outdentTo: null,
+                  // Already at the top of this tab. Its monthly rollup, if it
+                  // has one, is a horizon away rather than a level up.
+                  canOutdent: false,
+                })}
+                {renderWeeklyTree(weekly, root.id, 1, root.parent_action_id ?? null)}
+              </div>
+            ));
+          })()
         ) : (
           yearly.map((yearlyGoal) => (
             <div className="plan-branch" key={yearlyGoal.id}>
@@ -874,9 +978,15 @@ export function PlannerWorkspace({
                       .map((monthlyTask) => (
                         <div key={monthlyTask.id}>
                           {renderItem(monthlyTask, 'monthly', 2)}
-                          {weekly
-                            .filter((item) => item.monthly_id === monthlyTask.id)
-                            .map((weeklyAction) => renderItem(weeklyAction, 'weekly', 3))}
+                          {/* monthly_id is now the nearest monthly ancestor at
+                              any depth, so filtering on it alone would flatten
+                              a whole subtree under the month. */}
+                          {renderWeeklyTree(
+                            weekly.filter((item) => item.monthly_id === monthlyTask.id),
+                            monthlyTask.id,
+                            3,
+                            null
+                          )}
                         </div>
                       ))}
                   </div>

@@ -252,3 +252,45 @@ test('a written vision is something to read, and still something to change', asy
   await page.reload();
   await expect(page.locator('.vision-statement')).toHaveText(rewritten);
 });
+
+test('work nests, and the nesting is how a task keeps its context', async ({ workspace }) => {
+  const { page } = workspace;
+
+  // "wait to hear back" means nothing on its own. actions.parent_action_id has
+  // always been able to hold this; the interface spent it on the monthly
+  // rollup and read it straight back out, so a task could never sit under a
+  // task.
+  await goTo(page, '/');
+  const today = page.getByRole('region', { name: 'New Action' });
+  for (const title of ['Reach out to Baily', 'wait to hear back']) {
+    await today.getByRole('textbox', { name: 'What needs doing' }).fill(title);
+    await today.getByRole('button', { name: 'Add Action' }).click();
+    await expect(today).toContainText(`"${title}" is saved`);
+  }
+
+  await goTo(page, '/planner');
+  await page
+    .getByRole('group', { name: 'Filter plan by horizon' })
+    .getByRole('button', { name: /^Week/ })
+    .click();
+
+  const child = page.getByRole('button', {
+    name: 'Indent wait to hear back under the Action above it',
+  });
+  await expect(child).toBeEnabled();
+  await child.click();
+  await expect(page.getByText('wait to hear back moved.')).toBeVisible();
+
+  // One level down, and its own row says so.
+  const nested = page.locator('.plan-item.plan-depth-1').filter({ hasText: 'wait to hear back' });
+  await expect(nested).toHaveCount(1);
+
+  // The first Action has nothing above it, so there is nowhere to indent to.
+  await expect(
+    page.getByRole('button', { name: 'Indent Reach out to Baily under the Action above it' })
+  ).toBeDisabled();
+
+  // And it comes back out again.
+  await page.getByRole('button', { name: 'Outdent wait to hear back' }).click();
+  await expect(page.locator('.plan-item.plan-depth-1')).toHaveCount(0);
+});

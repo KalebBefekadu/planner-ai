@@ -3694,6 +3694,17 @@ button:disabled {
   font-weight: 400;
 }
 
+/* Indent and outdent. Kept quiet and beside Edit rather than given their own
+   toolbar: nesting is an occasional correction, not the main verb of the row. */
+.plan-nesting {
+  display: inline-flex;
+  gap: 2px;
+}
+.plan-nesting .icon-button:disabled {
+  opacity: 0.35;
+  cursor: default;
+}
+
 /* Work that resets rather than being carried. Marked in place rather than
    pulled into its own list: it still needs doing, and moving it out makes the
    week look emptier than it was. */
