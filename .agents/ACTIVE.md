@@ -2,7 +2,7 @@
 
 Roadmap stage: **2 - Workspace, Planner And Delivery Hardening**
 
-## Active Codex task: reproducible delivery
+## Codex handoff ready: reproducible delivery
 
 - **Contract:** `.agents/tasks/reproducible-delivery.md`
 - **Branch:** `codex/reproducible-delivery`
@@ -11,7 +11,9 @@ Roadmap stage: **2 - Workspace, Planner And Delivery Hardening**
 - **Writable paths:** delivery scripts, their focused tests, CI, package scripts,
   and coordination documents named by the contract.
 - **Foundation:** architecture handoff `da8f2fb` remains ready for review.
-- **Next:** implement and prove the EH-02 local database verification boundary.
+- **Handoff:** `.agents/handoffs/reproducible-delivery.md`
+- **Next:** review `c81c042`, then activate the first EH-01 least-privilege
+  server-access slice.
 
 ## CI runs again, and integration itself is red
 
