@@ -84,6 +84,44 @@ test('the week reports what it finished, not only what it did not', async ({ wor
   await expect(trigger).toContainText('1');
 });
 
+test('the week is grouped by the project the work is for', async ({ workspace }) => {
+  const { page } = workspace;
+
+  // The ritual being replaced is a folder per business. An initiative is the
+  // folder: a Goal that is never reached, so it is never asked whether it was.
+  await goTo(page, '/planner');
+  await page.getByRole('button', { name: 'Add yearly goal' }).last().click();
+  const composer = page.locator('section.goal-composer');
+  await expect(composer).toBeVisible();
+  await composer.locator('textarea').fill('Real estate agent business');
+  await composer.locator('input[type=checkbox]').check();
+  await composer.getByRole('button', { name: 'Save initiative' }).click();
+  await expect(page.getByText('Real estate agent business is now an initiative')).toBeVisible();
+
+  await goTo(page, '/');
+  const today = page.getByRole('region', { name: 'New Action' });
+  for (const title of ['Write the listing script', 'Value First follow up']) {
+    await today.getByRole('textbox', { name: 'What needs doing' }).fill(title);
+    await today
+      .getByRole('combobox', { name: 'Goal' })
+      .selectOption({ label: 'Real estate agent business' });
+    await today.getByRole('button', { name: 'Add Action' }).click();
+    await expect(today).toContainText(`"${title}" is saved`);
+  }
+
+  await goTo(page, '/review');
+  const group = page.getByRole('button', { name: /^Initiative Real estate agent business/ });
+  await expect(group).toBeVisible();
+  await expect(group).toContainText('2');
+
+  // The grouping is a level of disclosure like any other, and closing it keeps
+  // the count on the row.
+  await group.click();
+  await expect(group).toHaveAttribute('aria-expanded', 'false');
+  await expect(page.getByText('Write the listing script')).toBeHidden();
+  await expect(group).toContainText('2 open');
+});
+
 test('a completed review survives navigation and appears in the history', async ({ workspace }) => {
   const { page } = workspace;
   await goTo(page, '/');

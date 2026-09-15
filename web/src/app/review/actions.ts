@@ -33,6 +33,26 @@ export type WeeklyReviewAction = {
 };
 
 /**
+ * A Goal the week has work under, with the two things the screen needs that an
+ * Action cannot tell it: whether the container itself is a standing concern,
+ * and whether the container has stopped moving.
+ */
+export type WeeklyReviewGoal = {
+  id: string;
+  title: string;
+  version: number;
+  kind: 'outcome' | 'initiative';
+  status: string;
+  /**
+   * Checkpoints since anything under this Goal was last completed. A task can
+   * be stuck; so can a whole project, and that is a different problem with a
+   * different answer -- pause the initiative rather than drop its tasks one by
+   * one.
+   */
+  quietCheckpoints: number;
+};
+
+/**
  * What closed. The Review has never shown this, and it is the first thing the
  * week is opened to find out.
  */
@@ -59,6 +79,7 @@ export type WeeklyReviewData = {
   finishedSince: string;
   /** True when that boundary is the calendar week because no Review exists yet. */
   finishedSinceIsFallback: boolean;
+  goals: WeeklyReviewGoal[];
   recentReviews: Array<{
     id: string;
     completedAt: string;
@@ -219,11 +240,12 @@ export async function getWeeklyReviewData(): Promise<WeeklyReviewData> {
   const finishedSince = finishedSinceIsFallback ? `${startsOn}T00:00:00.000Z` : checkpoints[0];
 
   const unfinished =
-    'id,title,status,version,scheduled_on,created_at,planning_horizons!inner(kind,starts_on),goals(id,title)';
+    'id,title,status,version,scheduled_on,created_at,planning_horizons!inner(kind,starts_on),goals(id,title,version,kind,status)';
   const [
     weekHorizonResult,
     scheduledIntoWeekResult,
     finishedResult,
+    momentumResult,
     reviewsResult,
     proposalResult,
     jobResult,
@@ -267,6 +289,21 @@ export async function getWeeklyReviewData(): Promise<WeeklyReviewData> {
       .is('trashed_at', null)
       .order('completed_at', { ascending: true })
       .limit(FINISHED_LIST_LIMIT),
+    // The most recent completion under each Goal, regardless of when. This is
+    // how the screen tells an initiative that has gone quiet from one task
+    // inside it that is stuck: the window above stops at the last checkpoint
+    // and would report every Goal as silent.
+    supabase
+      .from('actions')
+      .select('goal_id,completed_at')
+      .eq('workspace_id', workspaceId)
+      .eq('status', 'done')
+      .not('goal_id', 'is', null)
+      .not('completed_at', 'is', null)
+      .is('archived_at', null)
+      .is('trashed_at', null)
+      .order('completed_at', { ascending: false })
+      .limit(FINISHED_LIST_LIMIT),
     supabase
       .from('reviews')
       .select('id,completed_at,reflection_markdown,review_action_items(priority)')
@@ -299,6 +336,7 @@ export async function getWeeklyReviewData(): Promise<WeeklyReviewData> {
     weekHorizonResult.error ||
     scheduledIntoWeekResult.error ||
     finishedResult.error ||
+    momentumResult.error ||
     reviewsResult.error ||
     proposalResult.error ||
     jobResult.error
@@ -311,6 +349,38 @@ export async function getWeeklyReviewData(): Promise<WeeklyReviewData> {
     ...(weekHorizonResult.data ?? []),
     ...(scheduledIntoWeekResult.data ?? []),
   ].filter((row, index, rows) => rows.findIndex((other) => other.id === row.id) === index);
+  // The last time anything closed under each Goal, from the whole history
+  // rather than this week's window.
+  const lastCompletionByGoal = new Map<string, string>();
+  for (const row of momentumResult.data ?? []) {
+    const goalId = row.goal_id as string | null;
+    if (!goalId || lastCompletionByGoal.has(goalId)) continue;
+    lastCompletionByGoal.set(goalId, String(row.completed_at));
+  }
+  const goals = new Map<string, WeeklyReviewGoal>();
+  for (const action of actionRows) {
+    const goal = action.goals as unknown as {
+      id: string;
+      title: string;
+      version: number;
+      kind: 'outcome' | 'initiative';
+      status: string;
+    } | null;
+    if (!goal || goals.has(goal.id)) continue;
+    const lastCompletion = lastCompletionByGoal.get(goal.id);
+    goals.set(goal.id, {
+      id: goal.id,
+      title: goal.title,
+      version: Number(goal.version),
+      kind: goal.kind ?? 'outcome',
+      status: goal.status,
+      // Nothing has ever closed here, so every checkpoint has been quiet.
+      quietCheckpoints: lastCompletion
+        ? countCheckpointsSince(checkpoints, lastCompletion)
+        : checkpoints.length,
+    });
+  }
+
   return {
     startsOn,
     endsOn,
@@ -318,6 +388,7 @@ export async function getWeeklyReviewData(): Promise<WeeklyReviewData> {
     coachingIntensity,
     finishedSince,
     finishedSinceIsFallback,
+    goals: [...goals.values()],
     actions: actionRows.map((action) => {
       const horizon = action.planning_horizons as unknown as { starts_on: string };
       const goal = action.goals as unknown as { id: string; title: string } | null;
@@ -383,6 +454,28 @@ export async function completeWeeklyReview(input: {
     idempotencyKey,
     surface: 'ui',
   });
+  revalidatePlannerAndRecords();
+  return result;
+}
+
+/**
+ * Stop an initiative appearing in the weekly pass without losing anything filed
+ * under it.
+ *
+ * This is the "clean it up" step of the ritual, made explicit and reversible. It
+ * is deliberately not archive: archiving cascades to every Action underneath,
+ * and a project that has gone quiet for a month is not a project whose work was
+ * wrong. 'paused' has been a Goal status since the first migration and nothing
+ * had ever offered it.
+ */
+export async function pauseInitiative(input: { goalId: string; expectedVersion: number }) {
+  const { supabase } = await reviewClient();
+  const result = await executeOperation(
+    supabase,
+    'goal.status.v1',
+    { id: input.goalId, status: 'paused', expectedVersion: input.expectedVersion },
+    { idempotencyKey: `pause-${input.goalId}-${input.expectedVersion}`, surface: 'ui' }
+  );
   revalidatePlannerAndRecords();
   return result;
 }

@@ -5,9 +5,10 @@ import Link from 'next/link';
 import { AlertCircle, CalendarRange, CheckCircle2, Flag, History } from 'lucide-react';
 import {
   completeWeeklyReview,
+  pauseInitiative,
+  type WeeklyReviewAction,
   type WeeklyReviewData,
   type WeeklyReviewDecision,
-  type WeeklyReviewFinishedAction,
 } from '@/app/review/actions';
 import { newReviewIntent } from '@/lib/reviews/completion-intent';
 import { CoachingCue } from '@/components/coaching-cue';
@@ -16,7 +17,7 @@ import { ReviewTabs } from '@/components/review-tabs';
 import { ReviewAiProposal } from '@/components/review-ai-proposal';
 import { weeklyReviewCoachingCue } from '@/lib/coaching';
 import { actionFailureMessage } from '@/lib/operations/failure-message';
-import { carriedLabel, isStalled } from '@/lib/reviews/checkpoints';
+import { carriedLabel, isStalled, STALLED_AFTER_CHECKPOINTS } from '@/lib/reviews/checkpoints';
 import {
   bandOpenByDefault,
   DEFAULT_REVIEW_DENSITY,
@@ -80,27 +81,28 @@ const densityLabels: Record<ReviewDensity, string> = {
   headlines: 'Headlines only',
 };
 
-/** Completions grouped by the Goal they belong to, in the order they closed. */
-function groupFinishedByGoal(finished: readonly WeeklyReviewFinishedAction[]) {
-  const groups = new Map<
-    string,
-    { key: string; title: string; items: WeeklyReviewFinishedAction[] }
-  >();
-  for (const action of finished) {
-    const key = action.goalId ?? 'unlinked';
+const UNFILED = 'unlinked';
+const UNFILED_TITLE = 'Not connected to a Goal';
+
+/**
+ * Work grouped by what it is for. The ritual being replaced is a folder per
+ * business, so the grouping is the feature -- a flat list across four projects
+ * is the thing Notion was doing better.
+ */
+function groupByGoal<T extends { goalId: string | null; goalTitle: string | null }>(
+  items: readonly T[]
+) {
+  const groups = new Map<string, { key: string; title: string; items: T[] }>();
+  for (const item of items) {
+    const key = item.goalId ?? UNFILED;
     const existing = groups.get(key);
     if (existing) {
-      existing.items.push(action);
+      existing.items.push(item);
       continue;
     }
-    groups.set(key, {
-      key,
-      title: action.goalTitle ?? 'Not connected to a Goal',
-      items: [action],
-    });
+    groups.set(key, { key, title: item.goalTitle ?? UNFILED_TITLE, items: [item] });
   }
-  // Largest first: the thing that absorbed the week leads the report of it.
-  return [...groups.values()].sort((a, b) => b.items.length - a.items.length);
+  return [...groups.values()];
 }
 
 type Resolution = WeeklyReviewDecision['resolution'];
@@ -175,6 +177,18 @@ export function WeeklyReview({ data }: { data: WeeklyReviewData }) {
     const current = sectionOpen(key, level);
     setOpenOverrides((existing) => ({ ...existing, [key]: !current }));
   }
+  function pauseGoal(goalId: string, expectedVersion: number, title: string) {
+    setError(null);
+    setNotice(null);
+    startTransition(async () => {
+      try {
+        await pauseInitiative({ goalId, expectedVersion });
+        setNotice(`${title} is paused. Everything filed under it is untouched.`);
+      } catch (caught) {
+        setError(actionFailureMessage(caught, `${title} could not be paused.`));
+      }
+    });
+  }
   function chooseDensity(next: ReviewDensity) {
     // Clearing the overrides is the point of the control: it is how "headlines
     // only" reaches a section that was opened by hand ten minutes ago.
@@ -182,7 +196,12 @@ export function WeeklyReview({ data }: { data: WeeklyReviewData }) {
     writeDensity(next);
   }
 
-  const finishedGroups = useMemo(() => groupFinishedByGoal(data.finished), [data.finished]);
+  // Largest first: the thing that absorbed the week leads the report of it.
+  const finishedGroups = useMemo(
+    () => groupByGoal(data.finished).sort((a, b) => b.items.length - a.items.length),
+    [data.finished]
+  );
+  const goalsById = useMemo(() => new Map(data.goals.map((goal) => [goal.id, goal])), [data.goals]);
   // Oldest work first. The list is ordered by the one number that says nobody
   // is going to do this, so the items that need an answer are never below the
   // fold behind the ones that do not.
@@ -194,6 +213,15 @@ export function WeeklyReview({ data }: { data: WeeklyReviewData }) {
     () => data.actions.filter((action) => isStalled(action.weeksCarried)).length,
     [data.actions]
   );
+  // The work that has stopped moving leads, because it is the only part of the
+  // list that still asks for anything.
+  const openGroups = useMemo(() => {
+    const stalledIn = (items: readonly { weeksCarried: number }[]) =>
+      items.filter((item) => isStalled(item.weeksCarried)).length;
+    return groupByGoal(openActions).sort(
+      (a, b) => stalledIn(b.items) - stalledIn(a.items) || b.items.length - a.items.length
+    );
+  }, [openActions]);
 
   function updateDecision(
     actionId: string,
@@ -242,6 +270,96 @@ export function WeeklyReview({ data }: { data: WeeklyReviewData }) {
         setError(errorMessage(caught));
       }
     });
+  }
+
+  // One row of still-open work. Pulled out of the list so the same row can
+  // be rendered inside whichever initiative it belongs to.
+  function renderOpenRow(action: WeeklyReviewAction) {
+    const decision = decisions[action.id];
+    const canPrioritize = !['done', 'dropped'].includes(decision.resolution);
+    const stalled = isStalled(action.weeksCarried);
+    return (
+      <article
+        className={`review-action-row${stalled ? ' review-action-stalled' : ''}`}
+        key={action.id}
+      >
+        <div className="review-action-copy">
+          <strong>{action.title}</strong>
+          {/* The Goal used to be named here because the list was flat. Every
+              row now sits inside its own initiative, so repeating it on each
+              line is noise. The status is an enum and reads better
+              capitalised; nothing the owner wrote may be. */}
+          <span>
+            <span className="enum-label">{action.status.replace('_', ' ')}</span>
+          </span>
+        </div>
+        {/* The age is the record. It is what lets work stay open
+                      without a decision without that being silent. */}
+        <span
+          className={`review-carry${stalled ? ' review-carry-stalled' : ''}`}
+          title={
+            action.weeksCarried
+              ? `Open through ${action.weeksCarried} completed ${
+                  action.weeksCarried === 1 ? 'review' : 'reviews'
+                }`
+              : 'Created since your last review'
+          }
+        >
+          {carriedLabel(action.weeksCarried)}
+        </span>
+        <select
+          value={decision.resolution}
+          aria-label={`Decision for ${action.title}`}
+          onChange={(event) => {
+            const resolution = event.target.value as DraftResolution;
+            updateDecision(action.id, {
+              resolution,
+              priority: ['done', 'dropped'].includes(resolution) ? false : decision.priority,
+            });
+          }}
+        >
+          <option value="unset">{stalled ? 'Decide what happens' : 'Stays open'}</option>
+          {Object.entries(resolutionLabels).map(([value, label]) => (
+            <option key={value} value={value}>
+              {label}
+            </option>
+          ))}
+        </select>
+        {['blocked', 'dropped'].includes(decision.resolution) ? (
+          <input
+            className="review-reason"
+            value={decision.reason ?? ''}
+            onChange={(event) => updateDecision(action.id, { reason: event.target.value || null })}
+            placeholder={
+              decision.resolution === 'blocked' ? 'What is blocking it?' : 'Why drop it?'
+            }
+            aria-label={`Reason for ${action.title}`}
+            maxLength={500}
+          />
+        ) : null}
+        <label className={`review-priority${canPrioritize ? '' : ' review-priority-disabled'}`}>
+          <input
+            type="checkbox"
+            checked={decision.priority}
+            disabled={!canPrioritize || (!decision.priority && priorityCount >= 5)}
+            onChange={(event) => {
+              const priority = event.target.checked;
+              // A row with no decision is left out of the payload
+              // entirely, and the priority flag rides on the
+              // decision. Naming something a priority is itself
+              // the statement that it stays, so record it as one.
+              updateDecision(action.id, {
+                priority,
+                resolution:
+                  priority && decision.resolution === 'unset' ? 'keep' : decision.resolution,
+              });
+            }}
+          />
+          <Flag size={14} aria-hidden="true" />
+          Priority
+        </label>
+      </article>
+    );
   }
 
   return (
@@ -415,106 +533,63 @@ export function WeeklyReview({ data }: { data: WeeklyReviewData }) {
             onToggle={() => toggleSection('unfinished', 'group')}
           >
             {data.actions.length ? (
-              <div className="review-action-list">
-                {openActions.map((action) => {
-                  const decision = decisions[action.id];
-                  const canPrioritize = !['done', 'dropped'].includes(decision.resolution);
-                  const stalled = isStalled(action.weeksCarried);
+              <div className="review-open-groups">
+                {openGroups.map((group) => {
+                  const goal = goalsById.get(group.key);
+                  const stalledHere = group.items.filter((item) =>
+                    isStalled(item.weeksCarried)
+                  ).length;
+                  const quiet = goal && goal.quietCheckpoints >= STALLED_AFTER_CHECKPOINTS;
                   return (
-                    <article
-                      className={`review-action-row${stalled ? ' review-action-stalled' : ''}`}
-                      key={action.id}
-                    >
-                      <div className="review-action-copy">
-                        <strong>{action.title}</strong>
-                        {/* The status is an enum and reads better capitalised;
-                          the Goal title is the owner's own sentence and must
-                          reach the screen exactly as it was written. They were
-                          sharing one element, so "Ship the private beta to ten
-                          invited people." was being displayed as title case. */}
-                        <span>
-                          {action.goalTitle ?? 'Unlinked action'} ·{' '}
-                          <span className="enum-label">{action.status.replace('_', ' ')}</span>
+                    <CollapsibleSection
+                      key={group.key}
+                      id={`review-open-${group.key}`}
+                      title={group.title}
+                      eyebrow={
+                        goal?.kind === 'initiative'
+                          ? 'Initiative'
+                          : group.key === UNFILED
+                            ? 'Unfiled'
+                            : 'Goal'
+                      }
+                      count={group.items.length}
+                      tone={stalledHere ? 'stalled' : undefined}
+                      shut={
+                        <span className="review-shut-note">
+                          {group.items.length} open
+                          {stalledHere ? ` · ${stalledHere} asking` : ''}
                         </span>
-                      </div>
-                      {/* The age is the record. It is what lets work stay open
-                        without a decision without that being silent. */}
-                      <span
-                        className={`review-carry${stalled ? ' review-carry-stalled' : ''}`}
-                        title={
-                          action.weeksCarried
-                            ? `Open through ${action.weeksCarried} completed ${
-                                action.weeksCarried === 1 ? 'review' : 'reviews'
-                              }`
-                            : 'Created since your last review'
-                        }
-                      >
-                        {carriedLabel(action.weeksCarried)}
-                      </span>
-                      <select
-                        value={decision.resolution}
-                        aria-label={`Decision for ${action.title}`}
-                        onChange={(event) => {
-                          const resolution = event.target.value as DraftResolution;
-                          updateDecision(action.id, {
-                            resolution,
-                            priority: ['done', 'dropped'].includes(resolution)
-                              ? false
-                              : decision.priority,
-                          });
-                        }}
-                      >
-                        <option value="unset">
-                          {stalled ? 'Decide what happens' : 'Stays open'}
-                        </option>
-                        {Object.entries(resolutionLabels).map(([value, label]) => (
-                          <option key={value} value={value}>
-                            {label}
-                          </option>
-                        ))}
-                      </select>
-                      {['blocked', 'dropped'].includes(decision.resolution) ? (
-                        <input
-                          className="review-reason"
-                          value={decision.reason ?? ''}
-                          onChange={(event) =>
-                            updateDecision(action.id, { reason: event.target.value || null })
-                          }
-                          placeholder={
-                            decision.resolution === 'blocked'
-                              ? 'What is blocking it?'
-                              : 'Why drop it?'
-                          }
-                          aria-label={`Reason for ${action.title}`}
-                          maxLength={500}
-                        />
+                      }
+                      open={sectionOpen(`open:${group.key}`, 'band')}
+                      onToggle={() => toggleSection(`open:${group.key}`, 'band')}
+                    >
+                      {/* A task can be stuck; so can a whole project, and that
+                          is a different problem with a different answer. */}
+                      {quiet && goal ? (
+                        <div className="review-quiet-goal">
+                          <p>
+                            Nothing has been completed here in {goal.quietCheckpoints} reviews. If
+                            that is deliberate, pause it — a paused
+                            {goal.kind === 'initiative' ? ' initiative' : ' Goal'} stops appearing
+                            here and keeps everything filed under it.
+                          </p>
+                          {goal.status === 'paused' ? (
+                            <span className="review-quiet-paused">Paused</span>
+                          ) : (
+                            <button
+                              type="button"
+                              onClick={() => pauseGoal(goal.id, goal.version, goal.title)}
+                              disabled={isPending}
+                            >
+                              Pause {goal.title}
+                            </button>
+                          )}
+                        </div>
                       ) : null}
-                      <label
-                        className={`review-priority${canPrioritize ? '' : ' review-priority-disabled'}`}
-                      >
-                        <input
-                          type="checkbox"
-                          checked={decision.priority}
-                          disabled={!canPrioritize || (!decision.priority && priorityCount >= 5)}
-                          onChange={(event) => {
-                            const priority = event.target.checked;
-                            // A row with no decision is left out of the payload
-                            // entirely, and the priority flag rides on the
-                            // decision. Naming something a priority is itself
-                            // the statement that it stays, so record it as one.
-                            updateDecision(action.id, {
-                              priority,
-                              resolution:
-                                priority && decision.resolution === 'unset'
-                                  ? 'keep'
-                                  : decision.resolution,
-                            });
-                          }}
-                        />
-                        <Flag size={14} aria-hidden="true" />
-                        Priority
-                      </label>
-                    </article>
+                      <div className="review-action-list">
+                        {group.items.map((action) => renderOpenRow(action))}
+                      </div>
+                    </CollapsibleSection>
                   );
                 })}
               </div>

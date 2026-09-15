@@ -74,7 +74,18 @@ export type ActionTemplateView = {
   version: number;
 };
 
-type GoalInput = { type: GoalType; parentId: string; content: string };
+type GoalInput = {
+  type: GoalType;
+  parentId: string;
+  content: string;
+  /**
+   * A yearly item may be a standing concern rather than an outcome -- a
+   * business, a project, the thing a weekly folder is named after. It never
+   * finishes, so it carries no deadline and is never asked whether it was
+   * achieved. Only meaningful for 'yearly'.
+   */
+  kind?: 'outcome' | 'initiative';
+};
 type CanonicalGoal = {
   id: string;
   vision_id: string;
@@ -433,6 +444,9 @@ export async function createGoal(input: GoalInput) {
           title: content,
           ...range,
           parentGoalId: input.type === 'quarterly' ? input.parentId : null,
+          ...(input.type === 'yearly' && input.kind === 'initiative'
+            ? { kind: 'initiative' as const }
+            : {}),
         },
         { idempotencyKey: randomUUID(), surface: 'ui' }
       );

@@ -3652,6 +3652,92 @@ button:disabled {
   font-variant-numeric: tabular-nums;
 }
 
+/* The one decision that separates a yearly outcome from a standing concern.
+   It sits in the composer rather than behind a second button because the two
+   are the same gesture, and the difference only matters afterwards. */
+.composer-kind {
+  display: flex;
+  gap: 10px;
+  padding: 11px 13px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--surface-sunken);
+  cursor: pointer;
+}
+.composer-kind input {
+  flex: none;
+  margin-top: 2px;
+}
+.composer-kind span {
+  display: grid;
+  gap: 2px;
+  color: var(--muted);
+  font-size: var(--fs-label);
+}
+.composer-kind strong {
+  color: var(--ink);
+  font-size: var(--fs-body);
+}
+.composer-kind:hover {
+  border-color: var(--border-strong);
+}
+
+.review-open-groups {
+  display: grid;
+  gap: 10px;
+  margin-top: 10px;
+}
+/* A grouping whose work has stopped moving. The tone is on the container
+   because the problem is the container: a project nobody has touched in a month
+   is not four stuck tasks, it is one paused project. */
+.collapsible-stalled {
+  border-color: var(--warning-line);
+}
+.collapsible-stalled .collapsible-count {
+  background: var(--warning-soft);
+  color: var(--warning);
+}
+.review-quiet-goal {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+  margin: 10px 0 0;
+  padding: 11px 13px;
+  border: 1px solid var(--warning-line);
+  border-radius: 8px;
+  background: var(--warning-soft);
+}
+.review-quiet-goal p {
+  flex: 1 1 240px;
+  margin: 0;
+  color: var(--ink-soft);
+  font-size: var(--fs-label);
+}
+.review-quiet-goal button {
+  padding: 5px 13px;
+  border: 1px solid var(--border-strong);
+  border-radius: 999px;
+  background: var(--surface);
+  color: var(--ink);
+  font-size: var(--fs-label);
+  font-weight: 600;
+  cursor: pointer;
+}
+.review-quiet-goal button:hover:not(:disabled) {
+  border-color: var(--warning);
+  color: var(--warning);
+}
+.review-quiet-goal button:disabled {
+  opacity: 0.6;
+  cursor: progress;
+}
+.review-quiet-paused {
+  color: var(--warning);
+  font-size: var(--fs-label);
+  font-weight: 700;
+}
+
 /* The age of open work. Quiet until it stops being credible. */
 .review-carry {
   justify-self: start;

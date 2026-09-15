@@ -322,7 +322,7 @@ export const operationDefinitions = {
     output: visionOutput,
   },
   'goal.create.v1': {
-    summary: 'Create a yearly or quarterly Goal.',
+    summary: 'Create a yearly or quarterly Goal, or a standing initiative.',
     risk: 'low',
     exposure: ['ui', 'chat', 'mcp'],
     reversible: true,
@@ -333,6 +333,14 @@ export const operationDefinitions = {
         startsOn: date,
         endsOn: date,
         parentGoalId: id.nullable(),
+        /**
+         * An 'initiative' is a Goal that is never finished -- a business, a
+         * project, a standing concern that recurs every week with new work
+         * under it. It has no due date and is anchored to the year only
+         * because goals.horizon_id cannot be null. Optional, so every existing
+         * caller keeps working and keeps meaning 'outcome'.
+         */
+        kind: z.enum(['outcome', 'initiative']).optional(),
       })
       .strict(),
     output: goalOutput,

@@ -103,6 +103,11 @@ export function PlannerWorkspace({
 }) {
   const [composer, setComposer] = useState<ComposerTarget>(null);
   const [content, setContent] = useState('');
+  // A yearly item is one of two different things. An outcome is reached and
+  // then it is over; an initiative -- a business, a project -- is never
+  // reached, and filing one as an outcome means being asked every quarter
+  // whether the business is done.
+  const [isInitiative, setIsInitiative] = useState(false);
   const [editTarget, setEditTarget] = useState<EditTarget>(null);
   const [templateEditor, setTemplateEditor] = useState<ActionTemplateView | 'new' | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
@@ -145,6 +150,7 @@ export function PlannerWorkspace({
   function openComposer(type: GoalType, parentId: string) {
     setComposer({ type, parentId, label: labels[type] });
     setContent('');
+    setIsInitiative(false);
     setError(null);
   }
 
@@ -153,10 +159,21 @@ export function PlannerWorkspace({
     setError(null);
     startTransition(async () => {
       try {
-        await createGoal({ type: composer.type, parentId: composer.parentId, content });
-        setNotice(`${composer.label} added to your plan.`);
+        const asInitiative = composer.type === 'yearly' && isInitiative;
+        await createGoal({
+          type: composer.type,
+          parentId: composer.parentId,
+          content,
+          ...(asInitiative ? { kind: 'initiative' as const } : {}),
+        });
+        setNotice(
+          asInitiative
+            ? `${content.trim()} is now an initiative. Work filed under it carries week to week.`
+            : `${composer.label} added to your plan.`
+        );
         setComposer(null);
         setContent('');
+        setIsInitiative(false);
       } catch (caught) {
         setError(messageFor(caught));
       }
@@ -658,6 +675,20 @@ export function PlannerWorkspace({
             placeholder={`Describe this ${composer.label.toLowerCase()}...`}
             autoFocus
           />
+          {composer.type === 'yearly' ? (
+            <label className="composer-kind">
+              <input
+                type="checkbox"
+                checked={isInitiative}
+                onChange={(event) => setIsInitiative(event.target.checked)}
+              />
+              <span>
+                <strong>This is an ongoing project, not something that finishes.</strong>A business,
+                a client, a product. It gets no deadline, is never asked whether it was achieved,
+                and work filed under it carries from week to week.
+              </span>
+            </label>
+          ) : null}
           <div className="composer-actions">
             <button
               className="btn-secondary"
@@ -678,7 +709,11 @@ export function PlannerWorkspace({
                   so they are the same name to a screen reader and ambiguous to
                   voice control. Saving is also the more accurate verb for the
                   second step. */}
-              {isPending ? 'Saving...' : `Save ${composer.label.toLowerCase()}`}
+              {isPending
+                ? 'Saving...'
+                : composer.type === 'yearly' && isInitiative
+                  ? 'Save initiative'
+                  : `Save ${composer.label.toLowerCase()}`}
             </button>
           </div>
         </section>
