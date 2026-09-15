@@ -2,33 +2,23 @@
 
 Roadmap stage: **2 - Workspace, Planner And Delivery Hardening**
 
-## Codex handoff ready: supply chain hardening
+## Codex handoff ready: critical path coverage
 
-- **Contract:** `.agents/tasks/supply-chain-hardening.md`
-- **Branch:** `codex/supply-chain-hardening`
-- **Scope:** every GitHub Action pinned to a commit, nine credential-holding or
-  untrusted-input dependencies pinned exactly with nothing installed changing,
-  and a release dependency inventory generated from the lockfile.
-- **Writable paths:** the two workflows, the package manifest and lockfile, two
-  generator scripts, one guard test, the generated inventory, and coordination
-  documents named by the contract.
-- **Foundation:** the EH-04 handoff `95ab836` remains ready for review, and
-  below it EH-03 and the four EH-01 capability branches.
-- **Handoff:** `.agents/handoffs/supply-chain-hardening.md`
-- **Correction:** every handoff in this stack recorded `npm ci` as 768, not the
-  770 they previously claimed. Measured, not repeated.
-- **Next:** three things, and two of them are decisions rather than work.
-  1. `/preview` — the largest win left under EH-03, gated by the roadmap on
-     parity `docs/status.md` does not record as met. A product call.
-  2. Critical-path coverage thresholds — the last stack item, and a judgement:
-     a number set without agreeing which paths are critical becomes something
-     people optimise around. The Operation execution path, the undo path and
-     the import parsers are the candidates.
-  3. The `dispatch_trusted_operation` chain — seven rename-and-wrap functions
-     deep, touched by every Operation. The large half of EH-04.
+- **Contract:** `.agents/tasks/critical-path-coverage.md`
+- **Branch:** `codex/critical-path-coverage`
+- **Scope:** the last stack-hardening item. One coverage floor, on the
+  Operation execution path, enforced in CI. **The stack hardening set is
+  complete.**
+- **Writable paths:** the vitest config, the package manifest and lockfile, the
+  CI workflow, one new test, and coordination documents named by the contract.
+- **Foundation:** everything below is pushed and open as PRs #243-#249.
+- **Handoff:** `.agents/handoffs/critical-path-coverage.md`
+- **Next:** delete `/preview` (the owner has confirmed the parity gates are
+  met), then replace the `dispatch_trusted_operation` chain.
 
-Seven branches are now stacked and unreviewed. EH-01 is met; EH-03 and EH-04
-are started, not closed; EH-06 and EH-07 are untouched.
+Eight branches are stacked. EH-01 is met and the stack hardening set is
+complete; EH-03 and EH-04 are started, not closed; EH-06 and EH-07 are
+untouched.
 
 ## CI runs again, and integration itself is red
 
