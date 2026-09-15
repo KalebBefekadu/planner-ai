@@ -1,8 +1,13 @@
 # The Weekly Initiative Workflow
 
-Status: **design proposal.** Not yet accepted into [the roadmap](../roadmap.md).
-Every factual claim below is cited to a file and line in this repository. Where
-an earlier draft of this document was wrong, the correction is marked.
+Status: **built, not yet merged or accepted into [the roadmap](../roadmap.md).**
+Every step in [the build order](#build-order) has shipped on a worker branch;
+the integration agent reviews and merges, and the roadmap remains the execution
+authority on delivery order. There are eight steps rather than the four this
+document originally scoped. Each factual claim below was cited to a file and line in this repository
+when it was written. Where an earlier draft of this document was wrong, or where
+building it corrected the plan, the correction is marked next to the claim it
+replaces.
 
 ## Contents
 
@@ -613,9 +618,18 @@ One screen, one initiative at a time, four parts:
 - **Still open** -- the carried list, each item showing how many weeks it has
   been carried. Anything at three or more is offered for dropping first, because
   that is the number that says nobody is going to do it.
-- **Came round again** -- what the recurrence templates produced, identified by
-  `actions.recurrence_template_id`.
+- **Came round again** -- what recurs here, stated once as a template rather
+  than retyped every week.
 - **New** -- one line to add, filed under the initiative, nested where it belongs.
+
+**Correction from the build: an occurrence is marked in place, not moved into
+its own section.** Drawing it as a fourth band is what the mockup does, and it
+is wrong. An occurrence still needs acting on, so lifting it out of the open
+list makes the week look emptier than it was and splits the reader's attention
+across two lists that want the same decisions. What each initiative lists
+instead is its recurring **templates** and their cadence -- the part that is
+genuinely stated once -- while an Action produced by one carries a marker in the
+open list so it reads as "this came round again" rather than as work nobody did.
 
 Every count is computed from records that already exist. Nothing here needs a
 model, which is what keeps the ritual working with AI off -- and every section
@@ -658,6 +672,10 @@ Week of 8-14 September
 |  +--------------------------------------+|  +----------------------+
 |    waiting is not a task -- it has no    |
 |    next action you control               |
+|                                          |
+|  - - - - - - - - - - - - - - - - - - - - |
+|  COMES ROUND AGAIN                       |
+|    ^ Weekly claim status check  every Mon|
 |                                          |
 |  + Add to TEK Systems                    |
 +------------------------------------------+
@@ -865,15 +883,17 @@ migration, one new operation.
 
 ## Build order
 
-**Status: all four shipped.** What the build changed about this plan is recorded
-under each ticket, because three of the changes were corrections to the plan
-rather than to the code.
+**Status: all eight shipped.** What the build changed about this plan is
+recorded under each ticket, because a good deal of what it changed was the plan
+rather than the code.
 
-Four tickets, not seven. The three cut above are recorded at the end as deferred
-rather than deleted. Each ticket is usable alone, none blocks on AI, and each
+Eight tickets, not four. Steps 1 to 4 were the feature as scoped above, and each
 carries a **kill criterion** -- the evidence that would say stop rather than
-continue. The roadmap permits one active implementation ticket at a time, so this
-is a queue.
+continue. Steps 5 to 8 are the deferrals, which were cut for sequencing rather
+than refused, and are [recorded as closed](#the-four-deferrals-since-closed) at
+the end. Each ticket is usable alone, and only step 8 touches a provider -- as an
+offer on a new initiative, not as a step in the weekly pass. The roadmap permits
+one active implementation ticket at a time, so this was a queue.
 
 ### 1. Show what the week finished
 
@@ -982,24 +1002,214 @@ it clearer, because in practice most work sits under one or two of them. If that
 is what a month shows, the grouping is decoration and a flat list sorted by age is
 the better screen.
 
+### 5. What good looks like, and the line to direction
+
+**Shipped** as `20260915110000_what_good_looks_like.sql`.
+
+**Changes:** one `definition_of_done` field on goals, named for the question that
+actually applies rather than for the word "done" -- "Real estate agent business"
+is never done, so the field asks what would make this quarter good here. The
+Weekly Review quotes it twice. Once on the initiative, alongside the chain of
+Goals the work answers to, so "why am I doing this" is on screen rather than
+reconstructable from three other pages. And again beside the reason field the
+moment a decision to drop is selected, because dropping is only defensible while
+the standard it failed is visible; reconstructing that standard afterwards is how
+the one task actually serving a goal gets dropped.
+
+**Correction: the field is optional in the schema for every kind of Goal.** This
+document proposed requiring it on an `outcome`. Making the column NOT NULL would
+have needed a value for every Goal that already exists, invented by a migration
+-- which is exactly the kind of fabricated content the field exists to prevent.
+It is optional in the schema and prompted in the interface instead. Omitting the
+key leaves the stored value alone rather than clearing it, so every caller
+written before the field existed keeps working and none of them erases anything;
+an empty string clears it.
+
+**Two inconsistencies from step 4 are closed here as well.** `goal.update.v1`
+refused an initiative the parent Goal that `goal.create.v1` allows, so a parent
+could be set once at creation and never changed -- and the planner editor was
+clearing it on every unrelated edit. And an edit could write a due date onto an
+initiative, which the check constraint then rejected as a constraint name rather
+than as a rule anyone could read. The editor now does not offer a due date on an
+initiative at all, rather than offering one and refusing it.
+
+**Worth recording:** the direction chain walk is bounded by the size of the goal
+tree and tracks what it has already seen, so a malformed parent link cannot spin.
+
+**New operations:** none; two extended. **Migrations:** one. **Risk:** low -- an
+optional column and two reads.
+
+**Verified by:** pgTAP (`what_good_looks_like.sql`) and the review journey
+(`web/tests/e2e/journey-review.spec.ts`).
+
+### 6. Show what comes round again
+
+**Shipped.** No migration: recurrence has had somewhere to live in
+`action_templates` since `20260817002800` without ever being visible from the
+week it recurs in.
+
+**Changes:** each initiative now lists what comes round under it, with its
+cadence and its next occurrence, so "every week I invoice" is stated once
+instead of retyped. An occurrence sitting in the open list is marked as
+recurring rather than reading as work nobody did.
+
+**Correction: occurrences are marked in place, not pulled into a section of
+their own.** [The weekly pass](#the-weekly-pass) and the mockup both draw "Came
+round again" as one of four sections. An occurrence still needs acting on, and
+moving it out of the open list makes the week look emptier than it was while
+splitting the owner's attention across two lists that want the same decisions.
+The distinction that matters is legible either way, and one list is cheaper.
+
+**New operations:** none. **Migrations:** none. **Risk:** near zero -- a read.
+
+**Verified by:** the review journey (`web/tests/e2e/journey-review.spec.ts`).
+
+### 7. Work nests
+
+**Shipped** as `20260915120000_work_nests.sql` and
+`20260915130000_nesting_does_not_require_a_goal.sql`.
+
+**Changes:** a weekly Action may now sit under another weekly Action, the
+planner renders that tree in both the week tab and the full hierarchy, and
+indent and outdent move it. The monthly rollup is derived by walking up to the
+nearest Action on the monthly horizon, as
+[Gap 1](#gap-1-nesting-is-stored-but-unreachable) recommended -- reading it off
+the column reported a sibling task as the month the moment a weekly Action had a
+weekly parent. Two guards ship with it, neither of
+which existed because nothing could reparent an Action before: the depth bound of
+four, and the cycle guard Notes have had since their first migration, without
+which an Action can be made its own ancestor and every cascade over
+`parent_action_id` fails to terminate. **The bound is on where the moved
+subtree's deepest leaf lands, not on the Action being dragged.**
+
+**Correction: `goalId` became nullable on `action.move.v1`, and it cost no new
+version.** Gap 1 offered two ways out and described the nullable one as "a new
+operation version". It is not. A widened input accepts every payload that was
+valid before, so the operation keeps its version, exactly as step 3 found for
+`review.complete-weekly.v1`. The other option -- inheriting the parent's Goal --
+would not have worked either: indenting two Actions captured from Today, neither
+of which has a Goal, has no Goal to inherit, and it failed as a generic
+"something went wrong". `goalId` is now nullable and the parent's Goal has to
+match rather than be equal.
+
+**Correction: `action.move.v1` also required a non-null `parentActionId`, so
+outdent had nowhere to go.** `action.create.v1` has always allowed a weekly
+Action with no parent, which is what Today produces, while `action.move.v1`
+demanded one -- so an Action could be nested and never brought back out. This
+document did not notice the asymmetry, and neither did reading the code: both
+inconsistencies were found by the e2e test once indent was wired to a real
+screen. Both are widenings, so the operation keeps its version.
+
+**Worth recording:** `action.move.v1` writes an `action_schedule_history` row
+with reason `rescheduled` on every move, so indenting would have inflated a carry
+count derived from history. It is derived from completed reviews instead, which
+is why nesting cost the age signal nothing. The trap
+[Gap 4](#gap-4-the-age-of-open-work-is-invisible-and-the-obvious-fix-is-a-trap)
+identified for an unrelated reason turned out to protect this step too.
+
+**New operations:** none; one widened twice. **Migrations:** two. **Risk:**
+medium, concentrated in the read-path change to the monthly rollup, which puts
+every consumer of `monthly_id` in scope.
+
+**Verified by:** pgTAP (`work_nests.sql`), unit tests on the nesting derivation
+(`web/tests/unit/planner-nesting.test.ts`), and a planner journey that indents
+and outdents (`web/tests/e2e/journey-planner.spec.ts`), which is what found both
+corrections above.
+
+### 8. Suggest a first list for a new initiative
+
+**Shipped** as `20260915140000_suggest_a_breakdown.sql`.
+
+**Changes:** a new initiative can ask for a first list of tasks. The proposal
+machinery is reused whole -- an immutable Capture records that the owner asked,
+`persist_capture_proposal_analysis_job` writes the batch atomically, and the
+Action Inbox reviews it line by line. The whole migration is one new
+`ai_jobs.operation` value, `initiative_breakdown`, so that a breakdown is
+distinguishable in Activity and in the job history from a Capture the owner typed
+themselves. The list is capped at five, matching the daily focus cap and the
+weekly priority cap, on the reasoning this document already gave: twelve generic
+tasks are worse than four real ones, and a list long enough to feel like a plan
+is a list nobody edits.
+
+**Writing the Capture was the right call.** The two ways past the
+`capture_proposal_batches` check that a batched proposal must carry a
+`source_capture_id` were to write a capture or to relax the check, and this
+document recommended the first. That is what shipped: "break this down" is a
+thought the owner had, recording it gives the batch a provenance, and the
+constraint is left alone.
+
+**The model's only influence is a list of titles.** Every identifier, date and
+horizon in the resulting `action.create.v1` inputs is computed by the server from
+the initiative it was asked about, and each input is validated against the
+Operation's own schema before anything is written. A title the Operation would
+reject is dropped rather than repaired, so the worst a bad completion can do is
+produce a shorter list, and a model that returns nonsense produces zero proposals
+rather than a bad write. That is deliberately narrower than the Capture flow,
+which lets the model emit whole Operation inputs. A breakdown is asked for at a
+moment when the workspace has nothing in it, so there are no real ids for a model
+to reference and every one it produced would be a guess.
+
+**The week the tasks land in is computed from the owner's timezone and their own
+week start.** A breakdown that lands in the wrong seven days is not a cosmetic
+error: it decides which week has to resolve the work.
+
+**Correction to "no AI anywhere in the plan": there is now exactly one AI entry
+point.** It is an offer rather than a step. The control is not rendered when AI
+is off, an initiative is fully usable with an empty list, and nothing is written
+until the owner accepts a proposal, so invariant 2 holds -- no number on the
+weekly pass exists because a model said so.
+
+**New operations:** none. **Migrations:** one, which only widens a check
+constraint. **Risk:** low -- every write goes through the existing proposal
+review.
+
+**Why last:** for the reasons it was cut first, which stayed true. It is the only
+step that needs a provider, the only one that cannot be verified
+deterministically, and the one whose value depends on the definition-of-done
+field that step 5 built. The prompt is given the initiative's title and that
+field, and treats both as untrusted data rather than as instructions.
+
 ### What this order deliberately refuses
 
 - **No new table.** Every gap is closed with a column, a read, or a screen.
-- **No AI anywhere in the plan.** Every number is computed.
+- **No AI on the path through the week.** Every number is computed. Step 8 is
+  the single AI entry point, it is an offer on a new initiative rather than a
+  step in the weekly pass, and it is not rendered when AI is off.
 - **No change to how work is stored before step 3.** Steps 1 and 2 are pure reads,
   so they ship in days and can be judged against a real week before anything is
   migrated.
 - **Nothing that only works from week three.** Every ticket has to be worth having
   on the first Sunday.
 
-### Deferred, not cancelled
+### The four deferrals, since closed
 
-| Deferred                 | Revisit when                                                                  |
-| ------------------------ | ----------------------------------------------------------------------------- |
-| **Nesting**              | A month of real use shows `description_markdown` checklists failing           |
-| **Definition of done**   | Step 4 has run and dropping decisions feel unprincipled without it            |
-| **Recurrence surfacing** | Step 2's data shows what proportion of a week genuinely recurs                |
-| **AI breakdown**         | The definition-of-done field exists, so the prompt has something to work from |
+Nothing on the deferred list was cancelled, and all four have since been built as
+steps 5 to 8 above. The order they were taken in is not the order they were cut,
+and the reasons are worth keeping.
+
+**The definition of done went first, because two other things were waiting on
+it.** Its own revisit condition -- step 4 has run and dropping decisions feel
+unprincipled without it -- was met the moment the pass shipped, and the AI
+breakdown has nothing to work from without it. It also turned out to be the
+cheapest of the four: one optional column and two reads.
+
+**Recurrence went second, and needed no migration at all.** The storage has
+existed since `20260817002800`; only the reading of it was missing. That made it
+the smallest of the four to build, and it is the one whose shape the build
+disagreed with -- see the correction under step 6.
+
+**Nesting went third, as the most expensive.** It was deferred on the argument
+that `description_markdown` checklists were the cheap version of the same thing
+and that the export shows exactly one two-level example. What settled it was not
+that argument failing but the two operation inconsistencies it uncovered, neither
+of which was visible until indent was wired to a real screen.
+
+**The breakdown went last, for the reasons it was cut first.** It is the only
+step that needs a provider and the only one that cannot be verified
+deterministically, so it had the weakest claim on going early, and its value
+depended on a field that did not exist until step 5. The sequencing call in
+[What to cut](#what-to-cut) was right: it lost nothing by waiting, and it gained
+a definition of done to work from.
 
 ## Risks, and how each is contained
 
