@@ -2,27 +2,28 @@
 
 Roadmap stage: **2 - Workspace, Planner And Delivery Hardening**
 
-## Codex handoff ready: EH-01 complete
+## Codex handoff ready: Workspace module boundaries
 
-- **Contract:** `.agents/tasks/invite-capability.md`
-- **Branch:** `codex/invite-capability`
-- **Scope:** the last ordinary-route service-role use. Signup claims and
-  releases invites on its own anonymous client, proving the caller with the
-  invite code hash, and `release_beta_invite` now requires that hash rather
-  than a bare invite id.
-- **Writable paths:** the auth actions, one new migration, the Stage 0 pgTAP
-  file, generated types, the admin-boundary register and test, the improvement
-  program, and coordination documents named by the contract.
-- **Foundation:** attachment-storage handoff `93ff21b` remains ready for review.
-- **Handoff:** `.agents/handoffs/invite-capability.md`
-- **Next:** review the four stacked capability branches, then start EH-03,
-  splitting the oversized Workspace and planner modules.
+- **Contract:** `.agents/tasks/workspace-module-boundaries.md`
+- **Branch:** `codex/workspace-module-boundaries`
+- **Scope:** first slice of EH-03. The pure state transitions behind the Notes
+  tree and the planner's horizon labels move into focused modules with tests;
+  no behaviour changes.
+- **Writable paths:** four new library modules, the two Workspace components,
+  the markdown editing module, `src/app/actions.ts`, and the matching unit
+  tests.
+- **Foundation:** EH-01 handoff `15ce786` remains ready for review, and the
+  attachment branch below it carries a Storage-policy fix found by running the
+  browser suite — read `.agents/handoffs/attachment-storage-capability.md`.
+- **Handoff:** `.agents/handoffs/workspace-module-boundaries.md`
+- **Next:** decide `/preview`. Removing it is the largest win left under EH-03
+  and the roadmap gates it on Workspace and Planner parity, which
+  `docs/status.md` does not record as met. That is a product call, not an
+  engineering one.
 
-**EH-01 is met.** The admin client is reserved for the four cron-authenticated
-lifecycle jobs, and the admin-boundary test's exception list is empty. Read
-`.agents/handoffs/invite-capability.md` before reviewing: this last slice is the
-only one that reverses a previously tested assertion rather than tightening one,
-and the reasoning is recorded there.
+**EH-01 is met** and its four capability branches are ready for review. EH-03 is
+started, not closed: `/preview` is blocked on the parity gates above, and the
+Server Actions half is its own contract.
 
 ## CI runs again, and integration itself is red
 
