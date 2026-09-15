@@ -1024,10 +1024,12 @@ export type Database = {
           archived_at: string | null;
           created_at: string;
           current_value: number | null;
+          definition_of_done: string | null;
           description_markdown: string | null;
           due_on: string | null;
           horizon_id: string;
           id: string;
+          kind: string;
           parent_goal_id: string | null;
           purge_after: string | null;
           status: string;
@@ -1045,10 +1047,12 @@ export type Database = {
           archived_at?: string | null;
           created_at?: string;
           current_value?: number | null;
+          definition_of_done?: string | null;
           description_markdown?: string | null;
           due_on?: string | null;
           horizon_id: string;
           id?: string;
+          kind?: string;
           parent_goal_id?: string | null;
           purge_after?: string | null;
           status?: string;
@@ -1066,10 +1070,12 @@ export type Database = {
           archived_at?: string | null;
           created_at?: string;
           current_value?: number | null;
+          definition_of_done?: string | null;
           description_markdown?: string | null;
           due_on?: string | null;
           horizon_id?: string;
           id?: string;
+          kind?: string;
           parent_goal_id?: string | null;
           purge_after?: string | null;
           status?: string;
@@ -2638,6 +2644,23 @@ export type Database = {
       [_ in never]: never;
     };
     Functions: {
+      action_ancestor_depth: {
+        Args: { p_action_id: string; p_workspace_id: string };
+        Returns: number;
+      };
+      action_has_descendant: {
+        Args: {
+          p_action_id: string;
+          p_candidate: string;
+          p_workspace_id: string;
+        };
+        Returns: boolean;
+      };
+      action_max_depth: { Args: never; Returns: number };
+      action_subtree_height: {
+        Args: { p_action_id: string; p_workspace_id: string };
+        Returns: number;
+      };
       approve_mcp_oauth_grant: {
         Args: {
           p_allowed_operations: string[];
@@ -3483,11 +3506,19 @@ export type Database = {
         Returns: undefined;
       };
       release_beta_invite: { Args: { p_invite_id: string }; Returns: undefined };
+      review_max_required_actions: { Args: never; Returns: number };
+      review_stalled_after_checkpoints: { Args: never; Returns: number };
       review_week_eligible_actions: {
         Args: { p_ends_on: string; p_starts_on: string; p_workspace_id: string };
         Returns: {
           action_id: string;
           horizon_kind: string;
+        }[];
+      };
+      review_week_required_actions: {
+        Args: { p_ends_on: string; p_starts_on: string; p_workspace_id: string };
+        Returns: {
+          action_id: string;
         }[];
       };
       revoke_mcp_access_token: {

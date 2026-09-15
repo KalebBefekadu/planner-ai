@@ -2,18 +2,16 @@
 
 Roadmap stage: **2 - Workspace, Planner And Delivery Hardening**
 
-## Codex handoff ready: architecture foundation
+## Active Codex task: reproducible delivery
 
-- **Contract:** `.agents/tasks/architecture-foundation.md`
-- **Branch:** `codex/architecture-foundation`
-- **Scope:** integrate the accepted two-pillar product shape with the roadmap,
-  record the engineering improvement program, and align Node/Next toolchain
-  versions.
-- **Writable paths:** documentation and package metadata named by the contract;
-  no application source or database migration changes.
-- **Handoff:** `.agents/handoffs/architecture-foundation.md`
-- **Next:** review commit `238eace`, then activate EH-02 delivery isolation
-  before the least-privilege implementation slices.
+- **Contract:** `.agents/tasks/reproducible-delivery.md`
+- **Branch:** `codex/reproducible-delivery`
+- **Scope:** serialize local Supabase use across worktrees and make database/type
+  verification begin from a clean migration reset.
+- **Writable paths:** delivery scripts, their focused tests, CI, package scripts,
+  and coordination documents named by the contract.
+- **Foundation:** architecture handoff `da8f2fb` remains ready for review.
+- **Next:** implement and prove the EH-02 local database verification boundary.
 
 ## CI runs again, and integration itself is red
 

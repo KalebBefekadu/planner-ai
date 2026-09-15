@@ -56,14 +56,7 @@ jobs:
           cache: npm
           cache-dependency-path: web/package-lock.json
       - run: npm ci
-      - run: npx supabase start
-      - run: npm run test:db
-      - name: Verify generated Supabase types
-        run: |
-          npm run types:generate
-          test -s src/types/supabase.generated.ts
-          npx prettier --write src/types/supabase.generated.ts
-          git diff --exit-code -- src/types/supabase.generated.ts
+      - run: npm run verify:db
 
   browser:
     runs-on: ubuntu-latest
