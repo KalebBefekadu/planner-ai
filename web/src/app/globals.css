@@ -3704,7 +3704,9 @@ button:disabled {
 }
 .review-action-row {
   display: grid;
-  grid-template-columns: minmax(160px, 1fr) auto 180px 120px;
+  /* The title is the only column whose content the person wrote, so it gets
+     the slack. Everything else is a control of known width. */
+  grid-template-columns: minmax(220px, 1fr) auto 168px 112px;
   align-items: center;
   gap: 12px;
   padding: 14px 0;
@@ -3731,6 +3733,9 @@ button:disabled {
    owner's own Goal titles into title case. */
 .enum-label {
   text-transform: capitalize;
+}
+.review-action-copy strong {
+  white-space: normal;
 }
 .review-action-row select,
 .review-reason {

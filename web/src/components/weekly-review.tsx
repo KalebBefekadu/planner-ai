@@ -252,7 +252,8 @@ export function WeeklyReview({ data }: { data: WeeklyReviewData }) {
           <p className="eyebrow">Weekly reset</p>
           <h1>Review</h1>
           <p className="lede">
-            Resolve what happened this week before deciding what carries forward.
+            What you finished, what is still moving, and what has stopped. Nothing is copied forward
+            — work that stays open keeps its own history.
           </p>
         </div>
         <div className="review-range" aria-label="Review period">
@@ -273,6 +274,7 @@ export function WeeklyReview({ data }: { data: WeeklyReviewData }) {
         cue={weeklyReviewCoachingCue(data.coachingIntensity, {
           actionCount: data.actions.length,
           blockedCount: data.actions.filter((action) => action.status === 'blocked').length,
+          stalledCount,
         })}
       />
 

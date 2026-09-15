@@ -1,9 +1,10 @@
 import { test, expect, goTo, onboardingSeed } from './support/workspace';
 
-// PL-09: finishing a week. The claim this screen makes, in its own heading, is
-// "No silent rollover" -- so the thing worth testing is that nothing crosses
-// into next week without someone having said so, and that saying so once is
-// enough.
+// PL-09: finishing a week. The claim this screen makes is still "no silent
+// rollover", but what carries it changed: work stays open freely and the screen
+// shows how long each item has sat, so the thing worth testing is that leaving
+// work alone is cheap, that saying something once is enough, and that the week
+// reports what it finished.
 
 async function addAction(page: import('@playwright/test').Page, title: string) {
   const composer = page.getByRole('region', { name: 'New Action' });
@@ -12,7 +13,9 @@ async function addAction(page: import('@playwright/test').Page, title: string) {
   await expect(composer).toContainText(`"${title}" is saved`);
 }
 
-test('a week closes only once every unfinished Action has been decided', async ({ workspace }) => {
+test('a week closes without answering for work that is simply still open', async ({
+  workspace,
+}) => {
   const { page } = workspace;
   await goTo(page, '/');
   await addAction(page, 'Carry into next week');
@@ -21,31 +24,26 @@ test('a week closes only once every unfinished Action has been decided', async (
   await goTo(page, '/review');
   const complete = page.getByRole('button', { name: 'Complete weekly review' });
 
-  // Every row starts undecided, and the week cannot close while any of them
-  // is. Defaulting rows to "leave overdue" made silent rollover the path of
-  // least resistance through the one screen that exists to prevent it.
-  await expect(complete).toBeDisabled();
-  // Scoped to the form's own message: Next's route announcer is also an alert.
-  await expect(page.locator('p.review-validation')).toContainText(
-    'a decision before the week can close'
-  );
+  // Nothing here has outlived a single completed Review, so nothing has to be
+  // answered for. This is the weekly tax the screen used to charge on every
+  // row: the answer was "yes, obviously, still doing that" nine times out of
+  // ten, and it had to be given anyway.
+  await expect(complete).toBeEnabled();
+  await expect(page.locator('p.review-validation')).toHaveCount(0);
+  await expect(page.getByText('Carry into next week')).toBeVisible();
 
-  await page
-    .getByRole('combobox', { name: 'Decision for Carry into next week' })
-    .selectOption('next_week');
-  // The onboarding Action is planned monthly and scheduled for today. Before
-  // this it was invisible here; the week could close without it ever having
-  // been asked about.
-  await page
-    .getByRole('combobox', { name: `Decision for ${onboardingSeed.action}` })
-    .selectOption('next_week');
+  // Work that is new says so rather than claiming a week it has not lived
+  // through, and nothing is marked as needing a decision.
+  await expect(page.locator('.review-carry').first()).toHaveText('new');
+  await expect(page.locator('.review-action-stalled')).toHaveCount(0);
+
+  // Deciding is still possible, and dropping still records why -- that part of
+  // the contract did not move.
   await page
     .getByRole('combobox', { name: 'Decision for Stop doing this' })
     .selectOption('dropped');
-
-  // Every row is decided now, so what still holds the week open is the reason:
-  // dropping work records why, not only that it happened.
   await expect(complete).toBeDisabled();
+  // Scoped to the form's own message: Next's route announcer is also an alert.
   await expect(page.locator('p.review-validation')).toContainText('Add a reason');
   await page
     .getByRole('textbox', { name: 'Reason for Stop doing this' })
@@ -58,6 +56,32 @@ test('a week closes only once every unfinished Action has been decided', async (
   // Closing the week has to lead somewhere; next week is a destination, not a
   // route the person is expected to remember.
   await expect(page.getByRole('link', { name: 'Plan next week' })).toBeVisible();
+});
+
+test('the week reports what it finished, not only what it did not', async ({ workspace }) => {
+  const { page } = workspace;
+  await goTo(page, '/');
+  await addAction(page, 'Ship the import report');
+
+  // Completing work is what the week is for, and until now the one screen
+  // built to look back at a week could not show any of it: both of its queries
+  // filtered to open work, so completed_at was never read.
+  await page.getByRole('button', { name: 'Complete Ship the import report' }).click();
+  await expect(page.getByRole('button', { name: 'Complete Ship the import report' })).toHaveCount(
+    0
+  );
+
+  await goTo(page, '/review');
+  await expect(page.locator('.review-finished-list')).toContainText('Ship the import report');
+
+  // Every level closes, and closing keeps the count: a collapsed section hides
+  // lines, never numbers.
+  const trigger = page.getByRole('button', { name: /^What you did Finished/ });
+  await expect(trigger).toHaveAttribute('aria-expanded', 'true');
+  await trigger.click();
+  await expect(trigger).toHaveAttribute('aria-expanded', 'false');
+  await expect(page.locator('.review-finished-list')).toBeHidden();
+  await expect(trigger).toContainText('1');
 });
 
 test('a completed review survives navigation and appears in the history', async ({ workspace }) => {
@@ -143,16 +167,15 @@ test('a review of a week with nothing unresolved can still be recorded', async (
   await expect(page.getByRole('status')).toContainText('Review completed');
 });
 
-test('work planned monthly and committed to this week must be resolved too', async ({
+test('work planned monthly and committed to this week can be resolved here', async ({
   workspace,
 }) => {
   const { page } = workspace;
 
   // The onboarding Action is planned at a monthly horizon and scheduled for
   // today. Today lets a person commit exactly this kind of work to their day,
-  // and Weekly Review used to look only at week-horizon Actions -- so leaving
-  // it undone produced a week that closed reporting "Nothing unresolved"
-  // while the Action rolled forward with no decision recorded against it.
+  // and Weekly Review used to look only at week-horizon Actions -- so it could
+  // not be decided here at all, and could not be reported as part of the week.
   await goTo(page, '/');
   await page.getByRole('button', { name: `Focus ${onboardingSeed.action}` }).click();
   await expect(page.getByRole('region', { name: 'Committed Actions' })).toContainText('1 / 5');
@@ -160,7 +183,6 @@ test('work planned monthly and committed to this week must be resolved too', asy
   await goTo(page, '/review');
   await expect(page.getByText('Nothing unresolved')).toHaveCount(0);
   const complete = page.getByRole('button', { name: 'Complete weekly review' });
-  await expect(complete).toBeDisabled();
 
   await page
     .getByRole('combobox', { name: `Decision for ${onboardingSeed.action}` })
