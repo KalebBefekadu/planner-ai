@@ -1,9 +1,9 @@
 # Admin Client Boundary
 
-Status: **migration register for EH-01.** The service-role client remains a
-server-only compatibility mechanism while ordinary request paths move to the
-person's JWT, narrowly granted RPCs, or a restricted non-`BYPASSRLS` role. The
-executable inventory is
+Status: **complete for EH-01.** No ordinary request path constructs the
+service-role client. It is reserved for the four cron-authenticated lifecycle
+jobs below, and the executable inventory is meant to stay that size. The
+inventory is
 [`web/tests/unit/admin-client-boundary.test.ts`](../../web/tests/unit/admin-client-boundary.test.ts).
 
 ## Intended allowlist
@@ -22,11 +22,8 @@ and an allowlist change.
 
 ## Migration exceptions
 
-These are current facts, not approved destinations:
-
-| Surface               | Why it currently uses admin access                                           | Removal direction                                                                                                       |
-| --------------------- | ---------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------- |
-| Signup invite actions | Claims/releases an invite before a session exists.                           | Expose a narrowly validated pre-auth invite capability without table-wide admin access.                                 |
+None. Every ordinary route has moved. The four capabilities that replaced them
+are described below in the order they were built.
 
 ## The restricted proposal-worker capability
 
@@ -82,6 +79,30 @@ caller. Reads use the person's own client against the Storage policy that
 already existed. The select policy hides reservations, so no reader can mistake
 one for an attachment.
 
+## The pre-auth invite capability
+
+Done, and it is the one case where the answer is not `auth.uid()`. An invite is
+claimed before the account it creates, so there is no session to derive anything
+from, and the register's other option -- a restricted non-`BYPASSRLS` role --
+would need a second production credential provisioned and signed.
+
+The invite code is already a credential. `claim_beta_invite` matches on its
+SHA-256, so reaching it means presenting a value that hashes into the table:
+guessing one means guessing a 256-bit digest, not a human-typed code. It is
+granted to `anon` and revoked from everything else, including `service_role`.
+Nothing new becomes possible -- everything an anonymous caller can do with it
+they could already do by submitting the signup form with the same code -- and
+the secret guarding it is now the one the operation is about rather than a key
+that can read and write every table.
+
+`release_beta_invite` is fixed rather than moved. It accepted a bare invite id,
+which is not a secret, and decremented the use count, so it handed uses back to
+any invite whose id was known with no proof the caller had ever claimed it. It
+now requires the token hash that claimed the invite.
+
+`beta_invites` grants are unchanged: `anon` and `authenticated` hold nothing on
+the table, so the two functions are the only way in.
+
 ## Removal order
 
 1. ~~Introduce the restricted worker capability and migrate the three proposal
@@ -90,7 +111,14 @@ one for an attachment.
    shared Operation boundary.~~ Complete.
 3. ~~Redesign attachment reserve/finalize/reconcile and migrate export reads.~~
    Complete.
-4. Replace pre-auth invite administration with a narrowly reviewed capability.
+4. ~~Replace pre-auth invite administration with a narrowly reviewed
+   capability.~~ Complete.
+
+Each capability derives its actor from the narrowest credential the operation
+actually has: `auth.uid()` where a session exists, the MCP token hash where the
+token is the credential, and the invite code hash where no account exists yet.
+None of them accepts an identifier as proof of identity, which is what the
+service-role grants were compensating for.
 
 At every step, delete the matching exception from the executable inventory. The
 test must become stricter over time; replacing one broad exception with several

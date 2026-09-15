@@ -2,24 +2,27 @@
 
 Roadmap stage: **2 - Workspace, Planner And Delivery Hardening**
 
-## Codex handoff ready: attachment storage capability
+## Codex handoff ready: EH-01 complete
 
-- **Contract:** `.agents/tasks/attachment-storage-capability.md`
-- **Branch:** `codex/attachment-storage-capability`
-- **Scope:** model attachment upload as reserve, upload, finalize and
-  reconcile, and remove service-role access from the attachment and Note
-  export routes.
-- **Writable paths:** the two routes, the attachment purge job, the shared
-  availability helper, one new migration, one new pgTAP file, generated types,
-  the admin-boundary register and test, and coordination documents named by the
-  contract.
-- **Foundation:** MCP token handoff `4197601` remains ready for review.
-- **Handoff:** `.agents/handoffs/attachment-storage-capability.md`
-- **Next:** review this branch, then replace pre-auth invite administration
-  with a narrowly reviewed capability -- the last EH-01 exception.
+- **Contract:** `.agents/tasks/invite-capability.md`
+- **Branch:** `codex/invite-capability`
+- **Scope:** the last ordinary-route service-role use. Signup claims and
+  releases invites on its own anonymous client, proving the caller with the
+  invite code hash, and `release_beta_invite` now requires that hash rather
+  than a bare invite id.
+- **Writable paths:** the auth actions, one new migration, the Stage 0 pgTAP
+  file, generated types, the admin-boundary register and test, the improvement
+  program, and coordination documents named by the contract.
+- **Foundation:** attachment-storage handoff `93ff21b` remains ready for review.
+- **Handoff:** `.agents/handoffs/invite-capability.md`
+- **Next:** review the four stacked capability branches, then start EH-03,
+  splitting the oversized Workspace and planner modules.
 
-One ordinary route still holds the admin client: signup invite actions, which
-claim and release an invite before any session exists.
+**EH-01 is met.** The admin client is reserved for the four cron-authenticated
+lifecycle jobs, and the admin-boundary test's exception list is empty. Read
+`.agents/handoffs/invite-capability.md` before reviewing: this last slice is the
+only one that reverses a previously tested assertion rather than tightening one,
+and the reasoning is recorded there.
 
 ## CI runs again, and integration itself is red
 

@@ -49,6 +49,12 @@ into a generic node table.
 **Gate:** no user-facing route can instantiate the admin client; cross-Workspace
 negative tests and attachment orphan-recovery tests pass.
 
+**Met.** The admin client is reserved for the four cron-authenticated lifecycle
+jobs, frozen by `web/tests/unit/admin-client-boundary.test.ts` with an empty
+exception list. See
+[the admin client boundary](admin-client-boundary.md) for the four capabilities
+that replaced the ordinary-route uses.
+
 ### EH-02 — Reproducible delivery
 
 - Keep the integration branch green before feature work merges.
