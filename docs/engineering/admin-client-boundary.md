@@ -27,7 +27,6 @@ These are current facts, not approved destinations:
 | Surface               | Why it currently uses admin access                                           | Removal direction                                                                                                       |
 | --------------------- | ---------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------- |
 | Signup invite actions | Claims/releases an invite before a session exists.                           | Expose a narrowly validated pre-auth invite capability without table-wide admin access.                                 |
-| MCP route             | Manual MCP credentials create an admin client after token verification.      | Carry the verified actor and Workspace into restricted Operations/RPCs.                                                 |
 | Note attachment route | Storage upload/download and recoverable metadata updates cross two services. | Implement reserve, upload, finalize, and reconcile with owner-scoped metadata writes and private Storage authorization. |
 | Note export route     | Reads approved attachment bytes from private Storage.                        | Authorize each object through the verified owner and a narrow Storage read capability.                                  |
 
@@ -49,12 +48,28 @@ dropped rather than left callable.
 only, so the capability is the sole write path and no `BYPASSRLS` role takes
 part in an ordinary request.
 
+## The MCP manual-token capability
+
+Done. `read_mcp_workspace_snapshot` and `execute_mcp_operation` took a token
+**id** -- a database identifier, not a secret -- so possession proved nothing
+and both had to be granted to `service_role`. That single fact is why the MCP
+route constructed an admin client on every request.
+
+Both now take the token hash, exactly as `authenticate_mcp_token` already did,
+and are granted to `anon`. The credential is the token; presenting its hash is
+the only way in. This makes the manual half structurally equal to the OAuth
+half, which already proved its caller with `auth.uid()` and the verified
+`client_id` and already ran without admin access.
+
+Expiry, revocation and capability scope are still re-decided inside each
+function at the moment of execution rather than only at authentication.
+
 ## Removal order
 
 1. ~~Introduce the restricted worker capability and migrate the three proposal
    routes together so their policy does not drift.~~ Complete.
-2. Remove the manual MCP admin client by routing verified actors through the
-   shared Operation boundary.
+2. ~~Remove the manual MCP admin client by routing verified actors through the
+   shared Operation boundary.~~ Complete.
 3. Redesign attachment reserve/finalize/reconcile and migrate export reads.
 4. Replace pre-auth invite administration with a narrowly reviewed capability.
 

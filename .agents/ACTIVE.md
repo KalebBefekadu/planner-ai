@@ -2,24 +2,22 @@
 
 Roadmap stage: **2 - Workspace, Planner And Delivery Hardening**
 
-## Codex handoff ready: restricted proposal worker
+## Codex handoff ready: MCP token capability
 
-- **Contract:** `.agents/tasks/restricted-proposal-worker.md`
-- **Branch:** `codex/proposal-worker-capability`
-- **Scope:** remove service-role access from Capture proposals, Review
-  proposals, and Initiative breakdown by introducing an `auth.uid()`-derived job
-  capability, and fix the two defects that made `initiative_breakdown`
-  unreachable.
-- **Writable paths:** the three proposal routes, the shared job-status module,
-  one new migration, the affected pgTAP files, generated types, the
-  admin-boundary register and test, and coordination documents named by the
-  contract.
-- **Foundation:** health-readiness handoff `64c15cf` remains ready for review.
-- **Handoff:** `.agents/handoffs/restricted-proposal-worker.md`
-- **Next:** review this branch, then remove the MCP route's admin client by
-  carrying its verified actor and Workspace through the same kind of capability.
+- **Contract:** `.agents/tasks/mcp-token-capability.md`
+- **Branch:** `codex/mcp-actor-capability`
+- **Scope:** remove service-role access from `/api/mcp` by making the manual
+  token path prove its caller with the token hash, as the OAuth path already
+  proves its caller with a verified JWT.
+- **Writable paths:** the MCP route, one new migration, the scope-boundary
+  pgTAP file, generated types, the admin-boundary register and test, and
+  coordination documents named by the contract.
+- **Foundation:** proposal-worker handoff `896b805` remains ready for review.
+- **Handoff:** `.agents/handoffs/mcp-token-capability.md`
+- **Next:** review this branch, then redesign attachment reserve, upload,
+  finalize and reconcile, migrating the Note export read alongside it.
 
-Four ordinary routes still hold the admin client: MCP, Note attachments, Note
+Three ordinary routes still hold the admin client: Note attachments, Note
 export, and signup invite actions. The register owns the removal order.
 
 ## CI runs again, and integration itself is red
