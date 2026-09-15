@@ -2,7 +2,7 @@
 
 Roadmap stage: **2 - Workspace, Planner And Delivery Hardening**
 
-## Active Codex task: architecture foundation
+## Codex handoff ready: architecture foundation
 
 - **Contract:** `.agents/tasks/architecture-foundation.md`
 - **Branch:** `codex/architecture-foundation`
@@ -11,8 +11,9 @@ Roadmap stage: **2 - Workspace, Planner And Delivery Hardening**
   versions.
 - **Writable paths:** documentation and package metadata named by the contract;
   no application source or database migration changes.
-- **Next:** hand off this focused foundation, then activate EH-02 delivery
-  isolation before the least-privilege implementation slices.
+- **Handoff:** `.agents/handoffs/architecture-foundation.md`
+- **Next:** review commit `238eace`, then activate EH-02 delivery isolation
+  before the least-privilege implementation slices.
 
 ## CI runs again, and integration itself is red
 
