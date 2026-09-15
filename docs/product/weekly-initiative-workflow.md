@@ -227,6 +227,78 @@ already records `previous_horizon_id`, `new_horizon_id`, `reason` and even
 `review_id`, so a carry made during a Review is already attributable to it.
 Nothing here needs a model, which is what keeps the ritual working with AI off.
 
+## The screen
+
+This is a refit of `/review`, not a new surface. That route already lists
+unfinished Actions and asks for a decision on each (`weekly-review.tsx:186`);
+what it has never shown is what the week _finished_, which is the first thing
+the owner wants from it. Mockup: [The Weekly Pass](https://claude.ai/code/artifact/f91b55fe-37ff-4e99-8923-726e4647062e).
+
+### Shape
+
+One column of initiatives, one sticky rail for next week.
+
+```
+Week of 8-14 September
+[ finished 14 ] [ open 9 ] [ stalled 3 ] [ recurred 5 ]
+
++-- TEK Systems - Amazon ------------------+  +-- Next week ------+
+|  Vision > Steady income > Q3 Land a role |  |  One line: what   |
+|  Good this quarter: a signed contract,   |  |  would make the   |
+|  or a clear no so the time goes elsewhere|  |  week worth it?   |
+|                                          |  |                   |
+|  FINISHED  3                             |  |  3  TEK Systems   |
+|    the week's completions, quietly       |  |  2  1679          |
+|                                          |  |  1  Planner AI    |
+|  STILL OPEN  2                           |  |  0  Real estate   |
+|    Wait for a new start date  [4th week] |  |                   |
+|    > four weeks: waiting is not a task   |  | [Start next week] |
+|                                          |  +-------------------+
+|  + Add to this initiative                |  |  Reflection       |
++------------------------------------------+  +-------------------+
+```
+
+### The decisions that make it cheap
+
+**Finished leads.** Each initiative opens with what closed, then what is still
+open. The order answers the question the owner came to the screen with.
+
+**Keep is the default, and most items need no decision at all.** Today's Review
+asks the owner to resolve _every_ unfinished Action, which is the weekly tax
+this design exists to remove. Once work carries rather than being copied,
+staying open is free and silent. Only items carried three weeks or more are put
+in front of the owner for a decision. That single change is most of the saving.
+
+**The carry count is the primary signal**, quiet at one or two weeks and amber
+at three or more. It is the only number that says nobody is ever going to do
+this, and it exists _because_ nothing is copied.
+
+**A stalled item gets a reason, not just a flag.** "Wait for a new start date,
+4th week" is worth naming as what it is: waiting is not a task, because it has
+no next action the owner controls. An initiative with weeks of no movement is
+offered **pause** rather than drop -- pausing stops it appearing in the weekly
+pass and keeps everything filed under it. That is the owner's "clean it up"
+step, made explicit and reversible.
+
+**Direction is on screen, not one click away.** Each initiative header carries
+its chain -- Vision, yearly Goal, quarterly Goal -- and its definition of done
+in plain words. Dropping something is only defensible when the criterion is
+visible at the moment of dropping.
+
+**Planning is the exit from reviewing.** The rail is where next week gets its
+one-line intent and its counts; the primary control reads `Start next week - 6
+carried`. There is no separate trip to a planning screen, because the moment
+the owner knows what to plan is the moment they have just finished looking at
+the week.
+
+### Still open in the design
+
+- Whether **Finished** collapses to a count once it has been read, or stays
+  expanded. It is the answer to the owner's first question, and also the part
+  that grows largest.
+- Whether the reflection belongs in the rail or as a full-width final step
+  before the week closes.
+
 ## Build order
 
 Each step is usable alone and none blocks on AI.
