@@ -3471,12 +3471,240 @@ button:disabled {
   font-size: var(--fs-label);
   font-weight: 800;
 }
+/* Disclosure, at every level of the Review.
+   The rule that makes closing safe is that the trigger keeps the counts: a
+   collapsed section hides lines, never numbers, so a fully collapsed week is
+   still an honest report of it. */
+.collapsible {
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: var(--surface);
+}
+.collapsible + .collapsible {
+  margin-top: 12px;
+}
+.collapsible-heading {
+  margin: 0;
+  font-size: inherit;
+  font-weight: inherit;
+}
+.collapsible-trigger {
+  display: flex;
+  width: 100%;
+  align-items: center;
+  gap: 9px;
+  padding: 13px 15px;
+  border: 0;
+  border-radius: 10px;
+  background: none;
+  color: var(--ink);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+.collapsible-trigger:hover {
+  background: var(--surface-sunken);
+}
+.collapsible-chevron {
+  flex: none;
+  color: var(--ink-faint);
+  transition: transform 160ms ease;
+}
+.collapsible-trigger[aria-expanded='true'] .collapsible-chevron {
+  transform: rotate(90deg);
+}
+.collapsible-title {
+  display: grid;
+  flex: 1 1 auto;
+  min-width: 0;
+  gap: 1px;
+  font-size: var(--fs-body);
+  font-weight: 700;
+}
+.collapsible-eyebrow {
+  color: var(--ink-faint);
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+.collapsible-count {
+  flex: none;
+  padding: 1px 9px;
+  border-radius: 999px;
+  background: var(--surface-sunken);
+  color: var(--muted);
+  font-size: var(--fs-label);
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+.collapsible-shut-summary {
+  flex: none;
+  color: var(--ink-faint);
+  font-size: var(--fs-label);
+}
+.collapsible-body {
+  padding: 0 15px 14px;
+}
+.collapsible-finished .collapsible-trigger {
+  color: var(--brand-strong);
+}
+.collapsible-finished .collapsible-count {
+  background: var(--brand-soft);
+  color: var(--brand-strong);
+}
+/* A nested level is a band inside a grouping, not a second card. */
+.collapsible .collapsible {
+  border-color: var(--line-soft);
+  border-radius: 8px;
+  background: none;
+}
+.collapsible .collapsible-trigger {
+  padding: 9px 11px;
+}
+.collapsible .collapsible-body {
+  padding: 0 11px 10px;
+}
+
+.review-density {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  margin-bottom: 14px;
+}
+.review-density-label {
+  margin-right: 2px;
+  color: var(--ink-faint);
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+.review-density-option {
+  padding: 4px 12px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: var(--surface);
+  color: var(--muted);
+  font-size: var(--fs-label);
+  font-weight: 600;
+  cursor: pointer;
+}
+.review-density-option:hover {
+  border-color: var(--border-strong);
+  color: var(--ink);
+}
+.review-density-option[aria-pressed='true'] {
+  border-color: var(--brand-line);
+  background: var(--brand-soft);
+  color: var(--brand-strong);
+}
+.review-density-hint {
+  color: var(--ink-faint);
+  font-size: var(--fs-label);
+}
+
+.review-window-note,
+.review-empty-note {
+  margin: 10px 0 0;
+  color: var(--ink-faint);
+  font-size: var(--fs-label);
+}
+.review-shut-note {
+  font-variant-numeric: tabular-nums;
+}
+.review-finished-groups {
+  display: grid;
+  gap: 8px;
+  margin-top: 10px;
+}
+/* Finished is a receipt, not a worklist: quiet, dense, dated. Rendering it in
+   the same weight as the open list made the two run together, and the open
+   list is the one that still needs something from the reader. */
+.review-finished-list {
+  display: grid;
+  gap: 2px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.review-finished-list li {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  color: var(--ink-soft);
+  font-size: 13px;
+}
+.review-finished-list svg {
+  flex: none;
+  color: var(--brand);
+  transform: translateY(2px);
+}
+.review-finished-title {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+.review-finished-list time {
+  flex: none;
+  color: var(--ink-faint);
+  font-size: 11.5px;
+  font-variant-numeric: tabular-nums;
+}
+
+/* The age of open work. Quiet until it stops being credible. */
+.review-carry {
+  justify-self: start;
+  padding: 1px 9px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  color: var(--ink-faint);
+  font-size: 11.5px;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+.review-carry-stalled {
+  border-color: var(--warning);
+  background: var(--warning-soft);
+  color: var(--warning);
+  font-weight: 700;
+}
+.review-action-stalled {
+  padding-right: 10px;
+  padding-left: 10px;
+  border-radius: 8px;
+  background: var(--warning-soft);
+}
+
+/* Compact trims the second line and the padding; headlines closes the levels
+   themselves, which the component does rather than the stylesheet. */
+.review-density-compact .review-action-row,
+.review-density-headlines .review-action-row {
+  padding: 8px 0;
+}
+.review-density-compact .review-action-copy span,
+.review-density-headlines .review-action-copy span,
+.review-density-compact .review-window-note,
+.review-density-headlines .review-window-note,
+.review-density-compact .review-density-hint,
+.review-density-headlines .review-density-hint {
+  display: none;
+}
+.review-density-compact .collapsible-trigger,
+.review-density-headlines .collapsible-trigger {
+  padding: 9px 13px;
+}
+.review-density-compact .review-finished-list li,
+.review-density-headlines .review-finished-list li {
+  font-size: 12.5px;
+}
+
 .review-action-list {
   border-top: 1px solid var(--line);
 }
 .review-action-row {
   display: grid;
-  grid-template-columns: minmax(180px, 1fr) 180px 120px;
+  grid-template-columns: minmax(160px, 1fr) auto 180px 120px;
   align-items: center;
   gap: 12px;
   padding: 14px 0;
@@ -3517,7 +3745,7 @@ button:disabled {
   font-size: var(--fs-label);
 }
 .review-reason {
-  grid-column: 2 / 4;
+  grid-column: 2 / 5;
 }
 .review-priority {
   display: inline-flex;
@@ -6441,6 +6669,14 @@ button:disabled {
   }
   .review-action-row {
     grid-template-columns: minmax(0, 1fr) 150px;
+  }
+  /* The title gets the full width and the age drops beside the decision, so
+     neither is truncated on a narrow screen. */
+  .review-action-copy {
+    grid-column: 1 / 3;
+  }
+  .review-carry {
+    grid-column: 1;
   }
   .review-priority {
     grid-column: 1 / 3;

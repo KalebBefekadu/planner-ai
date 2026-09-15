@@ -1,19 +1,107 @@
 'use client';
 
-import { useMemo, useRef, useState, useTransition } from 'react';
+import { useCallback, useMemo, useRef, useState, useSyncExternalStore, useTransition } from 'react';
 import Link from 'next/link';
 import { AlertCircle, CalendarRange, CheckCircle2, Flag, History } from 'lucide-react';
 import {
   completeWeeklyReview,
   type WeeklyReviewData,
   type WeeklyReviewDecision,
+  type WeeklyReviewFinishedAction,
 } from '@/app/review/actions';
 import { newReviewIntent } from '@/lib/reviews/completion-intent';
 import { CoachingCue } from '@/components/coaching-cue';
+import { CollapsibleSection } from '@/components/collapsible-section';
 import { ReviewTabs } from '@/components/review-tabs';
 import { ReviewAiProposal } from '@/components/review-ai-proposal';
 import { weeklyReviewCoachingCue } from '@/lib/coaching';
 import { actionFailureMessage } from '@/lib/operations/failure-message';
+import { carriedLabel, isStalled } from '@/lib/reviews/checkpoints';
+import {
+  bandOpenByDefault,
+  DEFAULT_REVIEW_DENSITY,
+  groupOpenByDefault,
+  parseReviewDensity,
+  REVIEW_DENSITY_KEY,
+  type ReviewDensity,
+} from '@/lib/reviews/density';
+
+// How much of the week is on screen is a reading preference, so it is read
+// through the store rather than restored in an effect -- setting state from an
+// effect on mount is both a lint error here and a visible flash of the wrong
+// density. Writes notify, so two Review screens in two tabs agree.
+let densityListeners: (() => void)[] = [];
+let densityCache: ReviewDensity | null = null;
+let densityRaw: string | null = null;
+
+function subscribeToDensity(onChange: () => void) {
+  densityListeners = [...densityListeners, onChange];
+  window.addEventListener('storage', onChange);
+  return () => {
+    densityListeners = densityListeners.filter((listener) => listener !== onChange);
+    window.removeEventListener('storage', onChange);
+  };
+}
+
+function densitySnapshot(): ReviewDensity {
+  let raw: string | null = null;
+  try {
+    raw = window.localStorage.getItem(REVIEW_DENSITY_KEY);
+  } catch {
+    raw = null;
+  }
+  // Cached against the raw text so the snapshot is referentially stable, which
+  // useSyncExternalStore requires.
+  if (raw !== densityRaw || densityCache === null) {
+    densityRaw = raw;
+    densityCache = parseReviewDensity(raw);
+  }
+  return densityCache;
+}
+
+function serverDensitySnapshot(): ReviewDensity {
+  return DEFAULT_REVIEW_DENSITY;
+}
+
+function writeDensity(next: ReviewDensity) {
+  try {
+    window.localStorage.setItem(REVIEW_DENSITY_KEY, next);
+  } catch {
+    // A browser that refuses storage still gets the density for this session.
+  }
+  densityRaw = next;
+  densityCache = next;
+  for (const listener of densityListeners) listener();
+}
+
+const densityLabels: Record<ReviewDensity, string> = {
+  full: 'Everything',
+  compact: 'Compact',
+  headlines: 'Headlines only',
+};
+
+/** Completions grouped by the Goal they belong to, in the order they closed. */
+function groupFinishedByGoal(finished: readonly WeeklyReviewFinishedAction[]) {
+  const groups = new Map<
+    string,
+    { key: string; title: string; items: WeeklyReviewFinishedAction[] }
+  >();
+  for (const action of finished) {
+    const key = action.goalId ?? 'unlinked';
+    const existing = groups.get(key);
+    if (existing) {
+      existing.items.push(action);
+      continue;
+    }
+    groups.set(key, {
+      key,
+      title: action.goalTitle ?? 'Not connected to a Goal',
+      items: [action],
+    });
+  }
+  // Largest first: the thing that absorbed the week leads the report of it.
+  return [...groups.values()].sort((a, b) => b.items.length - a.items.length);
+}
 
 type Resolution = WeeklyReviewDecision['resolution'];
 // A decision nobody made is not a decision. The list starts unset so that
@@ -62,6 +150,42 @@ export function WeeklyReview({ data }: { data: WeeklyReviewData }) {
   const priorityCount = useMemo(
     () => Object.values(decisions).filter((decision) => decision.priority).length,
     [decisions]
+  );
+
+  const density = useSyncExternalStore(subscribeToDensity, densitySnapshot, serverDensitySnapshot);
+  // A density sets every level at once; a section the person then opens or
+  // closes by hand overrides it until the density changes again.
+  const [openOverrides, setOpenOverrides] = useState<Record<string, boolean>>({});
+  const sectionOpen = useCallback(
+    (key: string, level: 'group' | 'band') => {
+      const override = openOverrides[key];
+      if (typeof override === 'boolean') return override;
+      return level === 'group' ? groupOpenByDefault(density) : bandOpenByDefault(density);
+    },
+    [density, openOverrides]
+  );
+  function toggleSection(key: string, level: 'group' | 'band') {
+    const current = sectionOpen(key, level);
+    setOpenOverrides((existing) => ({ ...existing, [key]: !current }));
+  }
+  function chooseDensity(next: ReviewDensity) {
+    // Clearing the overrides is the point of the control: it is how "headlines
+    // only" reaches a section that was opened by hand ten minutes ago.
+    setOpenOverrides({});
+    writeDensity(next);
+  }
+
+  const finishedGroups = useMemo(() => groupFinishedByGoal(data.finished), [data.finished]);
+  // Oldest work first. The list is ordered by the one number that says nobody
+  // is going to do this, so the items that need an answer are never below the
+  // fold behind the ones that do not.
+  const openActions = useMemo(
+    () => [...data.actions].sort((left, right) => right.weeksCarried - left.weeksCarried),
+    [data.actions]
+  );
+  const stalledCount = useMemo(
+    () => data.actions.filter((action) => isStalled(action.weeksCarried)).length,
+    [data.actions]
   );
 
   function updateDecision(
@@ -182,98 +306,203 @@ export function WeeklyReview({ data }: { data: WeeklyReviewData }) {
         </p>
       ) : null}
 
-      <div className="review-layout">
-        <section className="review-workspace" aria-labelledby="unfinished-heading">
-          <div className="section-heading">
-            <div>
-              <p className="eyebrow">No silent rollover</p>
-              <h2 id="unfinished-heading">Unfinished actions</h2>
-            </div>
-            <span className="review-count">{data.actions.length}</span>
-          </div>
+      <div className="review-density" role="group" aria-label="How much of the week to show">
+        <span className="review-density-label">Show</span>
+        {(Object.keys(densityLabels) as ReviewDensity[]).map((option) => (
+          <button
+            key={option}
+            type="button"
+            className="review-density-option"
+            aria-pressed={density === option}
+            onClick={() => chooseDensity(option)}
+          >
+            {densityLabels[option]}
+          </button>
+        ))}
+        <span className="review-density-hint">Or open and close any section on its own.</span>
+      </div>
 
-          {data.actions.length ? (
-            <div className="review-action-list">
-              {data.actions.map((action) => {
-                const decision = decisions[action.id];
-                const canPrioritize = !['done', 'dropped'].includes(decision.resolution);
-                return (
-                  <article className="review-action-row" key={action.id}>
-                    <div className="review-action-copy">
-                      <strong>{action.title}</strong>
-                      {/* The status is an enum and reads better capitalised;
+      <div className={`review-layout review-density-${density}`}>
+        <section className="review-workspace" aria-label="This week">
+          {/* What closed leads the screen. It is the question the week is
+              opened to answer, and until now the Review has been the one
+              surface in the product that could not answer it. */}
+          <CollapsibleSection
+            id="review-finished"
+            eyebrow="What you did"
+            title="Finished"
+            count={data.finished.length}
+            tone="finished"
+            shut={<span className="review-shut-note">{data.finished.length} completed</span>}
+            open={sectionOpen('finished', 'group')}
+            onToggle={() => toggleSection('finished', 'group')}
+          >
+            {data.finishedSinceIsFallback ? (
+              <p className="review-window-note">
+                Counted across this week. Once you close a week, this covers everything since.
+              </p>
+            ) : (
+              <p className="review-window-note">
+                Everything completed since you last closed a week on{' '}
+                {new Intl.DateTimeFormat('en-US', {
+                  month: 'short',
+                  day: 'numeric',
+                }).format(new Date(data.finishedSince))}
+                .
+              </p>
+            )}
+            {finishedGroups.length ? (
+              <div className="review-finished-groups">
+                {finishedGroups.map((group) => (
+                  <CollapsibleSection
+                    key={group.key}
+                    id={`review-finished-${group.key}`}
+                    title={group.title}
+                    count={group.items.length}
+                    shut={<span className="review-shut-note">{group.items.length} done</span>}
+                    open={sectionOpen(`finished:${group.key}`, 'band')}
+                    onToggle={() => toggleSection(`finished:${group.key}`, 'band')}
+                  >
+                    <ul className="review-finished-list">
+                      {group.items.map((item) => (
+                        <li key={item.id}>
+                          <CheckCircle2 size={13} aria-hidden="true" />
+                          <span className="review-finished-title">{item.title}</span>
+                          <time dateTime={item.completedAt}>
+                            {new Intl.DateTimeFormat('en-US', { weekday: 'short' }).format(
+                              new Date(item.completedAt)
+                            )}
+                          </time>
+                        </li>
+                      ))}
+                    </ul>
+                  </CollapsibleSection>
+                ))}
+              </div>
+            ) : (
+              <p className="review-empty-note">
+                Nothing has been completed yet. Anything you finish this week shows up here.
+              </p>
+            )}
+          </CollapsibleSection>
+
+          <CollapsibleSection
+            id="review-unfinished"
+            eyebrow="No silent rollover"
+            title="Still open"
+            count={data.actions.length}
+            shut={
+              <span className="review-shut-note">
+                {data.actions.length} open
+                {stalledCount
+                  ? ` · ${stalledCount} carried ${stalledCount === 1 ? 'week' : 'weeks'} on`
+                  : ''}
+              </span>
+            }
+            open={sectionOpen('unfinished', 'group')}
+            onToggle={() => toggleSection('unfinished', 'group')}
+          >
+            {data.actions.length ? (
+              <div className="review-action-list">
+                {openActions.map((action) => {
+                  const decision = decisions[action.id];
+                  const canPrioritize = !['done', 'dropped'].includes(decision.resolution);
+                  const stalled = isStalled(action.weeksCarried);
+                  return (
+                    <article
+                      className={`review-action-row${stalled ? ' review-action-stalled' : ''}`}
+                      key={action.id}
+                    >
+                      <div className="review-action-copy">
+                        <strong>{action.title}</strong>
+                        {/* The status is an enum and reads better capitalised;
                           the Goal title is the owner's own sentence and must
                           reach the screen exactly as it was written. They were
                           sharing one element, so "Ship the private beta to ten
                           invited people." was being displayed as title case. */}
-                      <span>
-                        {action.goalTitle ?? 'Unlinked action'} ·{' '}
-                        <span className="enum-label">{action.status.replace('_', ' ')}</span>
+                        <span>
+                          {action.goalTitle ?? 'Unlinked action'} ·{' '}
+                          <span className="enum-label">{action.status.replace('_', ' ')}</span>
+                        </span>
+                      </div>
+                      {/* The age is the record. It is what lets work stay open
+                        without a decision without that being silent. */}
+                      <span
+                        className={`review-carry${stalled ? ' review-carry-stalled' : ''}`}
+                        title={
+                          action.weeksCarried
+                            ? `Open through ${action.weeksCarried} completed ${
+                                action.weeksCarried === 1 ? 'review' : 'reviews'
+                              }`
+                            : 'Created since your last review'
+                        }
+                      >
+                        {carriedLabel(action.weeksCarried)}
                       </span>
-                    </div>
-                    <select
-                      value={decision.resolution}
-                      aria-label={`Decision for ${action.title}`}
-                      onChange={(event) => {
-                        const resolution = event.target.value as DraftResolution;
-                        updateDecision(action.id, {
-                          resolution,
-                          priority: ['done', 'dropped'].includes(resolution)
-                            ? false
-                            : decision.priority,
-                        });
-                      }}
-                    >
-                      <option value="unset">Decide what happens</option>
-                      {Object.entries(resolutionLabels).map(([value, label]) => (
-                        <option key={value} value={value}>
-                          {label}
-                        </option>
-                      ))}
-                    </select>
-                    {['blocked', 'dropped'].includes(decision.resolution) ? (
-                      <input
-                        className="review-reason"
-                        value={decision.reason ?? ''}
-                        onChange={(event) =>
-                          updateDecision(action.id, { reason: event.target.value || null })
-                        }
-                        placeholder={
-                          decision.resolution === 'blocked'
-                            ? 'What is blocking it?'
-                            : 'Why drop it?'
-                        }
-                        aria-label={`Reason for ${action.title}`}
-                        maxLength={500}
-                      />
-                    ) : null}
-                    <label
-                      className={`review-priority${canPrioritize ? '' : ' review-priority-disabled'}`}
-                    >
-                      <input
-                        type="checkbox"
-                        checked={decision.priority}
-                        disabled={!canPrioritize || (!decision.priority && priorityCount >= 5)}
-                        onChange={(event) =>
-                          updateDecision(action.id, { priority: event.target.checked })
-                        }
-                      />
-                      <Flag size={14} aria-hidden="true" />
-                      Priority
-                    </label>
-                  </article>
-                );
-              })}
-            </div>
-          ) : (
-            <div className="review-clear-state">
-              <CheckCircle2 size={22} aria-hidden="true" />
-              <div>
-                <h3>Nothing unresolved</h3>
-                <p>You can still record a reflection and close the week.</p>
+                      <select
+                        value={decision.resolution}
+                        aria-label={`Decision for ${action.title}`}
+                        onChange={(event) => {
+                          const resolution = event.target.value as DraftResolution;
+                          updateDecision(action.id, {
+                            resolution,
+                            priority: ['done', 'dropped'].includes(resolution)
+                              ? false
+                              : decision.priority,
+                          });
+                        }}
+                      >
+                        <option value="unset">Decide what happens</option>
+                        {Object.entries(resolutionLabels).map(([value, label]) => (
+                          <option key={value} value={value}>
+                            {label}
+                          </option>
+                        ))}
+                      </select>
+                      {['blocked', 'dropped'].includes(decision.resolution) ? (
+                        <input
+                          className="review-reason"
+                          value={decision.reason ?? ''}
+                          onChange={(event) =>
+                            updateDecision(action.id, { reason: event.target.value || null })
+                          }
+                          placeholder={
+                            decision.resolution === 'blocked'
+                              ? 'What is blocking it?'
+                              : 'Why drop it?'
+                          }
+                          aria-label={`Reason for ${action.title}`}
+                          maxLength={500}
+                        />
+                      ) : null}
+                      <label
+                        className={`review-priority${canPrioritize ? '' : ' review-priority-disabled'}`}
+                      >
+                        <input
+                          type="checkbox"
+                          checked={decision.priority}
+                          disabled={!canPrioritize || (!decision.priority && priorityCount >= 5)}
+                          onChange={(event) =>
+                            updateDecision(action.id, { priority: event.target.checked })
+                          }
+                        />
+                        <Flag size={14} aria-hidden="true" />
+                        Priority
+                      </label>
+                    </article>
+                  );
+                })}
               </div>
-            </div>
-          )}
+            ) : (
+              <div className="review-clear-state">
+                <CheckCircle2 size={22} aria-hidden="true" />
+                <div>
+                  <h3>Nothing unresolved</h3>
+                  <p>You can still record a reflection and close the week.</p>
+                </div>
+              </div>
+            )}
+          </CollapsibleSection>
 
           <div className="review-reflection">
             <label htmlFor="weekly-reflection">What should you remember from this week?</label>

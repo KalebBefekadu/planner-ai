@@ -7,6 +7,11 @@ import type { CoachingIntensity } from '@/lib/coaching';
 import { dateInTimezone } from '@/lib/date';
 import { executeOperation, OperationFailure } from '@/lib/operations';
 import { currentLongReviewPeriod, type LongReviewPeriod } from '@/lib/reviews/periods';
+import {
+  countCheckpointsSince,
+  FINISHED_LIST_LIMIT,
+  WEEKLY_CHECKPOINT_WINDOW,
+} from '@/lib/reviews/checkpoints';
 import { parsePersistedReviewProposal, type ResolvedReviewProposal } from '@/lib/review-proposals';
 import { createClient } from '@/lib/supabase/server';
 
@@ -17,6 +22,25 @@ export type WeeklyReviewAction = {
   version: number;
   scheduledOn: string | null;
   horizonStartsOn: string;
+  goalId: string | null;
+  goalTitle: string | null;
+  /**
+   * How many completed Weekly Reviews this Action has outlived. Zero means it
+   * has never been carried, which is a different statement from "one week old"
+   * -- an Action created on Friday has survived nothing by Sunday.
+   */
+  weeksCarried: number;
+};
+
+/**
+ * What closed. The Review has never shown this, and it is the first thing the
+ * week is opened to find out.
+ */
+export type WeeklyReviewFinishedAction = {
+  id: string;
+  title: string;
+  completedAt: string;
+  goalId: string | null;
   goalTitle: string | null;
 };
 
@@ -26,6 +50,15 @@ export type WeeklyReviewData = {
   timezone: string;
   coachingIntensity: CoachingIntensity;
   actions: WeeklyReviewAction[];
+  finished: WeeklyReviewFinishedAction[];
+  /**
+   * The moment the last week was closed. Completions are counted from here
+   * rather than from Monday, so a fortnight with one review reports fourteen
+   * days of work instead of hiding seven of them.
+   */
+  finishedSince: string;
+  /** True when that boundary is the calendar week because no Review exists yet. */
+  finishedSinceIsFallback: boolean;
   recentReviews: Array<{
     id: string;
     completedAt: string;
@@ -156,67 +189,111 @@ async function reviewClient() {
 export async function getWeeklyReviewData(): Promise<WeeklyReviewData> {
   const { supabase, workspaceId, timezone, weekStartsOn, coachingIntensity } = await reviewClient();
   const { startsOn, endsOn } = currentWeek(timezone, weekStartsOn);
+
+  // Every completed Weekly Review, most recent first. Two things are derived
+  // from this one list, and both are the reason it is read before anything
+  // else: where the "finished" window starts, and how many checkpoints each
+  // open Action has outlived.
+  //
+  // The obvious source for that second number is action_schedule_history, and
+  // it is the wrong one. Those rows are written per submitted decision, so the
+  // moment the Review stops demanding a decision on every item the count
+  // silently stops counting. Checkpoints are a property of the week, not of
+  // what the person did in it.
+  const checkpointsResult = await supabase
+    .from('reviews')
+    .select('completed_at')
+    .eq('workspace_id', workspaceId)
+    .eq('kind', 'weekly')
+    .eq('status', 'completed')
+    .order('completed_at', { ascending: false })
+    .limit(WEEKLY_CHECKPOINT_WINDOW);
+  if (checkpointsResult.error) throw new Error('Unable to load Weekly Review.');
+  const checkpoints = (checkpointsResult.data ?? []).map((row) => String(row.completed_at));
+  const finishedSinceIsFallback = checkpoints.length === 0;
+  const finishedSince = finishedSinceIsFallback ? `${startsOn}T00:00:00.000Z` : checkpoints[0];
+
   const unfinished =
-    'id,title,status,version,scheduled_on,planning_horizons!inner(kind,starts_on),goals(title)';
-  const [weekHorizonResult, scheduledIntoWeekResult, reviewsResult, proposalResult, jobResult] =
-    await Promise.all([
-      supabase
-        .from('actions')
-        .select(unfinished)
-        .eq('workspace_id', workspaceId)
-        .eq('planning_horizons.kind', 'week')
-        .lte('planning_horizons.starts_on', endsOn)
-        .in('status', ['open', 'in_progress', 'blocked'])
-        .is('archived_at', null)
-        .is('trashed_at', null)
-        .order('scheduled_on'),
-      // Work planned at a longer horizon and scheduled into these seven days
-      // is unfinished work of this week. This list and the Operation's own
-      // eligibility rule have to agree exactly -- the Operation rejects a
-      // decision set that is missing an eligible Action or names an
-      // ineligible one -- so the two predicates are deliberately identical.
-      supabase
-        .from('actions')
-        .select(unfinished)
-        .eq('workspace_id', workspaceId)
-        .neq('planning_horizons.kind', 'week')
-        .gte('scheduled_on', startsOn)
-        .lte('scheduled_on', endsOn)
-        .in('status', ['open', 'in_progress', 'blocked'])
-        .is('archived_at', null)
-        .is('trashed_at', null)
-        .order('scheduled_on'),
-      supabase
-        .from('reviews')
-        .select('id,completed_at,reflection_markdown,review_action_items(priority)')
-        .eq('workspace_id', workspaceId)
-        .eq('kind', 'weekly')
-        .eq('status', 'completed')
-        .order('completed_at', { ascending: false })
-        .limit(8),
-      supabase
-        .from('review_ai_proposals')
-        .select('id,payload,model_id,prompt_version,created_at')
-        .eq('workspace_id', workspaceId)
-        .eq('kind', 'weekly')
-        .eq('starts_on', startsOn)
-        .eq('status', 'active')
-        .order('created_at', { ascending: false })
-        .limit(1)
-        .maybeSingle(),
-      supabase
-        .from('ai_jobs')
-        .select('id,status,error_code,created_at')
-        .eq('operation', 'review_analysis')
-        .eq('source_review_kind', 'weekly')
-        .eq('source_starts_on', startsOn)
-        .order('created_at', { ascending: false })
-        .limit(1)
-        .maybeSingle(),
-    ]);
+    'id,title,status,version,scheduled_on,created_at,planning_horizons!inner(kind,starts_on),goals(id,title)';
+  const [
+    weekHorizonResult,
+    scheduledIntoWeekResult,
+    finishedResult,
+    reviewsResult,
+    proposalResult,
+    jobResult,
+  ] = await Promise.all([
+    supabase
+      .from('actions')
+      .select(unfinished)
+      .eq('workspace_id', workspaceId)
+      .eq('planning_horizons.kind', 'week')
+      .lte('planning_horizons.starts_on', endsOn)
+      .in('status', ['open', 'in_progress', 'blocked'])
+      .is('archived_at', null)
+      .is('trashed_at', null)
+      .order('scheduled_on'),
+    // Work planned at a longer horizon and scheduled into these seven days
+    // is unfinished work of this week. This list and the Operation's own
+    // eligibility rule have to agree exactly -- the Operation rejects a
+    // decision set that is missing an eligible Action or names an
+    // ineligible one -- so the two predicates are deliberately identical.
+    supabase
+      .from('actions')
+      .select(unfinished)
+      .eq('workspace_id', workspaceId)
+      .neq('planning_horizons.kind', 'week')
+      .gte('scheduled_on', startsOn)
+      .lte('scheduled_on', endsOn)
+      .in('status', ['open', 'in_progress', 'blocked'])
+      .is('archived_at', null)
+      .is('trashed_at', null)
+      .order('scheduled_on'),
+    // What closed since the last checkpoint. Ordered by completion rather
+    // than by horizon: an Action planned in June and finished on Tuesday is
+    // part of this week's work, and its horizon still says June.
+    supabase
+      .from('actions')
+      .select('id,title,completed_at,goals(id,title)')
+      .eq('workspace_id', workspaceId)
+      .eq('status', 'done')
+      .gte('completed_at', finishedSince)
+      .is('archived_at', null)
+      .is('trashed_at', null)
+      .order('completed_at', { ascending: true })
+      .limit(FINISHED_LIST_LIMIT),
+    supabase
+      .from('reviews')
+      .select('id,completed_at,reflection_markdown,review_action_items(priority)')
+      .eq('workspace_id', workspaceId)
+      .eq('kind', 'weekly')
+      .eq('status', 'completed')
+      .order('completed_at', { ascending: false })
+      .limit(8),
+    supabase
+      .from('review_ai_proposals')
+      .select('id,payload,model_id,prompt_version,created_at')
+      .eq('workspace_id', workspaceId)
+      .eq('kind', 'weekly')
+      .eq('starts_on', startsOn)
+      .eq('status', 'active')
+      .order('created_at', { ascending: false })
+      .limit(1)
+      .maybeSingle(),
+    supabase
+      .from('ai_jobs')
+      .select('id,status,error_code,created_at')
+      .eq('operation', 'review_analysis')
+      .eq('source_review_kind', 'weekly')
+      .eq('source_starts_on', startsOn)
+      .order('created_at', { ascending: false })
+      .limit(1)
+      .maybeSingle(),
+  ]);
   if (
     weekHorizonResult.error ||
     scheduledIntoWeekResult.error ||
+    finishedResult.error ||
     reviewsResult.error ||
     proposalResult.error ||
     jobResult.error
@@ -234,9 +311,11 @@ export async function getWeeklyReviewData(): Promise<WeeklyReviewData> {
     endsOn,
     timezone,
     coachingIntensity,
+    finishedSince,
+    finishedSinceIsFallback,
     actions: actionRows.map((action) => {
       const horizon = action.planning_horizons as unknown as { starts_on: string };
-      const goal = action.goals as unknown as { title: string } | null;
+      const goal = action.goals as unknown as { id: string; title: string } | null;
       return {
         id: action.id as string,
         title: action.title as string,
@@ -244,6 +323,18 @@ export async function getWeeklyReviewData(): Promise<WeeklyReviewData> {
         version: Number(action.version),
         scheduledOn: action.scheduled_on as string | null,
         horizonStartsOn: horizon.starts_on,
+        goalId: goal?.id ?? null,
+        goalTitle: goal?.title ?? null,
+        weeksCarried: countCheckpointsSince(checkpoints, String(action.created_at)),
+      };
+    }),
+    finished: (finishedResult.data ?? []).map((action) => {
+      const goal = action.goals as unknown as { id: string; title: string } | null;
+      return {
+        id: action.id as string,
+        title: action.title as string,
+        completedAt: String(action.completed_at),
+        goalId: goal?.id ?? null,
         goalTitle: goal?.title ?? null,
       };
     }),
