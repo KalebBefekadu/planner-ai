@@ -27,8 +27,6 @@ These are current facts, not approved destinations:
 | Surface               | Why it currently uses admin access                                           | Removal direction                                                                                                       |
 | --------------------- | ---------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------- |
 | Signup invite actions | Claims/releases an invite before a session exists.                           | Expose a narrowly validated pre-auth invite capability without table-wide admin access.                                 |
-| Note attachment route | Storage upload/download and recoverable metadata updates cross two services. | Implement reserve, upload, finalize, and reconcile with owner-scoped metadata writes and private Storage authorization. |
-| Note export route     | Reads approved attachment bytes from private Storage.                        | Authorize each object through the verified owner and a narrow Storage read capability.                                  |
 
 ## The restricted proposal-worker capability
 
@@ -64,13 +62,34 @@ half, which already proved its caller with `auth.uid()` and the verified
 Expiry, revocation and capability scope are still re-decided inside each
 function at the moment of execution rather than only at authentication.
 
+## Attachment reserve, upload, finalize, and reconcile
+
+Done. Uploading crossed two services with no record between them: the Storage
+object was written first and the metadata row second, so any failure after the
+upload left an object nothing pointed at. Deleting the object again only works
+when the process survives long enough to do it.
+
+A reservation is now written first, in `reserved` state, naming the exact object
+key the upload may write. The Storage insert policy grants that one key and
+nothing else -- deliberately narrower than the Workspace prefix the read policy
+uses. The upload happens, the row is finalized, and anything that fails in
+between leaves a reservation the purge job reconciles after a fifteen-minute
+grace period. Nothing is invisible.
+
+Metadata writes go through owner-scoped functions that derive the Workspace from
+`auth.uid()`; retention is decided in the database rather than sent by the
+caller. Reads use the person's own client against the Storage policy that
+already existed. The select policy hides reservations, so no reader can mistake
+one for an attachment.
+
 ## Removal order
 
 1. ~~Introduce the restricted worker capability and migrate the three proposal
    routes together so their policy does not drift.~~ Complete.
 2. ~~Remove the manual MCP admin client by routing verified actors through the
    shared Operation boundary.~~ Complete.
-3. Redesign attachment reserve/finalize/reconcile and migrate export reads.
+3. ~~Redesign attachment reserve/finalize/reconcile and migrate export reads.~~
+   Complete.
 4. Replace pre-auth invite administration with a narrowly reviewed capability.
 
 At every step, delete the matching exception from the executable inventory. The

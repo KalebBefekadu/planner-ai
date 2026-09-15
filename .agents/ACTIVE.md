@@ -2,23 +2,24 @@
 
 Roadmap stage: **2 - Workspace, Planner And Delivery Hardening**
 
-## Codex handoff ready: MCP token capability
+## Codex handoff ready: attachment storage capability
 
-- **Contract:** `.agents/tasks/mcp-token-capability.md`
-- **Branch:** `codex/mcp-actor-capability`
-- **Scope:** remove service-role access from `/api/mcp` by making the manual
-  token path prove its caller with the token hash, as the OAuth path already
-  proves its caller with a verified JWT.
-- **Writable paths:** the MCP route, one new migration, the scope-boundary
-  pgTAP file, generated types, the admin-boundary register and test, and
-  coordination documents named by the contract.
-- **Foundation:** proposal-worker handoff `896b805` remains ready for review.
-- **Handoff:** `.agents/handoffs/mcp-token-capability.md`
-- **Next:** review this branch, then redesign attachment reserve, upload,
-  finalize and reconcile, migrating the Note export read alongside it.
+- **Contract:** `.agents/tasks/attachment-storage-capability.md`
+- **Branch:** `codex/attachment-storage-capability`
+- **Scope:** model attachment upload as reserve, upload, finalize and
+  reconcile, and remove service-role access from the attachment and Note
+  export routes.
+- **Writable paths:** the two routes, the attachment purge job, the shared
+  availability helper, one new migration, one new pgTAP file, generated types,
+  the admin-boundary register and test, and coordination documents named by the
+  contract.
+- **Foundation:** MCP token handoff `4197601` remains ready for review.
+- **Handoff:** `.agents/handoffs/attachment-storage-capability.md`
+- **Next:** review this branch, then replace pre-auth invite administration
+  with a narrowly reviewed capability -- the last EH-01 exception.
 
-Three ordinary routes still hold the admin client: Note attachments, Note
-export, and signup invite actions. The register owns the removal order.
+One ordinary route still holds the admin client: signup invite actions, which
+claim and release an invite before any session exists.
 
 ## CI runs again, and integration itself is red
 
