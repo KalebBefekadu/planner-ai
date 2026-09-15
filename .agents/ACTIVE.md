@@ -2,28 +2,28 @@
 
 Roadmap stage: **2 - Workspace, Planner And Delivery Hardening**
 
-## Codex handoff ready: Workspace module boundaries
+## Codex handoff ready: Operation contract manifest
 
-- **Contract:** `.agents/tasks/workspace-module-boundaries.md`
-- **Branch:** `codex/workspace-module-boundaries`
-- **Scope:** first slice of EH-03. The pure state transitions behind the Notes
-  tree and the planner's horizon labels move into focused modules with tests;
-  no behaviour changes.
-- **Writable paths:** four new library modules, the two Workspace components,
-  the markdown editing module, `src/app/actions.ts`, and the matching unit
-  tests.
-- **Foundation:** EH-01 handoff `15ce786` remains ready for review, and the
-  attachment branch below it carries a Storage-policy fix found by running the
-  browser suite — read `.agents/handoffs/attachment-storage-capability.md`.
-- **Handoff:** `.agents/handoffs/workspace-module-boundaries.md`
-- **Next:** decide `/preview`. Removing it is the largest win left under EH-03
-  and the roadmap gates it on Workspace and Planner parity, which
-  `docs/status.md` does not record as met. That is a product call, not an
-  engineering one.
+- **Contract:** `.agents/tasks/operation-contract-manifest.md`
+- **Branch:** `codex/operation-contract-manifest`
+- **Scope:** first slice of EH-04. TypeScript and Postgres now prove they
+  expose the same Operation contract, in both CI jobs. No behaviour changes.
+- **Writable paths:** one generator script, the local database verifier, one
+  generated registry, one unit test, and coordination documents named by the
+  contract.
+- **Foundation:** the EH-03 handoff `ea30d7d` remains ready for review, and
+  below it the four EH-01 capability branches.
+- **Handoff:** `.agents/handoffs/operation-contract-manifest.md`
+- **Next:** two decisions, neither of them mine to take.
+  1. `/preview` — removing it is the largest win left under EH-03 and the
+     roadmap gates it on Workspace and Planner parity that `docs/status.md`
+     does not record as met. A product call.
+  2. The `dispatch_trusted_operation` chain — seven rename-and-wrap functions
+     deep, touched by every Operation. The large half of EH-04 and its own
+     contract.
 
-**EH-01 is met** and its four capability branches are ready for review. EH-03 is
-started, not closed: `/preview` is blocked on the parity gates above, and the
-Server Actions half is its own contract.
+Six branches are now stacked and unreviewed. EH-01 is met; EH-03 and EH-04 are
+started, not closed.
 
 ## CI runs again, and integration itself is red
 
