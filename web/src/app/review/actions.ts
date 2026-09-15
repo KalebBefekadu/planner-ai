@@ -88,7 +88,12 @@ export type ReviewAnalysisJobView = {
 export type WeeklyReviewDecision = {
   actionId: string;
   expectedVersion: number;
-  resolution: 'done' | 'next_week' | 'blocked' | 'dropped' | 'left_overdue';
+  /**
+   * 'keep' means "I looked at this and it stays": it records the decision and
+   * may carry a priority, but changes nothing about the Action. It is what
+   * makes a priority attachable to work that needs no other answer.
+   */
+  resolution: 'done' | 'next_week' | 'keep' | 'blocked' | 'dropped' | 'left_overdue';
   reason: string | null;
   priority: boolean;
 };

@@ -938,7 +938,11 @@ export const operationDefinitions = {
     output: captureFileActionOutput,
   },
   'review.complete-weekly.v1': {
-    summary: 'Complete Weekly Review with an explicit decision for every unfinished Action.',
+    // Widened in 20260915090000 rather than versioned: the decision set went
+    // from exhaustive to "everything past three checkpoints", and 'keep' was
+    // added to the resolutions. Both are relaxations, so every payload that
+    // was valid before is still valid and still does the same thing.
+    summary: 'Complete Weekly Review, deciding the work that has stopped moving.',
     risk: 'medium',
     exposure: ['ui', 'chat'],
     reversible: true,
@@ -953,7 +957,14 @@ export const operationDefinitions = {
               .object({
                 actionId: id,
                 expectedVersion: version,
-                resolution: z.enum(['done', 'next_week', 'blocked', 'dropped', 'left_overdue']),
+                resolution: z.enum([
+                  'done',
+                  'next_week',
+                  'keep',
+                  'blocked',
+                  'dropped',
+                  'left_overdue',
+                ]),
                 reason: z.string().trim().max(500).nullable(),
                 priority: z.boolean(),
               })

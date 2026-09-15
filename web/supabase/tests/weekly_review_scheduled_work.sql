@@ -1,11 +1,11 @@
 begin;
-select plan(11);
+select plan(10);
 
 -- Weekly Review used to consider only week-horizon Actions. Work planned at a
 -- longer horizon and scheduled into the week under review -- which is exactly
--- what Today commits a person to -- was invisible, so the week could close
--- reporting nothing unresolved while that Action rolled forward with no
--- decision recorded against it.
+-- what Today commits a person to -- was invisible to it entirely: the week
+-- could not decide that work even when the person wanted to, and it could not
+-- be reported as part of the week.
 
 insert into auth.users (
   id, instance_id, aud, role, email, encrypted_password, email_confirmed_at,
@@ -42,25 +42,11 @@ select lives_ok(
   'a month-horizon Action is scheduled outside the week under review'
 );
 
--- Omitting the scheduled monthly Action is the silent rollover this prevents.
-select throws_ok(
-  $$select public.execute_ui_operation(
-    'review.complete-weekly.v1',
-    jsonb_build_object(
-      'startsOn', '2026-08-10', 'endsOn', '2026-08-16',
-      'reflectionMarkdown', '',
-      'decisions', jsonb_build_array(
-        jsonb_build_object(
-          'actionId', (select id from public.actions where title = 'Weekly work'),
-          'expectedVersion', 1, 'resolution', 'done', 'reason', null, 'priority', false
-        )
-      )
-    ),
-    'scheduled-review-incomplete-0001'
-  )$$,
-  'P0001', 'review_action_set_changed',
-  'a week cannot close while work scheduled into it has no decision'
-);
+-- Whether that work may be OMITTED is no longer this file's question: since
+-- 20260915090000 only work that has outlived three checkpoints must be
+-- decided, and weekly_review_keeping_is_free.sql covers that rule. What this
+-- file still pins is the other half, which did not change -- the week may only
+-- decide work it actually touches.
 
 -- Work scheduled outside the week is equally not this week's business.
 select throws_ok(

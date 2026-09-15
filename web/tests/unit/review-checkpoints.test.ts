@@ -81,3 +81,25 @@ describe('how much of the week is shown', () => {
     expect(bandOpenByDefault('headlines')).toBe(false);
   });
 });
+
+describe('what closing a week costs', () => {
+  // The invariant with a number attached: the work of closing a week is set by
+  // how much has stalled, not by how much is open. A backlog that grows does
+  // not make the ritual more expensive.
+  function decisionsRequired(weeksCarriedPerAction: readonly number[]) {
+    return weeksCarriedPerAction.filter((weeks) => isStalled(weeks)).length;
+  }
+
+  it('does not scale with the size of the backlog', () => {
+    const smallWeek = [0, 0, 1, 2, 1];
+    const hugeWeek = Array.from({ length: 150 }, (_, index) => index % 3);
+
+    expect(decisionsRequired(smallWeek)).toBe(0);
+    expect(decisionsRequired(hugeWeek)).toBe(0);
+  });
+
+  it('charges only for work that has stopped moving', () => {
+    const week = [0, 1, 2, 3, 4, 9, 2, 0];
+    expect(decisionsRequired(week)).toBe(3);
+  });
+});

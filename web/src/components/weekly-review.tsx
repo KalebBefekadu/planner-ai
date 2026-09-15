@@ -104,15 +104,22 @@ function groupFinishedByGoal(finished: readonly WeeklyReviewFinishedAction[]) {
 }
 
 type Resolution = WeeklyReviewDecision['resolution'];
-// A decision nobody made is not a decision. The list starts unset so that
-// closing the week requires saying what happens to each unfinished Action --
-// defaulting every row to "leave overdue" made silent rollover the easiest
-// path through a screen whose whole claim is that it prevents one.
+// A decision nobody made is not a decision -- but that only made forcing one on
+// every row the right answer while the week was the only container. An Action
+// that rolled over unremarked left no trace anywhere, so the decision was the
+// only thing standing between the owner and an invisible backlog.
+//
+// The age beside each row is that trace now, so the guard moves rather than
+// disappearing: an unset row is simply left out of the payload and stays open,
+// and only work past three checkpoints still has to be answered before the week
+// can close. What is gone is the tax on the nine rows out of ten where the
+// answer was always "yes, obviously, still doing that".
 type DraftResolution = Resolution | 'unset';
 
 const resolutionLabels: Record<Resolution, string> = {
   done: 'Completed',
   next_week: 'Move to next week',
+  keep: 'Keep it open',
   blocked: 'Blocked',
   dropped: 'Drop intentionally',
   left_overdue: 'Leave overdue',
@@ -198,8 +205,11 @@ export function WeeklyReview({ data }: { data: WeeklyReviewData }) {
     }));
   }
 
-  const undecidedCount = Object.values(decisions).filter(
-    (decision) => decision.resolution === 'unset'
+  // Only work that has stopped moving still has to be answered. The operation
+  // enforces the same rule, against the same threshold, so a screen that let
+  // one through would be refused rather than silently accepted.
+  const undecidedCount = data.actions.filter(
+    (action) => isStalled(action.weeksCarried) && decisions[action.id]?.resolution === 'unset'
   ).length;
   const missingReason = Object.values(decisions).some(
     (decision) => ['blocked', 'dropped'].includes(decision.resolution) && !decision.reason?.trim()
@@ -452,7 +462,9 @@ export function WeeklyReview({ data }: { data: WeeklyReviewData }) {
                           });
                         }}
                       >
-                        <option value="unset">Decide what happens</option>
+                        <option value="unset">
+                          {stalled ? 'Decide what happens' : 'Stays open'}
+                        </option>
                         {Object.entries(resolutionLabels).map(([value, label]) => (
                           <option key={value} value={value}>
                             {label}
@@ -482,9 +494,20 @@ export function WeeklyReview({ data }: { data: WeeklyReviewData }) {
                           type="checkbox"
                           checked={decision.priority}
                           disabled={!canPrioritize || (!decision.priority && priorityCount >= 5)}
-                          onChange={(event) =>
-                            updateDecision(action.id, { priority: event.target.checked })
-                          }
+                          onChange={(event) => {
+                            const priority = event.target.checked;
+                            // A row with no decision is left out of the payload
+                            // entirely, and the priority flag rides on the
+                            // decision. Naming something a priority is itself
+                            // the statement that it stays, so record it as one.
+                            updateDecision(action.id, {
+                              priority,
+                              resolution:
+                                priority && decision.resolution === 'unset'
+                                  ? 'keep'
+                                  : decision.resolution,
+                            });
+                          }}
                         />
                         <Flag size={14} aria-hidden="true" />
                         Priority
@@ -517,7 +540,10 @@ export function WeeklyReview({ data }: { data: WeeklyReviewData }) {
           <div className="review-commit">
             <div>
               <Flag size={15} aria-hidden="true" />
-              <span>{priorityCount} of 5 priorities selected</span>
+              <span>
+                {priorityCount} of 5 priorities selected
+                {data.actions.length ? ` · ${data.actions.length} staying open` : ''}
+              </span>
             </div>
             <button
               className="btn-primary"
@@ -531,8 +557,9 @@ export function WeeklyReview({ data }: { data: WeeklyReviewData }) {
           {undecidedCount ? (
             <p className="review-validation" role="alert">
               <AlertCircle size={14} aria-hidden="true" /> {undecidedCount}{' '}
-              {undecidedCount === 1 ? 'Action still needs' : 'Actions still need'} a decision before
-              the week can close.
+              {undecidedCount === 1 ? 'Action has' : 'Actions have'} been carried for three weeks or
+              more and {undecidedCount === 1 ? 'needs' : 'need'} an answer before the week can
+              close. Everything else can stay open.
             </p>
           ) : missingReason ? (
             <p className="review-validation" role="alert">
