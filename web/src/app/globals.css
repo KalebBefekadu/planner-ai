@@ -3507,7 +3507,7 @@ button:disabled {
 }
 .collapsible-chevron {
   flex: none;
-  color: var(--ink-faint);
+  color: var(--muted);
   transition: transform 160ms ease;
 }
 .collapsible-trigger[aria-expanded='true'] .collapsible-chevron {
@@ -3522,7 +3522,7 @@ button:disabled {
   font-weight: 700;
 }
 .collapsible-eyebrow {
-  color: var(--ink-faint);
+  color: var(--muted);
   font-size: 11px;
   font-weight: 700;
   letter-spacing: 0.08em;
@@ -3540,7 +3540,7 @@ button:disabled {
 }
 .collapsible-shut-summary {
   flex: none;
-  color: var(--ink-faint);
+  color: var(--muted);
   font-size: var(--fs-label);
 }
 .collapsible-body {
@@ -3575,7 +3575,7 @@ button:disabled {
 }
 .review-density-label {
   margin-right: 2px;
-  color: var(--ink-faint);
+  color: var(--muted);
   font-size: 11px;
   font-weight: 700;
   letter-spacing: 0.08em;
@@ -3601,14 +3601,14 @@ button:disabled {
   color: var(--brand-strong);
 }
 .review-density-hint {
-  color: var(--ink-faint);
+  color: var(--muted);
   font-size: var(--fs-label);
 }
 
 .review-window-note,
 .review-empty-note {
   margin: 10px 0 0;
-  color: var(--ink-faint);
+  color: var(--muted);
   font-size: var(--fs-label);
 }
 .review-shut-note {
@@ -3647,7 +3647,7 @@ button:disabled {
 }
 .review-finished-list time {
   flex: none;
-  color: var(--ink-faint);
+  color: var(--muted);
   font-size: 11.5px;
   font-variant-numeric: tabular-nums;
 }
@@ -3744,7 +3744,7 @@ button:disabled {
   padding: 1px 9px;
   border: 1px solid var(--line);
   border-radius: 999px;
-  color: var(--ink-faint);
+  color: var(--muted);
   font-size: 11.5px;
   font-variant-numeric: tabular-nums;
   white-space: nowrap;
