@@ -2,23 +2,19 @@
 
 Roadmap stage: **2 - Workspace, Planner And Delivery Hardening**
 
-## Codex handoff ready: critical path coverage
+## Codex handoff ready: preview deferred screens
 
-- **Contract:** `.agents/tasks/critical-path-coverage.md`
-- **Branch:** `codex/critical-path-coverage`
-- **Scope:** the last stack-hardening item. One coverage floor, on the
-  Operation execution path, enforced in CI. **The stack hardening set is
-  complete.**
-- **Writable paths:** the vitest config, the package manifest and lockfile, the
-  CI workflow, one new test, and coordination documents named by the contract.
-- **Foundation:** everything below is pushed and open as PRs #243-#249.
-- **Handoff:** `.agents/handoffs/critical-path-coverage.md`
-- **Next:** delete `/preview` (the owner has confirmed the parity gates are
-  met), then replace the `dispatch_trusted_operation` chain.
-
-Eight branches are stacked. EH-01 is met and the stack hardening set is
-complete; EH-03 and EH-04 are started, not closed; EH-06 and EH-07 are
-untouched.
+- **Contract:** `.agents/tasks/preview-deferred-screens.md`
+- **Branch:** `codex/remove-preview`
+- **Scope:** increment 2 of the `/preview` retirement. The six deferred screens
+  are gone; the route stays. 996 lines removed, no production file touched.
+- **Foundation:** everything below is pushed and open as PRs #243-#250.
+- **Handoff:** `.agents/handoffs/preview-deferred-screens.md`
+- **Blocked:** increment 5, deleting the route, needs increment 3 first — six
+  unbuilt features under five tickets (WS-01, WS-02 x2, WS-03, WS-04). That is
+  product work, not cleanup, and the audit says each keeps its Preview screen
+  alive as the reference until its port lands.
+- **Next:** the `dispatch_trusted_operation` chain.
 
 ## CI runs again, and integration itself is red
 

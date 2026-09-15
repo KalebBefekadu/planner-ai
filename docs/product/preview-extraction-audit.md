@@ -251,9 +251,12 @@ capture-composer affordances (attach, `@`-mention). Move the property strip into
 without a working destination or explicit future specification", and nothing else can be deleted
 until it holds.*
 
-**Increment 2 — delete only the four deferred screens.**
-Remove `TableView`, `GraphView`, `GraphNode`, `CanvasView`, `WorkspaceTabs`, `ShareState` and
-their CSS. `/preview` keeps working; the shell and every MVP surface stay.
+**Increment 2 — delete only the four deferred screens. COMPLETE.**
+`TableView`, `GraphView`, `GraphNode`, `CanvasView`, `WorkspaceTabs` and `ShareState` are gone,
+with 584 lines of their CSS, the `WorkspaceMode` state that switched between them, the sidebar
+`Views` section and the top-bar `Share` button. 996 lines removed; `/preview` is 9,115 lines.
+The route keeps working, the shell and every MVP surface stay, and the reference captures from
+Increment 1 are now the only record of those six patterns -- which is what they were made for.
 *Precondition: Increment 1 complete and the screenshots merged. `npx vitest run` green
 (`preview-isolation` will need its import list unchanged — it is).*
 
