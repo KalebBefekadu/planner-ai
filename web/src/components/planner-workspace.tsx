@@ -203,6 +203,39 @@ export function PlannerWorkspace({
     ));
   }
 
+  /**
+   * Ask for a first list. It arrives in the Action Inbox as a proposal batch --
+   * nothing is written until the owner accepts it, line by line.
+   */
+  function suggestBreakdown(item: GoalItem) {
+    setError(null);
+    setNotice(null);
+    startTransition(async () => {
+      try {
+        const response = await fetch('/api/initiative-breakdown', {
+          method: 'POST',
+          headers: { 'content-type': 'application/json' },
+          body: JSON.stringify({ goalId: item.id }),
+        });
+        const body = (await response.json().catch(() => null)) as {
+          data?: { proposed?: number };
+          detail?: string;
+        } | null;
+        if (!response.ok) {
+          throw new Error(body?.detail ?? 'The breakdown could not be produced.');
+        }
+        const proposed = body?.data?.proposed ?? 0;
+        setNotice(
+          proposed > 0
+            ? `${proposed} suggested ${proposed === 1 ? 'task' : 'tasks'} for ${item.content} are waiting in your Action inbox. Nothing is saved until you accept them.`
+            : `No tasks were suggested for ${item.content}. It is ready to use as it is.`
+        );
+      } catch (caught) {
+        setError(caught instanceof Error ? caught.message : messageFor(caught));
+      }
+    });
+  }
+
   function createItem() {
     if (!composer) return;
     setError(null);
@@ -550,6 +583,16 @@ export function PlannerWorkspace({
                 <ChevronRight size={15} />
               </button>
             </span>
+          ) : null}
+          {initialData?.aiEnabled && item.kind === 'initiative' ? (
+            <button
+              className="text-button"
+              type="button"
+              onClick={() => suggestBreakdown(item)}
+              disabled={isPending}
+            >
+              Suggest tasks
+            </button>
           ) : null}
           {childType ? (
             <button

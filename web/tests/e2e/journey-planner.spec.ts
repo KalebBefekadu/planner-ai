@@ -294,3 +294,48 @@ test('work nests, and the nesting is how a task keeps its context', async ({ wor
   await page.getByRole('button', { name: 'Outdent wait to hear back' }).click();
   await expect(page.locator('.plan-item.plan-depth-1')).toHaveCount(0);
 });
+
+test('a breakdown is an offer, and an initiative works without one', async ({ workspace }) => {
+  const { page } = workspace;
+
+  await goTo(page, '/planner');
+  await page.getByRole('button', { name: 'Add yearly goal' }).last().click();
+  const composer = page.locator('section.goal-composer');
+  await expect(composer).toBeVisible();
+  await composer.locator('textarea').fill('Real estate agent business');
+  await composer.locator('input[type=checkbox]').check();
+  await composer.getByRole('button', { name: 'Save initiative' }).click();
+  await expect(page.getByText('Real estate agent business is now an initiative')).toBeVisible();
+
+  // A second yearly item, this time an outcome, to pin that the offer is tied
+  // to the kind rather than to the horizon.
+  await page.getByRole('button', { name: 'Add yearly goal' }).last().click();
+  await expect(composer).toBeVisible();
+  await composer.locator('textarea').fill('Steady income by December');
+  await composer.getByRole('button', { name: /^Save yearly goal/ }).click();
+  await expect(page.getByText('Yearly goal added to your plan.')).toBeVisible();
+
+  const initiative = page
+    .locator('.plan-item')
+    .filter({ hasText: 'Real estate agent business' })
+    .first();
+  const outcome = page.locator('.plan-item').filter({ hasText: 'Steady income by' }).first();
+  await expect(initiative.getByRole('button', { name: 'Suggest tasks' })).toBeVisible();
+  await expect(outcome.getByRole('button', { name: 'Suggest tasks' })).toHaveCount(0);
+
+  // The invariant the offer has to respect: an initiative with an empty list is
+  // fully usable, and nothing about the week depends on a provider.
+  await goTo(page, '/');
+  const today = page.getByRole('region', { name: 'New Action' });
+  await today.getByRole('textbox', { name: 'What needs doing' }).fill('Write the listing script');
+  await today
+    .getByRole('combobox', { name: 'Goal' })
+    .selectOption({ label: 'Real estate agent business' });
+  await today.getByRole('button', { name: 'Add Action' }).click();
+  await expect(today).toContainText('"Write the listing script" is saved');
+
+  await goTo(page, '/review');
+  await expect(
+    page.getByRole('button', { name: /^Initiative Real estate agent business/ })
+  ).toBeVisible();
+});

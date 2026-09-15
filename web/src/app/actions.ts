@@ -71,6 +71,8 @@ export type GoalsData = {
   currentPeriods: Record<HorizonKind, PeriodBounds>;
   localDate: string;
   weekStartsOn: number;
+  /** Whether a breakdown can be offered. An initiative works without one. */
+  aiEnabled?: boolean;
 };
 export type ActionTemplateView = {
   id: string;
@@ -158,7 +160,7 @@ async function requireWorkspaceId() {
   const { supabase, user } = await requireUser();
   const { data, error } = await supabase
     .from('workspaces')
-    .select('id,timezone,week_starts_on')
+    .select('id,timezone,week_starts_on,ai_enabled')
     .eq('owner_user_id', user.id)
     .single();
   if (error || !data) throw new Error('Unable to load your workspace.');
@@ -168,6 +170,7 @@ async function requireWorkspaceId() {
     workspaceId: data.id as string,
     timezone: data.timezone as string,
     weekStartsOn: Number(data.week_starts_on),
+    aiEnabled: Boolean(data.ai_enabled),
   };
 }
 
@@ -299,7 +302,7 @@ export async function getGoalsHierarchy(): Promise<GoalsData | null> {
   if (!vision) return null;
 
   if (canonicalEnabled) {
-    const { supabase, workspaceId, timezone, weekStartsOn } = await requireWorkspaceId();
+    const { supabase, workspaceId, timezone, weekStartsOn, aiEnabled } = await requireWorkspaceId();
     /* Paged: PostgREST caps a response at max_rows without saying so, and a
        plan that has accumulated for a few years passes a thousand rows without
        being remarkable. Truncated, the screen would show part of the plan as
@@ -390,6 +393,9 @@ export async function getGoalsHierarchy(): Promise<GoalsData | null> {
       weekly: actions.filter((action) => action.planning_horizons.kind === 'week').map(mapAction),
       localDate,
       weekStartsOn,
+      // Whether to offer a breakdown at all. An initiative has to be fully
+      // usable with an empty list, so this hides an offer rather than a step.
+      aiEnabled,
       currentPeriods: {
         year: periodBounds('year', localDate, weekStartsOn),
         quarter: periodBounds('quarter', localDate, weekStartsOn),
