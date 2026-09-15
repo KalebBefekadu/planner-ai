@@ -23,7 +23,7 @@ import {
   type ReviewEvidence,
   type ResolvedReviewProposal,
 } from '@/lib/review-proposals';
-import { createAdminClient } from '@/lib/supabase/admin';
+import { completeAiJob, failAiJob, startAiJob } from '@/lib/ai/job-status';
 import { createClient } from '@/lib/supabase/server';
 
 const MAX_JSON_BYTES = 2_000;
@@ -45,6 +45,7 @@ function persistencePayload(proposal: ResolvedReviewProposal) {
 
 export async function POST(request: Request) {
   let context: RequestContext | undefined;
+  let supabase: Awaited<ReturnType<typeof createClient>> | undefined;
   let jobId: string | null = null;
   let providerIdentity = {
     provider: GROQ_PROVIDER,
@@ -57,7 +58,7 @@ export async function POST(request: Request) {
       throw new ApiProblem(409, 'canonical_model_required', 'AI Review is not ready yet.');
     }
     const input = await readJson(request, inputSchema, MAX_JSON_BYTES);
-    const supabase = await createClient();
+    supabase = await createClient();
     const {
       data: { user },
     } = await supabase.auth.getUser();
@@ -103,30 +104,17 @@ export async function POST(request: Request) {
     if (actionsResult.error || goalsResult.error || reviewsResult.error) {
       throw new ApiProblem(503, 'review_context_unavailable', 'Review evidence is unavailable.');
     }
-    const admin = createAdminClient();
-    const { data: job, error: jobError } = await admin
-      .from('ai_jobs')
-      .insert({
-        workspace_id: workspace.id,
-        actor_user_id: user.id,
+    jobId = await startAiJob(
+      supabase,
+      {
         operation: 'review_analysis',
-        source_capture_id: null,
-        source_review_kind: input.kind,
-        source_starts_on: input.startsOn,
-        source_ends_on: input.endsOn,
-        request_id: context.requestId,
-        status: 'running',
-      })
-      .select('id')
-      .single();
-    if (jobError || !job) {
-      throw new ApiProblem(
-        503,
-        'job_status_unavailable',
-        'Review analysis could not start safely.'
-      );
-    }
-    jobId = String(job.id);
+        requestId: context.requestId,
+        kind: input.kind,
+        startsOn: input.startsOn,
+        endsOn: input.endsOn,
+      },
+      'Review analysis could not start safely.'
+    );
     const actions = actionsResult.data ?? [];
     const goals = goalsResult.data ?? [];
     const reviews = reviewsResult.data ?? [];
@@ -179,10 +167,9 @@ export async function POST(request: Request) {
         'Planner AI returned an unsafe Review proposal.'
       );
     }
-    const { data: proposalId, error: persistenceError } = await admin.rpc(
+    const { data: proposalId, error: persistenceError } = await supabase.rpc(
       'persist_review_ai_proposal_job',
       {
-        p_owner_user_id: user.id,
         p_job_id: jobId,
         p_kind: input.kind,
         p_starts_on: input.startsOn,
@@ -206,23 +193,12 @@ export async function POST(request: Request) {
         'Review proposal could not be saved.'
       );
     }
-    const { error: completionError } = await admin
-      .from('ai_jobs')
-      .update({
-        status: 'succeeded',
-        result_target_id: proposalId,
-        completed_at: new Date().toISOString(),
-        updated_at: new Date().toISOString(),
-      })
-      .eq('id', jobId)
-      .eq('status', 'running');
-    if (completionError) {
-      throw new ApiProblem(
-        503,
-        'job_status_unavailable',
-        'Review analysis status could not be saved.'
-      );
-    }
+    await completeAiJob(
+      supabase,
+      jobId,
+      String(proposalId),
+      'Review analysis status could not be saved.'
+    );
     await recordAiUsage(context, {
       providerRole: 'structured_analysis',
       ...providerIdentity,
@@ -234,21 +210,8 @@ export async function POST(request: Request) {
       context
     );
   } catch (error) {
-    if (jobId) {
-      try {
-        await createAdminClient()
-          .from('ai_jobs')
-          .update({
-            status: 'failed',
-            error_code: stableAiErrorCode(error),
-            completed_at: new Date().toISOString(),
-            updated_at: new Date().toISOString(),
-          })
-          .eq('id', jobId)
-          .eq('status', 'running');
-      } catch {
-        // The primary error remains stable if job-status persistence is unavailable.
-      }
+    if (jobId && supabase) {
+      await failAiJob(supabase, jobId, stableAiErrorCode(error));
     }
     if (context) {
       providerIdentity = managedProviderIdentityForError(error, providerIdentity);

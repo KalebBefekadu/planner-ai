@@ -11,8 +11,8 @@ select table_privs_are(
 );
 select function_privs_are(
   'public', 'persist_capture_proposal_analysis_job',
-  array['uuid', 'uuid', 'uuid', 'jsonb', 'text', 'text'],
-  'authenticated', array[]::text[], 'job-bound analysis persistence is private'
+  array['uuid', 'uuid', 'jsonb', 'text', 'text'],
+  'anon', array[]::text[], 'anonymous callers cannot persist a job-bound analysis'
 );
 
 insert into auth.users (
@@ -88,9 +88,10 @@ select lives_ok(
   where workspace.owner_user_id = 'a5000000-0000-0000-0000-000000000001'$$,
   'two overlapping analysis attempts can be represented safely'
 );
+set local role authenticated;
+select set_config('request.jwt.claim.sub', 'a5000000-0000-0000-0000-000000000001', true);
 select throws_ok(
   $$select public.persist_capture_proposal_analysis_job(
-    'a5000000-0000-0000-0000-000000000001',
     (select source_capture_id from public.ai_jobs
      where request_id = 'a5100000-0000-4000-8000-000000000002'),
     (select id from public.ai_jobs where request_id = 'a5100000-0000-4000-8000-000000000002'),
@@ -102,7 +103,6 @@ select throws_ok(
 );
 select lives_ok(
   $$select public.persist_capture_proposal_analysis_job(
-    'a5000000-0000-0000-0000-000000000001',
     (select source_capture_id from public.ai_jobs
      where request_id = 'a5100000-0000-4000-8000-000000000003'),
     (select id from public.ai_jobs where request_id = 'a5100000-0000-4000-8000-000000000003'),

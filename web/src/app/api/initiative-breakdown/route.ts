@@ -27,7 +27,7 @@ import {
 import { executeOperation } from '@/lib/operations';
 import { periodBounds } from '@/lib/planning-period';
 import { dateInTimezone } from '@/lib/date';
-import { createAdminClient } from '@/lib/supabase/admin';
+import { completeAiJob, failAiJob, startAiJob } from '@/lib/ai/job-status';
 import { createClient } from '@/lib/supabase/server';
 
 const MAX_JSON_BYTES = 2_000;
@@ -51,6 +51,7 @@ const inputSchema = z.object({ goalId: z.uuid() }).strict();
  */
 export async function POST(request: Request) {
   let context: RequestContext | undefined;
+  let supabase: Awaited<ReturnType<typeof createClient>> | undefined;
   let jobId: string | null = null;
   let quotaConsumed = false;
   let providerIdentity = {
@@ -66,7 +67,7 @@ export async function POST(request: Request) {
       throw new ApiProblem(409, 'canonical_model_required', 'Breakdowns are not ready yet.');
     }
     const { goalId } = await readJson(request, inputSchema, MAX_JSON_BYTES);
-    const supabase = await createClient();
+    supabase = await createClient();
     const {
       data: { user },
     } = await supabase.auth.getUser();
@@ -114,23 +115,15 @@ export async function POST(request: Request) {
 
     await consumeAiQuota(context, true);
     quotaConsumed = true;
-    const admin = createAdminClient();
-    const { data: job, error: jobError } = await admin
-      .from('ai_jobs')
-      .insert({
-        workspace_id: workspace.id,
-        actor_user_id: user.id,
+    jobId = await startAiJob(
+      supabase,
+      {
         operation: 'initiative_breakdown',
-        source_capture_id: captureId,
-        request_id: context.requestId,
-        status: 'running',
-      })
-      .select('id')
-      .single();
-    if (jobError || !job) {
-      throw new ApiProblem(503, 'job_status_unavailable', 'The breakdown could not be started.');
-    }
-    jobId = String(job.id);
+        requestId: context.requestId,
+        sourceCaptureId: captureId,
+      },
+      'The breakdown could not be started.'
+    );
 
     const result = await completeManagedText('structured_analysis', {
       response_format: { type: 'json_object' },
@@ -162,10 +155,9 @@ export async function POST(request: Request) {
     );
     const analysis = breakdownToAnalysis(tasks, { goalId, startsOn, endsOn });
 
-    const { data: batchId, error: persistenceError } = await admin.rpc(
+    const { data: batchId, error: persistenceError } = await supabase.rpc(
       'persist_capture_proposal_analysis_job',
       {
-        p_owner_user_id: user.id,
         p_capture_id: captureId,
         p_job_id: jobId,
         p_analysis: analysis,
@@ -176,19 +168,7 @@ export async function POST(request: Request) {
     if (persistenceError || !batchId) {
       throw new ApiProblem(503, 'proposal_persistence_failed', 'The breakdown could not be saved.');
     }
-    const { error: completionError } = await admin
-      .from('ai_jobs')
-      .update({
-        status: 'succeeded',
-        result_target_id: batchId,
-        completed_at: new Date().toISOString(),
-        updated_at: new Date().toISOString(),
-      })
-      .eq('id', jobId)
-      .eq('status', 'running');
-    if (completionError) {
-      throw new ApiProblem(503, 'job_status_unavailable', 'Breakdown status could not be saved.');
-    }
+    await completeAiJob(supabase, jobId, String(batchId), 'Breakdown status could not be saved.');
     await recordAiUsage(context, {
       providerRole: 'structured_analysis',
       ...providerIdentity,
@@ -197,21 +177,8 @@ export async function POST(request: Request) {
     });
     return aiSuccess({ batchId, jobId, captureId, proposed: analysis.proposals.length }, context);
   } catch (error) {
-    if (jobId) {
-      try {
-        await createAdminClient()
-          .from('ai_jobs')
-          .update({
-            status: 'failed',
-            error_code: stableAiErrorCode(error),
-            completed_at: new Date().toISOString(),
-            updated_at: new Date().toISOString(),
-          })
-          .eq('id', jobId)
-          .eq('status', 'running');
-      } catch {
-        // The primary error response stays stable if status persistence is unavailable.
-      }
+    if (jobId && supabase) {
+      await failAiJob(supabase, jobId, stableAiErrorCode(error));
     }
     if (context && quotaConsumed) {
       providerIdentity = managedProviderIdentityForError(error, providerIdentity);

@@ -2724,6 +2724,10 @@ export type Database = {
           workspace_id: string;
         }[];
       };
+      complete_ai_job: {
+        Args: { p_job_id: string; p_result_target_id: string };
+        Returns: undefined;
+      };
       consume_ai_quota: { Args: { p_operation: string }; Returns: boolean };
       consume_ai_quota_status:
         | { Args: { p_operation: string }; Returns: string }
@@ -3353,6 +3357,10 @@ export type Database = {
         };
         Returns: Json;
       };
+      fail_ai_job: {
+        Args: { p_error_code: string; p_job_id: string };
+        Returns: undefined;
+      };
       generate_workspace_notifications: {
         Args: { p_workspace_id: string };
         Returns: number;
@@ -3381,7 +3389,6 @@ export type Database = {
           p_capture_id: string;
           p_job_id: string;
           p_model_id: string;
-          p_owner_user_id: string;
           p_prompt_version: string;
         };
         Returns: string;
@@ -3404,7 +3411,6 @@ export type Database = {
           p_job_id: string;
           p_kind: string;
           p_model_id: string;
-          p_owner_user_id: string;
           p_payload: Json;
           p_prompt_version: string;
           p_starts_on: string;
@@ -3546,6 +3552,17 @@ export type Database = {
           updated_at: string;
           version: number;
         }[];
+      };
+      start_ai_job: {
+        Args: {
+          p_operation: string;
+          p_request_id: string;
+          p_source_capture_id?: string;
+          p_source_ends_on?: string;
+          p_source_review_kind?: string;
+          p_source_starts_on?: string;
+        };
+        Returns: string;
       };
       trash_item_snapshot: {
         Args: { p_item_id: string; p_item_type: string; p_workspace_id: string };
