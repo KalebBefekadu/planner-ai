@@ -230,11 +230,20 @@ export function PlannerWorkspace({
             expectedVersion: item.version,
             title,
             descriptionMarkdown,
-            parentGoalId: type === 'quarterly' ? destination : null,
+            // An initiative is year-anchored but may serve a yearly Goal, and
+            // the form does not offer that link -- so preserve it rather than
+            // clearing it on every unrelated edit.
+            parentGoalId:
+              type === 'quarterly'
+                ? destination
+                : item.kind === 'initiative'
+                  ? (item.yearly_id ?? null)
+                  : null,
             targetValue: targetText ? Number(targetText) : null,
             currentValue: targetText ? (currentText ? Number(currentText) : 0) : null,
             unit,
-            dueOn: date,
+            dueOn: item.kind === 'initiative' ? null : date,
+            definitionOfDone: String(formData.get('definitionOfDone') ?? ''),
           });
         } else {
           const updated = await updatePlanAction({
@@ -917,17 +926,44 @@ export function PlannerWorkspace({
                   required
                 />
               </label>
-              <label>
-                {editTarget.type === 'yearly' || editTarget.type === 'quarterly'
-                  ? 'Due date'
-                  : 'Scheduled date'}
-                <input
-                  className="input-field"
-                  type="date"
-                  name="date"
-                  defaultValue={editTarget.item.due_on ?? editTarget.item.scheduled_on ?? ''}
-                />
-              </label>
+              {/* An initiative is never finished, so it has no due date and the
+                  field is not offered rather than offered and refused. */}
+              {editTarget.item.kind === 'initiative' ? null : (
+                <label>
+                  {editTarget.type === 'yearly' || editTarget.type === 'quarterly'
+                    ? 'Due date'
+                    : 'Scheduled date'}
+                  <input
+                    className="input-field"
+                    type="date"
+                    name="date"
+                    defaultValue={editTarget.item.due_on ?? editTarget.item.scheduled_on ?? ''}
+                  />
+                </label>
+              )}
+
+              {editTarget.type === 'yearly' || editTarget.type === 'quarterly' ? (
+                <label>
+                  {editTarget.item.kind === 'initiative'
+                    ? 'What would make this quarter good here?'
+                    : 'What does done look like?'}
+                  <textarea
+                    className="input-field"
+                    name="definitionOfDone"
+                    rows={2}
+                    maxLength={2000}
+                    defaultValue={editTarget.item.definition_of_done ?? ''}
+                    placeholder={
+                      editTarget.item.kind === 'initiative'
+                        ? 'A signed contract, or a clear no so the time goes elsewhere.'
+                        : 'The standard this is measured against.'
+                    }
+                  />
+                  <span className="field-note">
+                    Quoted in Weekly Review at the moment you decide to drop work filed here.
+                  </span>
+                </label>
+              ) : null}
 
               {editTarget.type === 'quarterly' ? (
                 <label>

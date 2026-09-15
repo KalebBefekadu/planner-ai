@@ -43,6 +43,14 @@ export type WeeklyReviewGoal = {
   version: number;
   kind: 'outcome' | 'initiative';
   status: string;
+  /** What good looks like here, quoted at the moment work is dropped. */
+  definitionOfDone: string | null;
+  /**
+   * The ancestors this work answers to, outermost first. "Why am I doing this"
+   * should be on screen at the moment of deciding, not reconstructable from
+   * three other pages afterwards.
+   */
+  directionChain: string[];
   /**
    * Checkpoints since anything under this Goal was last completed. A task can
    * be stuck; so can a whole project, and that is a different problem with a
@@ -240,12 +248,13 @@ export async function getWeeklyReviewData(): Promise<WeeklyReviewData> {
   const finishedSince = finishedSinceIsFallback ? `${startsOn}T00:00:00.000Z` : checkpoints[0];
 
   const unfinished =
-    'id,title,status,version,scheduled_on,created_at,planning_horizons!inner(kind,starts_on),goals(id,title,version,kind,status)';
+    'id,title,status,version,scheduled_on,created_at,planning_horizons!inner(kind,starts_on),goals(id,title,version,kind,status,definition_of_done,parent_goal_id)';
   const [
     weekHorizonResult,
     scheduledIntoWeekResult,
     finishedResult,
     momentumResult,
+    goalTreeResult,
     reviewsResult,
     proposalResult,
     jobResult,
@@ -304,6 +313,14 @@ export async function getWeeklyReviewData(): Promise<WeeklyReviewData> {
       .is('trashed_at', null)
       .order('completed_at', { ascending: false })
       .limit(FINISHED_LIST_LIMIT),
+    // Every Goal, so an ancestor chain can be walked without a recursive query.
+    // A personal workspace has tens of these, not thousands.
+    supabase
+      .from('goals')
+      .select('id,title,parent_goal_id')
+      .eq('workspace_id', workspaceId)
+      .is('archived_at', null)
+      .is('trashed_at', null),
     supabase
       .from('reviews')
       .select('id,completed_at,reflection_markdown,review_action_items(priority)')
@@ -337,6 +354,7 @@ export async function getWeeklyReviewData(): Promise<WeeklyReviewData> {
     scheduledIntoWeekResult.error ||
     finishedResult.error ||
     momentumResult.error ||
+    goalTreeResult.error ||
     reviewsResult.error ||
     proposalResult.error ||
     jobResult.error
@@ -357,6 +375,30 @@ export async function getWeeklyReviewData(): Promise<WeeklyReviewData> {
     if (!goalId || lastCompletionByGoal.has(goalId)) continue;
     lastCompletionByGoal.set(goalId, String(row.completed_at));
   }
+  const parentOf = new Map<string, { title: string; parentGoalId: string | null }>();
+  for (const row of goalTreeResult.data ?? []) {
+    parentOf.set(String(row.id), {
+      title: String(row.title),
+      parentGoalId: (row.parent_goal_id as string | null) ?? null,
+    });
+  }
+  // Outermost ancestor first, and the Goal itself left off -- the chain says
+  // what this sits under, and the header already says what it is. A malformed
+  // parent link would loop forever, so the walk is bounded by the tree.
+  function directionChainFor(goalId: string): string[] {
+    const chain: string[] = [];
+    const seen = new Set<string>([goalId]);
+    let cursor = parentOf.get(goalId)?.parentGoalId ?? null;
+    while (cursor && !seen.has(cursor) && chain.length < parentOf.size) {
+      const node = parentOf.get(cursor);
+      if (!node) break;
+      chain.unshift(node.title);
+      seen.add(cursor);
+      cursor = node.parentGoalId;
+    }
+    return chain;
+  }
+
   const goals = new Map<string, WeeklyReviewGoal>();
   for (const action of actionRows) {
     const goal = action.goals as unknown as {
@@ -365,6 +407,7 @@ export async function getWeeklyReviewData(): Promise<WeeklyReviewData> {
       version: number;
       kind: 'outcome' | 'initiative';
       status: string;
+      definition_of_done: string | null;
     } | null;
     if (!goal || goals.has(goal.id)) continue;
     const lastCompletion = lastCompletionByGoal.get(goal.id);
@@ -374,6 +417,8 @@ export async function getWeeklyReviewData(): Promise<WeeklyReviewData> {
       version: Number(goal.version),
       kind: goal.kind ?? 'outcome',
       status: goal.status,
+      definitionOfDone: goal.definition_of_done ?? null,
+      directionChain: directionChainFor(goal.id),
       // Nothing has ever closed here, so every checkpoint has been quiet.
       quietCheckpoints: lastCompletion
         ? countCheckpointsSince(checkpoints, lastCompletion)

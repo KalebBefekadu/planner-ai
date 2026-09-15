@@ -36,6 +36,12 @@ export type GoalView = {
   scheduled_on?: string | null;
   parent_action_id?: string | null;
   vision_id?: string;
+  /**
+   * 'initiative' is a standing concern that never finishes -- a business, a
+   * project. It carries no deadline and may hang under a yearly Goal.
+   */
+  kind?: 'outcome' | 'initiative';
+  definition_of_done?: string | null;
   yearly_id?: string;
   quarterly_id?: string;
   monthly_id?: string;
@@ -98,6 +104,8 @@ type CanonicalGoal = {
   current_value: number | null;
   unit: string | null;
   due_on: string | null;
+  kind: 'outcome' | 'initiative';
+  definition_of_done: string | null;
   created_at: string;
   updated_at: string;
   archived_at: string | null;
@@ -334,6 +342,8 @@ export async function getGoalsHierarchy(): Promise<GoalsData | null> {
       current_value: goal.current_value === null ? null : Number(goal.current_value),
       unit: goal.unit,
       vision_id: goal.vision_id,
+      kind: goal.kind ?? 'outcome',
+      definition_of_done: goal.definition_of_done ?? null,
       yearly_id: goal.parent_goal_id ?? undefined,
       created_at: goal.created_at,
       updated_at: goal.updated_at,
@@ -723,6 +733,7 @@ export async function updatePlanGoal(input: {
   currentValue: number | null;
   unit: string | null;
   dueOn: string | null;
+  definitionOfDone?: string;
 }) {
   if (!canonicalEnabled) throw new Error('Goal editing requires the canonical data model.');
   const { supabase } = await requireUser();

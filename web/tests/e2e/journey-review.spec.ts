@@ -122,6 +122,51 @@ test('the week is grouped by the project the work is for', async ({ workspace })
   await expect(group).toContainText('2 open');
 });
 
+test('what good looks like is on screen at the moment work is dropped', async ({ workspace }) => {
+  const { page } = workspace;
+
+  await goTo(page, '/planner');
+  await page.getByRole('button', { name: 'Add yearly goal' }).last().click();
+  const composer = page.locator('section.goal-composer');
+  await expect(composer).toBeVisible();
+  await composer.locator('textarea').fill('TEK Systems');
+  await composer.locator('input[type=checkbox]').check();
+  await composer.getByRole('button', { name: 'Save initiative' }).click();
+  await expect(page.getByText('TEK Systems is now an initiative')).toBeVisible();
+
+  // An initiative is never finished, so the editor does not offer a due date --
+  // it asks what would make the quarter good instead.
+  await page.getByRole('button', { name: 'Edit TEK Systems' }).click();
+  const editor = page.getByRole('textbox', {
+    name: 'What would make this quarter good here?',
+  });
+  await expect(page.getByRole('textbox', { name: 'Due date' })).toHaveCount(0);
+  await editor.fill('A signed contract, or a clear no so the time goes elsewhere.');
+  await page.getByRole('button', { name: /^Save/ }).click();
+  await expect(page.getByText('Yearly goal saved.')).toBeVisible();
+
+  await goTo(page, '/');
+  const today = page.getByRole('region', { name: 'New Action' });
+  await today.getByRole('textbox', { name: 'What needs doing' }).fill('Wait for a start date');
+  await today.getByRole('combobox', { name: 'Goal' }).selectOption({ label: 'TEK Systems' });
+  await today.getByRole('button', { name: 'Add Action' }).click();
+  await expect(today).toContainText('"Wait for a start date" is saved');
+
+  await goTo(page, '/review');
+  // The criterion is visible on the initiative before any decision is made.
+  await expect(page.locator('.review-goal-criterion')).toContainText('A signed contract');
+
+  // And again next to the reason, because dropping is only defensible when the
+  // standard it failed is visible while you decide rather than afterwards.
+  await expect(page.locator('.review-drop-criterion')).toHaveCount(0);
+  await page
+    .getByRole('combobox', { name: 'Decision for Wait for a start date' })
+    .selectOption('dropped');
+  await expect(page.locator('.review-drop-criterion')).toContainText(
+    'A signed contract, or a clear no so the time goes elsewhere.'
+  );
+});
+
 test('a completed review survives navigation and appears in the history', async ({ workspace }) => {
   const { page } = workspace;
   await goTo(page, '/');

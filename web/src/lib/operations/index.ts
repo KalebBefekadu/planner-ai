@@ -375,6 +375,13 @@ export const operationDefinitions = {
         currentValue: z.number().finite().nonnegative().nullable(),
         unit: z.string().trim().min(1).max(80).nullable(),
         dueOn: date.nullable(),
+        /**
+         * What good looks like, in the owner's words. Optional rather than
+         * nullable: omitting the key leaves the stored value alone, because
+         * every caller written before this field existed omits it and none of
+         * them means to erase it. Send an empty string to clear it.
+         */
+        definitionOfDone: z.string().max(2_000).optional(),
       })
       .strict(),
     output: goalOutput,

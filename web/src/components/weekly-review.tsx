@@ -278,6 +278,13 @@ export function WeeklyReview({ data }: { data: WeeklyReviewData }) {
     const decision = decisions[action.id];
     const canPrioritize = !['done', 'dropped'].includes(decision.resolution);
     const stalled = isStalled(action.weeksCarried);
+    // Dropping is only defensible when the standard it failed is visible while
+    // you decide. Reconstructing it afterwards is how work gets dropped that
+    // was the only thing actually serving the goal.
+    const criterion =
+      decision.resolution === 'dropped' && action.goalId
+        ? (goalsById.get(action.goalId)?.definitionOfDone ?? null)
+        : null;
     return (
       <article
         className={`review-action-row${stalled ? ' review-action-stalled' : ''}`}
@@ -325,6 +332,12 @@ export function WeeklyReview({ data }: { data: WeeklyReviewData }) {
             </option>
           ))}
         </select>
+        {criterion ? (
+          <p className="review-drop-criterion">
+            <span>Dropping against</span>
+            {criterion}
+          </p>
+        ) : null}
         {['blocked', 'dropped'].includes(decision.resolution) ? (
           <input
             className="review-reason"
@@ -563,6 +576,22 @@ export function WeeklyReview({ data }: { data: WeeklyReviewData }) {
                       open={sectionOpen(`open:${group.key}`, 'band')}
                       onToggle={() => toggleSection(`open:${group.key}`, 'band')}
                     >
+                      {/* Why this work exists, and what would make it good.
+                          Both belong on screen at the moment of deciding, not
+                          one page away from it. */}
+                      {goal && (goal.directionChain.length > 0 || goal.definitionOfDone) ? (
+                        <div className="review-goal-direction">
+                          {goal.directionChain.length > 0 ? (
+                            <p className="review-goal-chain">{goal.directionChain.join(' › ')}</p>
+                          ) : null}
+                          {goal.definitionOfDone ? (
+                            <p className="review-goal-criterion">
+                              <span>Good here</span>
+                              {goal.definitionOfDone}
+                            </p>
+                          ) : null}
+                        </div>
+                      ) : null}
                       {/* A task can be stuck; so can a whole project, and that
                           is a different problem with a different answer. */}
                       {quiet && goal ? (
