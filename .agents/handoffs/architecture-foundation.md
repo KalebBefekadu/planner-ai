@@ -33,7 +33,7 @@
 
 Run in `web/` with Node 24.21.0:
 
-- `npm ci` — passed; 770 packages installed, 0 vulnerabilities.
+- `npm ci` — passed; 768 packages installed, 0 vulnerabilities.
 - `npm run agent:check` — passed; formatting, ESLint, and TypeScript clean.
 - `npm test` — passed; 78 files and 920 tests.
 - Targeted Markdown Prettier check — passed.

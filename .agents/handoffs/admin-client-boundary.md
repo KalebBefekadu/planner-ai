@@ -27,7 +27,7 @@
 
 Run in `web/` with Node 24.21.0:
 
-- `npm ci` — passed; 770 packages installed, 0 vulnerabilities.
+- `npm ci` — passed; 768 packages installed, 0 vulnerabilities.
 - Focused admin-boundary tests — passed; 2/2.
 - `npm run agent:check` — passed; formatting, ESLint, and TypeScript clean.
 - `npm test` — passed; 80 files and 924 tests.

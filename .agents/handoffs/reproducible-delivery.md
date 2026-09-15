@@ -36,7 +36,7 @@
 
 Run in `web/` with Node 24.21.0:
 
-- `npm ci` — passed; 770 packages installed, 0 vulnerabilities.
+- `npm ci` — passed; 768 packages installed, 0 vulnerabilities.
 - Focused lock tests — passed; 2/2.
 - `npm run verify:db` — passed after a clean reset; 68 pgTAP files and
   1,197 assertions, with generated types consistent.

@@ -2,28 +2,33 @@
 
 Roadmap stage: **2 - Workspace, Planner And Delivery Hardening**
 
-## Codex handoff ready: Operation contract manifest
+## Codex handoff ready: supply chain hardening
 
-- **Contract:** `.agents/tasks/operation-contract-manifest.md`
-- **Branch:** `codex/operation-contract-manifest`
-- **Scope:** first slice of EH-04. TypeScript and Postgres now prove they
-  expose the same Operation contract, in both CI jobs. No behaviour changes.
-- **Writable paths:** one generator script, the local database verifier, one
-  generated registry, one unit test, and coordination documents named by the
-  contract.
-- **Foundation:** the EH-03 handoff `ea30d7d` remains ready for review, and
-  below it the four EH-01 capability branches.
-- **Handoff:** `.agents/handoffs/operation-contract-manifest.md`
-- **Next:** two decisions, neither of them mine to take.
-  1. `/preview` — removing it is the largest win left under EH-03 and the
-     roadmap gates it on Workspace and Planner parity that `docs/status.md`
-     does not record as met. A product call.
-  2. The `dispatch_trusted_operation` chain — seven rename-and-wrap functions
-     deep, touched by every Operation. The large half of EH-04 and its own
-     contract.
+- **Contract:** `.agents/tasks/supply-chain-hardening.md`
+- **Branch:** `codex/supply-chain-hardening`
+- **Scope:** every GitHub Action pinned to a commit, nine credential-holding or
+  untrusted-input dependencies pinned exactly with nothing installed changing,
+  and a release dependency inventory generated from the lockfile.
+- **Writable paths:** the two workflows, the package manifest and lockfile, two
+  generator scripts, one guard test, the generated inventory, and coordination
+  documents named by the contract.
+- **Foundation:** the EH-04 handoff `95ab836` remains ready for review, and
+  below it EH-03 and the four EH-01 capability branches.
+- **Handoff:** `.agents/handoffs/supply-chain-hardening.md`
+- **Correction:** every handoff in this stack recorded `npm ci` as 768, not the
+  770 they previously claimed. Measured, not repeated.
+- **Next:** three things, and two of them are decisions rather than work.
+  1. `/preview` — the largest win left under EH-03, gated by the roadmap on
+     parity `docs/status.md` does not record as met. A product call.
+  2. Critical-path coverage thresholds — the last stack item, and a judgement:
+     a number set without agreeing which paths are critical becomes something
+     people optimise around. The Operation execution path, the undo path and
+     the import parsers are the candidates.
+  3. The `dispatch_trusted_operation` chain — seven rename-and-wrap functions
+     deep, touched by every Operation. The large half of EH-04.
 
-Six branches are now stacked and unreviewed. EH-01 is met; EH-03 and EH-04 are
-started, not closed.
+Seven branches are now stacked and unreviewed. EH-01 is met; EH-03 and EH-04
+are started, not closed; EH-06 and EH-07 are untouched.
 
 ## CI runs again, and integration itself is red
 

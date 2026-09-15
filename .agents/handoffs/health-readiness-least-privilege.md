@@ -29,7 +29,7 @@
 
 Run in `web/` with Node 24.21.0:
 
-- `npm ci` — passed; 770 packages installed, 0 vulnerabilities.
+- `npm ci` — passed; 768 packages installed, 0 vulnerabilities.
 - Focused health and admin-boundary tests — passed; 5/5.
 - Real local Supabase publishable-key REST probe — returned HTTP 200 while the
   repository-wide Supabase lock was held; no key was printed.

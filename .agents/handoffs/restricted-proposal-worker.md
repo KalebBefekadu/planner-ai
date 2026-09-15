@@ -77,7 +77,7 @@ now cannot.
 
 Run in `web/` with Node 24.21.0, holding the repository-wide Supabase lock:
 
-- `npm ci` — passed; 770 packages, 0 vulnerabilities.
+- `npm ci` — passed; 768 packages, 0 vulnerabilities.
 - `npm run agent:check` — passed; Prettier, ESLint, and TypeScript clean.
 - `npm test` — passed; 81 files, 927 tests.
 - `npm run test:db` — passed; 69 files, 1,231 assertions (baseline 68 / 1,197).
