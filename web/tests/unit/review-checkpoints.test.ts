@@ -1,9 +1,11 @@
 import { describe, expect, it } from 'vitest';
 import {
+  canPrioritize,
   carriedLabel,
   countCheckpointsSince,
   isStalled,
   STALLED_AFTER_CHECKPOINTS,
+  withPriority,
 } from '@/lib/reviews/checkpoints';
 import {
   bandOpenByDefault,
@@ -101,5 +103,44 @@ describe('what closing a week costs', () => {
   it('charges only for work that has stopped moving', () => {
     const week = [0, 1, 2, 3, 4, 9, 2, 0];
     expect(decisionsRequired(week)).toBe(3);
+  });
+});
+
+describe('attaching a priority', () => {
+  // The defect this pins: there are two ways to set a priority -- the checkbox
+  // on a row, and accepting the assistant's suggested five -- and only the
+  // first was updated when undecided rows started being left out of the
+  // payload. The header counted priorities that were then dropped on submit,
+  // so next week got none of its five and nothing said so.
+  it('records a decision, because the flag rides on one', () => {
+    expect(withPriority({ resolution: 'unset', priority: false }, true)).toEqual({
+      resolution: 'keep',
+      priority: true,
+    });
+  });
+
+  it('leaves a decision that already exists alone', () => {
+    expect(withPriority({ resolution: 'next_week', priority: false }, true)).toEqual({
+      resolution: 'next_week',
+      priority: true,
+    });
+    expect(withPriority({ resolution: 'blocked', priority: true }, false)).toEqual({
+      resolution: 'blocked',
+      priority: false,
+    });
+  });
+
+  it('does not invent a decision when the flag is being cleared', () => {
+    expect(withPriority({ resolution: 'unset', priority: true }, false)).toEqual({
+      resolution: 'unset',
+      priority: false,
+    });
+  });
+
+  it('refuses a priority on work that is finished or abandoned', () => {
+    expect(canPrioritize('done')).toBe(false);
+    expect(canPrioritize('dropped')).toBe(false);
+    expect(canPrioritize('keep')).toBe(true);
+    expect(canPrioritize('unset')).toBe(true);
   });
 });

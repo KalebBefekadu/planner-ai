@@ -9,6 +9,7 @@ import {
   type WeeklyReviewAction,
   type WeeklyReviewData,
   type WeeklyReviewDecision,
+  type WeeklyReviewRecurrence,
 } from '@/app/review/actions';
 import { newReviewIntent } from '@/lib/reviews/completion-intent';
 import { CoachingCue } from '@/components/coaching-cue';
@@ -17,7 +18,13 @@ import { ReviewTabs } from '@/components/review-tabs';
 import { ReviewAiProposal } from '@/components/review-ai-proposal';
 import { weeklyReviewCoachingCue } from '@/lib/coaching';
 import { actionFailureMessage } from '@/lib/operations/failure-message';
-import { carriedLabel, isStalled, STALLED_AFTER_CHECKPOINTS } from '@/lib/reviews/checkpoints';
+import {
+  canPrioritize,
+  carriedLabel,
+  isStalled,
+  STALLED_AFTER_CHECKPOINTS,
+  withPriority,
+} from '@/lib/reviews/checkpoints';
 import {
   bandOpenByDefault,
   DEFAULT_REVIEW_DENSITY,
@@ -202,7 +209,7 @@ export function WeeklyReview({ data }: { data: WeeklyReviewData }) {
     [data.finished]
   );
   const recurringByGoal = useMemo(() => {
-    const byGoal = new Map<string, typeof data.recurring>();
+    const byGoal = new Map<string, WeeklyReviewRecurrence[]>();
     for (const template of data.recurring) {
       const key = template.goalId ?? UNFILED;
       const existing = byGoal.get(key);
@@ -286,7 +293,7 @@ export function WeeklyReview({ data }: { data: WeeklyReviewData }) {
   // be rendered inside whichever initiative it belongs to.
   function renderOpenRow(action: WeeklyReviewAction) {
     const decision = decisions[action.id];
-    const canPrioritize = !['done', 'dropped'].includes(decision.resolution);
+    const prioritizable = canPrioritize(decision.resolution);
     const stalled = isStalled(action.weeksCarried);
     // Dropping is only defensible when the standard it failed is visible while
     // you decide. Reconstructing it afterwards is how work gets dropped that
@@ -365,23 +372,14 @@ export function WeeklyReview({ data }: { data: WeeklyReviewData }) {
             maxLength={500}
           />
         ) : null}
-        <label className={`review-priority${canPrioritize ? '' : ' review-priority-disabled'}`}>
+        <label className={`review-priority${prioritizable ? '' : ' review-priority-disabled'}`}>
           <input
             type="checkbox"
             checked={decision.priority}
-            disabled={!canPrioritize || (!decision.priority && priorityCount >= 5)}
-            onChange={(event) => {
-              const priority = event.target.checked;
-              // A row with no decision is left out of the payload
-              // entirely, and the priority flag rides on the
-              // decision. Naming something a priority is itself
-              // the statement that it stays, so record it as one.
-              updateDecision(action.id, {
-                priority,
-                resolution:
-                  priority && decision.resolution === 'unset' ? 'keep' : decision.resolution,
-              });
-            }}
+            disabled={!prioritizable || (!decision.priority && priorityCount >= 5)}
+            onChange={(event) =>
+              updateDecision(action.id, withPriority(decision, event.target.checked))
+            }
           />
           <Flag size={14} aria-hidden="true" />
           Priority
@@ -434,13 +432,24 @@ export function WeeklyReview({ data }: { data: WeeklyReviewData }) {
           const selected = new Set(ids.slice(0, 5));
           setDecisions((current) =>
             Object.fromEntries(
-              Object.entries(current).map(([id, decision]) => [
-                id,
-                {
-                  ...decision,
-                  priority: selected.has(id) && !['done', 'dropped'].includes(decision.resolution),
-                },
-              ])
+              Object.entries(current).map(([id, decision]) => {
+                const priority =
+                  selected.has(id) && !['done', 'dropped'].includes(decision.resolution);
+                return [
+                  id,
+                  {
+                    ...decision,
+                    priority,
+                    // Same rule as the checkbox: a row with no decision is left
+                    // out of the payload, and the priority flag rides on the
+                    // decision. Accepting a suggestion used to set the flag and
+                    // leave the row unset, so the header counted priorities
+                    // that were then dropped on submit and next week got none.
+                    resolution:
+                      priority && decision.resolution === 'unset' ? 'keep' : decision.resolution,
+                  },
+                ];
+              })
             )
           );
         }}

@@ -63,3 +63,31 @@ export function carriedLabel(weeksCarried: number): string {
   if (weeksCarried <= 0) return 'new';
   return `${ordinal(weeksCarried + 1)} week`;
 }
+
+/**
+ * Attaching a priority to a decision.
+ *
+ * The priority flag rides on a decision, and a row with no decision is left out
+ * of the payload entirely -- so naming something a priority has to record a
+ * decision too, or the flag is silently dropped on submit and next week gets
+ * none of the five.
+ *
+ * This lives here rather than inline because there are two ways to set a
+ * priority -- the checkbox on a row, and accepting the assistant's suggested
+ * five -- and the first was updated for that rule while the second was not.
+ */
+export function withPriority<Decision extends { resolution: string; priority: boolean }>(
+  decision: Decision,
+  priority: boolean
+): Decision {
+  return {
+    ...decision,
+    priority,
+    resolution: priority && decision.resolution === 'unset' ? 'keep' : decision.resolution,
+  };
+}
+
+/** Priority is meaningless on work that is finished or abandoned. */
+export function canPrioritize(resolution: string): boolean {
+  return !['done', 'dropped'].includes(resolution);
+}

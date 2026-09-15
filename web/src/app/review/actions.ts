@@ -14,6 +14,7 @@ import {
 } from '@/lib/reviews/checkpoints';
 import { parsePersistedReviewProposal, type ResolvedReviewProposal } from '@/lib/review-proposals';
 import { createClient } from '@/lib/supabase/server';
+import { selectAll, SUPABASE_PAGE_SIZE } from '@/lib/supabase/select-all';
 
 export type WeeklyReviewAction = {
   id: string;
@@ -274,39 +275,50 @@ export async function getWeeklyReviewData(): Promise<WeeklyReviewData> {
     weekHorizonResult,
     scheduledIntoWeekResult,
     finishedResult,
-    momentumResult,
     recurringResult,
     goalTreeResult,
     reviewsResult,
     proposalResult,
     jobResult,
   ] = await Promise.all([
-    supabase
-      .from('actions')
-      .select(unfinished)
-      .eq('workspace_id', workspaceId)
-      .eq('planning_horizons.kind', 'week')
-      .lte('planning_horizons.starts_on', endsOn)
-      .in('status', ['open', 'in_progress', 'blocked'])
-      .is('archived_at', null)
-      .is('trashed_at', null)
-      .order('scheduled_on'),
+    // Paged, not capped. PostgREST truncates at max_rows without saying so, and
+    // a truncated open list is worse than a slow one: the screen would ask
+    // about a subset while the Operation's own eligibility query sees the rest,
+    // and the week would refuse to close saying the action set changed.
+    selectAll((from, to) =>
+      supabase
+        .from('actions')
+        .select(unfinished)
+        .eq('workspace_id', workspaceId)
+        .eq('planning_horizons.kind', 'week')
+        .lte('planning_horizons.starts_on', endsOn)
+        .in('status', ['open', 'in_progress', 'blocked'])
+        .is('archived_at', null)
+        .is('trashed_at', null)
+        .order('scheduled_on')
+        .order('id')
+        .range(from, to)
+    ),
     // Work planned at a longer horizon and scheduled into these seven days
     // is unfinished work of this week. This list and the Operation's own
     // eligibility rule have to agree exactly -- the Operation rejects a
     // decision set that is missing an eligible Action or names an
     // ineligible one -- so the two predicates are deliberately identical.
-    supabase
-      .from('actions')
-      .select(unfinished)
-      .eq('workspace_id', workspaceId)
-      .neq('planning_horizons.kind', 'week')
-      .gte('scheduled_on', startsOn)
-      .lte('scheduled_on', endsOn)
-      .in('status', ['open', 'in_progress', 'blocked'])
-      .is('archived_at', null)
-      .is('trashed_at', null)
-      .order('scheduled_on'),
+    selectAll((from, to) =>
+      supabase
+        .from('actions')
+        .select(unfinished)
+        .eq('workspace_id', workspaceId)
+        .neq('planning_horizons.kind', 'week')
+        .gte('scheduled_on', startsOn)
+        .lte('scheduled_on', endsOn)
+        .in('status', ['open', 'in_progress', 'blocked'])
+        .is('archived_at', null)
+        .is('trashed_at', null)
+        .order('scheduled_on')
+        .order('id')
+        .range(from, to)
+    ),
     // What closed since the last checkpoint. Ordered by completion rather
     // than by horizon: an Action planned in June and finished on Tuesday is
     // part of this week's work, and its horizon still says June.
@@ -319,21 +331,6 @@ export async function getWeeklyReviewData(): Promise<WeeklyReviewData> {
       .is('archived_at', null)
       .is('trashed_at', null)
       .order('completed_at', { ascending: true })
-      .limit(FINISHED_LIST_LIMIT),
-    // The most recent completion under each Goal, regardless of when. This is
-    // how the screen tells an initiative that has gone quiet from one task
-    // inside it that is stuck: the window above stops at the last checkpoint
-    // and would report every Goal as silent.
-    supabase
-      .from('actions')
-      .select('goal_id,completed_at')
-      .eq('workspace_id', workspaceId)
-      .eq('status', 'done')
-      .not('goal_id', 'is', null)
-      .not('completed_at', 'is', null)
-      .is('archived_at', null)
-      .is('trashed_at', null)
-      .order('completed_at', { ascending: false })
       .limit(FINISHED_LIST_LIMIT),
     // Every Goal, so an ancestor chain can be walked without a recursive query.
     // A personal workspace has tens of these, not thousands.
@@ -382,7 +379,6 @@ export async function getWeeklyReviewData(): Promise<WeeklyReviewData> {
     weekHorizonResult.error ||
     scheduledIntoWeekResult.error ||
     finishedResult.error ||
-    momentumResult.error ||
     recurringResult.error ||
     goalTreeResult.error ||
     reviewsResult.error ||
@@ -397,13 +393,39 @@ export async function getWeeklyReviewData(): Promise<WeeklyReviewData> {
     ...(weekHorizonResult.data ?? []),
     ...(scheduledIntoWeekResult.data ?? []),
   ].filter((row, index, rows) => rows.findIndex((other) => other.id === row.id) === index);
-  // The last time anything closed under each Goal, from the whole history
-  // rather than this week's window.
+  // The last time anything closed under each Goal the week has work under.
+  //
+  // Scoped to those Goals rather than read from a page of the workspace's most
+  // recent completions: this number decides whether the screen offers to pause
+  // a project, and a Goal whose last completion fell off the end of a
+  // workspace-wide page would have been reported as never having finished
+  // anything, with a Pause button beside it.
+  const goalIdsInWeek = [
+    ...new Set(
+      actionRows
+        .map((action) => (action.goals as unknown as { id: string } | null)?.id)
+        .filter((id): id is string => Boolean(id))
+    ),
+  ];
   const lastCompletionByGoal = new Map<string, string>();
-  for (const row of momentumResult.data ?? []) {
-    const goalId = row.goal_id as string | null;
-    if (!goalId || lastCompletionByGoal.has(goalId)) continue;
-    lastCompletionByGoal.set(goalId, String(row.completed_at));
+  if (goalIdsInWeek.length > 0) {
+    const momentumResult = await supabase
+      .from('actions')
+      .select('goal_id,completed_at')
+      .eq('workspace_id', workspaceId)
+      .eq('status', 'done')
+      .in('goal_id', goalIdsInWeek)
+      .not('completed_at', 'is', null)
+      .is('archived_at', null)
+      .is('trashed_at', null)
+      .order('completed_at', { ascending: false })
+      .limit(SUPABASE_PAGE_SIZE);
+    if (momentumResult.error) throw new Error('Unable to load Weekly Review.');
+    for (const row of momentumResult.data ?? []) {
+      const goalId = row.goal_id as string | null;
+      if (!goalId || lastCompletionByGoal.has(goalId)) continue;
+      lastCompletionByGoal.set(goalId, String(row.completed_at));
+    }
   }
   const parentOf = new Map<string, { title: string; parentGoalId: string | null }>();
   for (const row of goalTreeResult.data ?? []) {
