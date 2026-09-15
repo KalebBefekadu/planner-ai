@@ -636,23 +636,39 @@ One column of initiatives, one sticky rail for next week.
 
 ```
 Week of 8-14 September
-[ finished 14 ] [ open 9 ] [ stalled 3 ] [ recurred 5 ]
+[ finished 14 ] [ open 9 ] [ need a decision 3 ] [ recurred 5 ]
 
-+-- TEK Systems - Amazon ------------------+  +-- Next week ------+
-|  Vision > Steady income > Q3 Land a role |  |  One line: what   |
-|  Good this quarter: a signed contract,   |  |  would make the   |
-|  or a clear no so the time goes elsewhere|  |  week worth it?   |
-|                                          |  |                   |
-|  FINISHED  3                             |  |  Priorities 3 / 5 |
-|    the week's completions, quietly       |  |  [x] Call Baily   |
-|                                          |  |  [x] Send invoice |
-|  STILL OPEN  2                           |  |  [x] Ship import  |
-|    Wait for a new start date  [4th week] |  |                   |
-|    > four weeks: waiting is not a task   |  | [Start next week] |
-|                                          |  +-------------------+
-|  + Add to this initiative                |  |  Reflection       |
-+------------------------------------------+  +-------------------+
++-- TEK Systems - Amazon ------------------+  +-- Next week ---------+
+|  Vision > Steady income > Q3 Land a role |  |  One line: what would|
+|  Good this quarter: a signed contract,   |  |  make it worth it?   |
+|  or a clear no so the time goes elsewhere|  |  [..................]|
+|                                          |  |                      |
+|  FINISHED  5                       (sunk)|  |  1 Ask Ivory for a   |
+|    v Reach out to Baily             Mon  |  |    date         TEK  |
+|    v Pull tasks from the thread     Mon  |  |  2 Create the        |
+|    v Reach out for Ivory            Wed  |  |    invoice     1679  |
+|    v Send the updated CV            Thu  |  |  3 Show what the week|
+|    show 1 more                           |  |    finished  Planner |
+|                                          |  |  4 - - - - - - - - - |
+|  STILL OPEN  2                           |  |  5 five is the cap   |
+|  [ ] Look at other TEK roles    2nd week |  |                      |
+|  +--------------------------------------+|  | [ Start next week ]  |
+|  |[ ] Wait for a new start   [4th week] ||  |  3 priorities        |
+|  |    [Make it concrete] [Keep] [Drop]  ||  |  6 carried           |
+|  +--------------------------------------+|  +----------------------+
+|    waiting is not a task -- it has no    |
+|    next action you control               |
+|                                          |
+|  + Add to TEK Systems                    |
++------------------------------------------+
+
++-- Before you close the week -------------------------------------+
+|  [ the reflection, full width, last, and optional ]              |
++------------------------------------------------------------------+
 ```
+
+The row that matters is the first one under **STILL OPEN**: no buttons at all.
+Six of the nine open items on this screen ask for nothing. That is the design.
 
 ### The decisions that make it cheap
 
@@ -695,13 +711,30 @@ for?". The primary control reads `Start next week - 3 priorities, 6 carried`.
 screen, because the moment the owner knows what to plan is the moment they have
 just finished looking at the week.
 
-### Still open in the design
+### Two questions the mockup now answers
 
-- Whether **Finished** collapses to a count once it has been read, or stays
-  expanded. It is the answer to the owner's first question, and also the part
-  that grows largest.
-- Whether the reflection belongs in the rail or as a full-width final step before
-  the week closes.
+Both were listed as open in the previous draft. Drawing the screen at real scale
+settled them.
+
+**Finished shows four lines and a count, then "show N more".** It is the answer
+to the owner's first question and also the part that grows largest -- at fourteen
+completions across four initiatives, an expanded list buries the work that still
+needs attention. Four lines is enough to recognise the week; the count carries
+the rest. It is also styled as a **receipt rather than a worklist** -- sunken
+ground, ticked, dated, smaller type -- so that it reads as a different kind of
+object from the live rows below it. Two lists that look identical is what made
+the first mockup unreadable.
+
+**The reflection is a full-width step below the initiatives, not a panel in the
+rail.** A paragraph about the week does not belong in a 280px column, and putting
+it last matches the order of the ritual: look, decide, aim, then write. The rail
+holds only the thing the rail is for -- next week's five.
+
+### Still open
+
+- Whether an initiative with no open work and no completions should appear at all.
+  The mockup omits it, which is right on the first Sunday and possibly wrong in
+  week twenty when it is the only signal that a project has gone quiet.
 
 ## Does this actually work?
 
