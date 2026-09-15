@@ -865,6 +865,10 @@ migration, one new operation.
 
 ## Build order
 
+**Status: all four shipped.** What the build changed about this plan is recorded
+under each ticket, because three of the changes were corrections to the plan
+rather than to the code.
+
 Four tickets, not seven. The three cut above are recorded at the end as deferred
 rather than deleted. Each ticket is usable alone, none blocks on AI, and each
 carries a **kill criterion** -- the evidence that would say stop rather than
@@ -872,6 +876,8 @@ continue. The roadmap permits one active implementation ticket at a time, so thi
 is a queue.
 
 ### 1. Show what the week finished
+
+**Shipped.**
 
 **Changes:** one additional query in `getWeeklyReviewData`
 (`web/src/app/review/actions.ts:156`) over Actions with `status = 'done'` and
@@ -892,6 +898,8 @@ problem is capture, not review, and the rest of this plan is premature.
 
 ### 2. Show how long open work has been sitting
 
+**Shipped.**
+
 **Changes:** weeks carried, derived from completed weekly reviews rather than
 from `action_schedule_history` (see Gap 4); a marker on each row; the open list
 sorted by it descending. The calendar-week fallback for a workspace with no
@@ -911,13 +919,29 @@ built.
 
 ### 3. Bound the review, and make keeping free
 
-**Changes:** a new eligibility rule; `review.complete-weekly.v2` registered in
-`operation_contracts` and `operation_undo_support`; a `keep` resolution; the
-decision array becomes **optional per item** under three rules -- an item carried
-three weeks or more must appear, any item may appear, and appearing is the only
-way to attach a priority flag.
+**Shipped** as `20260915090000_keeping_open_work_is_free.sql`.
 
-**New operations:** one. **Migrations:** one. **Risk:** the highest here.
+**Changes:** a new eligibility rule (`review_week_required_actions`, and a
+`review_stalled_after_checkpoints()` so the threshold has one definition in SQL
+as well as one in TypeScript); a `keep` resolution; the decision array becomes
+**optional per item** under three rules -- an item carried three weeks or more
+must appear, any item may appear, and appearing is the only way to attach a
+priority flag.
+
+**Correction: there is no `review.complete-weekly.v2`.** A relaxed requirement
+and an extended enum are both _widenings_ -- every payload that was valid before
+is still valid and still produces the same result -- so `v1` was widened instead.
+A new operation id would have bought no compatibility and would have required
+three edits inside the weekly-review undo machinery, which pins the operation id
+in a trigger guard, a receipt lookup and an undo dispatch. Versioning is for
+changes that break a caller; this one cannot.
+
+**Near-miss worth recording:** rebuilding the `action_schedule_history` reason
+check from its _original_ migration silently dropped `'undo'`, which a later
+migration had added. The undo suites caught it. Rebuild a check constraint from
+the live definition, never from the migration that first created it.
+
+**New operations:** none. **Migrations:** one. **Risk:** the highest here.
 
 This is the step that removes the weekly tax, and it is also the step that fixes
 [Gap 5](#gap-5-the-reviews-decision-set-is-unbounded-and-capped-at-100). They
@@ -934,6 +958,8 @@ to see, and they start opening the planner to check what the review did not ask
 about. That is the tax returning in a worse form.
 
 ### 4. Initiatives, and the pass
+
+**Shipped** as `20260915100000_an_initiative_is_never_finished.sql`.
 
 These ship together, because an initiative with no screen is not worth a
 migration and the pass with no initiatives is the current flat list.
