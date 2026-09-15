@@ -2967,7 +2967,7 @@ export type Database = {
           p_idempotency_key: string;
           p_input: Json;
           p_operation_id: string;
-          p_token_id: string;
+          p_token_hash: string;
         };
         Returns: Json;
       };
@@ -3426,7 +3426,7 @@ export type Database = {
         Returns: Json;
       };
       read_mcp_workspace_snapshot: {
-        Args: { p_token_id: string };
+        Args: { p_token_hash: string };
         Returns: Json;
       };
       record_ai_usage: {

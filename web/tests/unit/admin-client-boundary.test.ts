@@ -17,7 +17,6 @@ const lifecycleAllowlist = [
 // an entry as soon as its route moves to user-scoped Operations, a restricted
 // worker, or a narrowly granted capability.
 const migrationExceptions = [
-  'src/app/api/mcp/route.ts',
   'src/app/api/notes/attachments/route.ts',
   'src/app/api/notes/export/route.ts',
   'src/app/auth/actions.ts',
