@@ -2,18 +2,25 @@
 
 Roadmap stage: **2 - Workspace, Planner And Delivery Hardening**
 
-## Codex handoff ready: least-privilege health readiness
+## Codex handoff ready: restricted proposal worker
 
-- **Contract:** `.agents/tasks/health-readiness-least-privilege.md`
-- **Branch:** `codex/health-readiness-least-privilege`
-- **Scope:** remove service-role access from the public health route while
-  preserving a real Supabase dependency probe.
-- **Writable paths:** the health route and focused tests, the admin-boundary
-  register, and coordination documents named by the contract.
-- **Foundation:** admin-boundary handoff `1342c58` remains ready for review.
-- **Handoff:** `.agents/handoffs/health-readiness-least-privilege.md`
-- **Next:** review `b85e1fe`, then design the restricted proposal-worker
-  capability for the next three EH-01 migration exceptions.
+- **Contract:** `.agents/tasks/restricted-proposal-worker.md`
+- **Branch:** `codex/proposal-worker-capability`
+- **Scope:** remove service-role access from Capture proposals, Review
+  proposals, and Initiative breakdown by introducing an `auth.uid()`-derived job
+  capability, and fix the two defects that made `initiative_breakdown`
+  unreachable.
+- **Writable paths:** the three proposal routes, the shared job-status module,
+  one new migration, the affected pgTAP files, generated types, the
+  admin-boundary register and test, and coordination documents named by the
+  contract.
+- **Foundation:** health-readiness handoff `64c15cf` remains ready for review.
+- **Handoff:** `.agents/handoffs/restricted-proposal-worker.md`
+- **Next:** review this branch, then remove the MCP route's admin client by
+  carrying its verified actor and Workspace through the same kind of capability.
+
+Four ordinary routes still hold the admin client: MCP, Note attachments, Note
+export, and signup invite actions. The register owns the removal order.
 
 ## CI runs again, and integration itself is red
 

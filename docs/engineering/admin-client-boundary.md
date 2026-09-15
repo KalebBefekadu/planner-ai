@@ -28,16 +28,31 @@ These are current facts, not approved destinations:
 | --------------------- | ---------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------- |
 | Signup invite actions | Claims/releases an invite before a session exists.                           | Expose a narrowly validated pre-auth invite capability without table-wide admin access.                                 |
 | MCP route             | Manual MCP credentials create an admin client after token verification.      | Carry the verified actor and Workspace into restricted Operations/RPCs.                                                 |
-| Capture proposals     | Background analysis reads and writes proposal state.                         | Use a restricted worker capability scoped to the claimed job and Workspace.                                             |
-| Review proposals      | Background analysis reads and writes review proposal state.                  | Use the same restricted job capability and Operation contracts.                                                         |
-| Initiative breakdown  | Background analysis creates a governed planning proposal.                    | Use the restricted job capability without `BYPASSRLS`.                                                                  |
 | Note attachment route | Storage upload/download and recoverable metadata updates cross two services. | Implement reserve, upload, finalize, and reconcile with owner-scoped metadata writes and private Storage authorization. |
 | Note export route     | Reads approved attachment bytes from private Storage.                        | Authorize each object through the verified owner and a narrow Storage read capability.                                  |
 
+## The restricted proposal-worker capability
+
+Done. The three AI proposal routes now write job status through `start_ai_job`,
+`complete_ai_job`, `fail_ai_job`, and the two job-bound persistence functions,
+shared by [`web/src/lib/ai/job-status.ts`](../../web/src/lib/ai/job-status.ts).
+
+Every one of those functions is `security definer` with a fixed `search_path`,
+revoked from `public` and `anon` before any grant, and executable by
+`authenticated` alone. Each derives the actor from `auth.uid()` and the
+Workspace from ownership, so no caller can assert an identity. The two
+persistence functions previously took `p_owner_user_id` as a trusted parameter,
+which is why they could only be granted to `service_role`; those signatures are
+dropped rather than left callable.
+
+`ai_jobs` table grants did not change. `authenticated` still holds `SELECT`
+only, so the capability is the sole write path and no `BYPASSRLS` role takes
+part in an ordinary request.
+
 ## Removal order
 
-1. Introduce the restricted worker capability and migrate the three proposal
-   routes together so their policy does not drift.
+1. ~~Introduce the restricted worker capability and migrate the three proposal
+   routes together so their policy does not drift.~~ Complete.
 2. Remove the manual MCP admin client by routing verified actors through the
    shared Operation boundary.
 3. Redesign attachment reserve/finalize/reconcile and migrate export reads.
