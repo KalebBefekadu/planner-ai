@@ -2,18 +2,16 @@
 
 Roadmap stage: **2 - Workspace, Planner And Delivery Hardening**
 
-## Codex handoff ready: admin-client boundary
+## Active Codex task: least-privilege health readiness
 
-- **Contract:** `.agents/tasks/admin-client-boundary.md`
-- **Branch:** `codex/admin-client-boundary`
-- **Scope:** freeze the current service-role surface, distinguish lifecycle jobs
-  from migration exceptions, and fail CI if access expands.
-- **Writable paths:** the focused boundary test, engineering register, and
-  coordination documents named by the contract.
-- **Foundation:** EH-02 handoff `3bcfc5d` remains ready for review.
-- **Handoff:** `.agents/handoffs/admin-client-boundary.md`
-- **Next:** review `7b8a293`, then remove the health-route migration exception
-  as the first runtime least-privilege change.
+- **Contract:** `.agents/tasks/health-readiness-least-privilege.md`
+- **Branch:** `codex/health-readiness-least-privilege`
+- **Scope:** remove service-role access from the public health route while
+  preserving a real Supabase dependency probe.
+- **Writable paths:** the health route and focused tests, the admin-boundary
+  register, and coordination documents named by the contract.
+- **Foundation:** admin-boundary handoff `1342c58` remains ready for review.
+- **Next:** prove readiness uses only the publishable-key API boundary.
 
 ## CI runs again, and integration itself is red
 

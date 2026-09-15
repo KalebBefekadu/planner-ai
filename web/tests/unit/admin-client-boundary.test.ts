@@ -18,7 +18,6 @@ const lifecycleAllowlist = [
 // worker, or a narrowly granted capability.
 const migrationExceptions = [
   'src/app/api/capture-proposals/route.ts',
-  'src/app/api/health/route.ts',
   'src/app/api/initiative-breakdown/route.ts',
   'src/app/api/mcp/route.ts',
   'src/app/api/notes/attachments/route.ts',

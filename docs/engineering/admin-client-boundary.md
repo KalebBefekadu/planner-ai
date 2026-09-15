@@ -27,7 +27,6 @@ These are current facts, not approved destinations:
 | Surface               | Why it currently uses admin access                                           | Removal direction                                                                                                       |
 | --------------------- | ---------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------- |
 | Signup invite actions | Claims/releases an invite before a session exists.                           | Expose a narrowly validated pre-auth invite capability without table-wide admin access.                                 |
-| Health route          | Performs an admin table probe.                                               | Replace it with a least-privilege readiness signal that proves the required dependency without private-row access.      |
 | MCP route             | Manual MCP credentials create an admin client after token verification.      | Carry the verified actor and Workspace into restricted Operations/RPCs.                                                 |
 | Capture proposals     | Background analysis reads and writes proposal state.                         | Use a restricted worker capability scoped to the claimed job and Workspace.                                             |
 | Review proposals      | Background analysis reads and writes review proposal state.                  | Use the same restricted job capability and Operation contracts.                                                         |
@@ -37,14 +36,12 @@ These are current facts, not approved destinations:
 
 ## Removal order
 
-1. Replace the health probe because it has no user mutation or recovery
-   semantics.
-2. Introduce the restricted worker capability and migrate the three proposal
+1. Introduce the restricted worker capability and migrate the three proposal
    routes together so their policy does not drift.
-3. Remove the manual MCP admin client by routing verified actors through the
+2. Remove the manual MCP admin client by routing verified actors through the
    shared Operation boundary.
-4. Redesign attachment reserve/finalize/reconcile and migrate export reads.
-5. Replace pre-auth invite administration with a narrowly reviewed capability.
+3. Redesign attachment reserve/finalize/reconcile and migrate export reads.
+4. Replace pre-auth invite administration with a narrowly reviewed capability.
 
 At every step, delete the matching exception from the executable inventory. The
 test must become stricter over time; replacing one broad exception with several
