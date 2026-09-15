@@ -2,7 +2,7 @@
 
 Roadmap stage: **2 - Workspace, Planner And Delivery Hardening**
 
-## Active Codex task: least-privilege health readiness
+## Codex handoff ready: least-privilege health readiness
 
 - **Contract:** `.agents/tasks/health-readiness-least-privilege.md`
 - **Branch:** `codex/health-readiness-least-privilege`
@@ -11,7 +11,9 @@ Roadmap stage: **2 - Workspace, Planner And Delivery Hardening**
 - **Writable paths:** the health route and focused tests, the admin-boundary
   register, and coordination documents named by the contract.
 - **Foundation:** admin-boundary handoff `1342c58` remains ready for review.
-- **Next:** prove readiness uses only the publishable-key API boundary.
+- **Handoff:** `.agents/handoffs/health-readiness-least-privilege.md`
+- **Next:** review `b85e1fe`, then design the restricted proposal-worker
+  capability for the next three EH-01 migration exceptions.
 
 ## CI runs again, and integration itself is red
 
