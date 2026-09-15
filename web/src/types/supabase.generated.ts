@@ -3384,6 +3384,14 @@ export type Database = {
         Args: { p_anchor_day: number; p_occurrence_on: string };
         Returns: string;
       };
+      note_attachment_object_is_readable: {
+        Args: { p_object_key: string };
+        Returns: boolean;
+      };
+      note_attachment_reservation_exists: {
+        Args: { p_object_key: string };
+        Returns: boolean;
+      };
       persist_capture_proposal_analysis: {
         Args: {
           p_analysis: Json;

@@ -1,5 +1,5 @@
 begin;
-select plan(32);
+select plan(41);
 
 -- Uploading crosses two services. What makes a failure between them repairable
 -- is that the metadata row is written first and is never invisible to the job
@@ -33,6 +33,18 @@ select ok(exists (
   select 1 from pg_policies where schemaname = 'storage' and tablename = 'objects'
     and policyname = 'note_attachments_insert_reserved'
 ), 'writing a private object requires a reservation of one own');
+
+-- Asserting the policy exists is not the same as asserting it decides
+-- correctly, and the first version of it denied every upload in two separate
+-- ways while passing an existence check. The predicate is exercised below.
+select function_privs_are(
+  'public', 'note_attachment_reservation_exists', array['text'],
+  'anon', array[]::text[], 'an anonymous caller cannot probe for reservations'
+);
+select function_privs_are(
+  'public', 'note_attachment_object_is_readable', array['text'],
+  'anon', array[]::text[], 'an anonymous caller cannot probe for readable objects'
+);
 
 select ok(
   (select bool_and(
@@ -122,6 +134,8 @@ select is(
 reset role;
 select set_config('test.reservation',
   (select id::text from public.note_attachments where upload_state = 'reserved'), true);
+select set_config('test.object_key',
+  (select object_key from public.note_attachments where upload_state = 'reserved'), true);
 select is(
   (select object_key from public.note_attachments
    where id = current_setting('test.reservation')::uuid),
@@ -132,8 +146,35 @@ select is(
   'the object key is computed from the Workspace, Note and attachment'
 );
 
+-- What the Storage insert policy actually asks, asked the same way.
+set local role authenticated;
+select set_config('request.jwt.claim.sub', 'd1000000-0000-0000-0000-000000000001', true);
+select ok(
+  public.note_attachment_reservation_exists(current_setting('test.object_key')),
+  'the owner may write exactly the object their reservation is waiting for'
+);
+select ok(
+  not public.note_attachment_reservation_exists(
+    current_setting('test.object_key') || '-other'
+  ),
+  'a key no reservation names is refused'
+);
+-- The bytes are not there yet, so there is nothing to read.
+select ok(
+  not public.note_attachment_object_is_readable(current_setting('test.object_key')),
+  'a reservation is not readable before its upload finalizes'
+);
+
 set local role authenticated;
 select set_config('request.jwt.claim.sub', 'd1000000-0000-0000-0000-000000000002', true);
+select ok(
+  not public.note_attachment_reservation_exists(current_setting('test.object_key')),
+  'another Workspace may not write into a reservation it does not own'
+);
+select ok(
+  not public.note_attachment_object_is_readable(current_setting('test.object_key')),
+  'another Workspace may not read an object it does not own'
+);
 select throws_ok(
   $$select public.finalize_note_attachment(current_setting('test.reservation')::uuid)$$,
   'P0001', 'attachment_not_reserved',
@@ -160,6 +201,16 @@ select lives_ok(
 select is(
   (select count(*)::integer from public.note_attachments),
   1, 'a finalized upload becomes a readable attachment'
+);
+-- The reservation is spent. Its key must not stay writable, or a finalized
+-- attachment could be overwritten by whoever knows where it lives.
+select ok(
+  not public.note_attachment_reservation_exists(current_setting('test.object_key')),
+  'a finalized object key can no longer be written'
+);
+select ok(
+  public.note_attachment_object_is_readable(current_setting('test.object_key')),
+  'the owner can read the object behind their own attachment'
 );
 select throws_ok(
   $$select public.finalize_note_attachment(current_setting('test.reservation')::uuid)$$,

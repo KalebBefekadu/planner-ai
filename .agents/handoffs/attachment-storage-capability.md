@@ -64,9 +64,43 @@ Run in `web/` with Node 24.21.0, holding the repository-wide Supabase lock:
 - `npm ci` — passed; 770 packages, 0 vulnerabilities.
 - `npm run agent:check` — passed; Prettier, ESLint, and TypeScript clean.
 - `npm test` — passed; 81 files, 927 tests.
-- `npm run test:db` — passed; 70 files, 1,266 assertions.
+- `npm run test:db` — passed; 70 files, 1,275 assertions.
+- `npx playwright test tests/e2e/journey-notes.spec.ts tests/e2e/auth-boundary.spec.ts
+  --project=chromium` — passed; 50 tests, against a throwaway local-stack
+  `.env.local` generated from `npx supabase status` and deleted afterwards.
 - `npm run types:generate` then `npm run verify:db` — passed; migrations, pgTAP,
   and generated types agree after a clean reset.
+
+## Two policy defects the browser suite caught
+
+Both denied silently, and both passed a pgTAP check that asserted the policy
+existed rather than asking what it decides. The lifecycle suite now exercises
+the predicates themselves.
+
+1. **The new insert policy denied every upload, twice over.** A policy on
+   `storage.objects` that joins `workspaces` has two `name` columns in scope,
+   and the bare `name` bound to `workspaces.name` rather than the object key --
+   so it compared an object key to a Workspace title. Separately,
+   `note_attachments` forces RLS and its select policy hides reservations, so a
+   subquery evaluated as the caller could not have seen the row even with the
+   right column. Both are removed by asking a `security definer` function that
+   takes the key as a parameter.
+
+2. **The read policy written with the bucket in `20260906060643` has never
+   granted anything to anyone.** It carries the same shadowing fault:
+   `storage.foldername(name)` inside its subquery became
+   `storage.foldername(workspace.name)`, comparing a Workspace id to a path
+   segment of the Workspace's own title. Nothing noticed, because every read
+   went through the service-role client, which does not consult policies at
+   all. This branch is what starts depending on it, so it is replaced here --
+   and narrowed, from ownership of the key's prefix to ownership of the
+   attachment row itself.
+
+The second is the more useful finding: a private-object read policy that has
+been inert since the day it was written is exactly what a least-privilege
+migration is for. Nothing was exposed by it — an over-restrictive policy fails
+closed — but it means the bucket's authorization had never actually been
+exercised before this branch.
 
 ## Risks and follow-up
 
@@ -75,10 +109,10 @@ Run in `web/` with Node 24.21.0, holding the repository-wide Supabase lock:
   reservation makes a direct browser upload possible later without another
   schema change, because the object key and its authorization already exist
   before any byte moves. That is a deliberate non-goal here.
-- No test drives a real Storage object end to end. The pgTAP suite proves the
-  metadata lifecycle and its ownership; the Storage insert policy is asserted to
-  exist and to be reservation-scoped, not exercised against a live upload. A
-  browser test over the real bucket is the missing piece.
+- `journey-notes.spec.ts` drives real uploads, downloads, removal and restore
+  over the real bucket, and passes. That is what found both policy defects
+  above; the earlier draft of this handoff listed the absence of such a run as
+  the main risk, and it was right to.
 - The fifteen-minute reconcile grace period is a judgement, not a measurement.
   It must stay comfortably longer than the slowest plausible 10 MB upload; if
   uploads ever move to the browser, revisit it.

@@ -42,22 +42,85 @@ create policy note_attachments_select_owner on public.note_attachments
     )
   );
 
+-- Whether the caller has a reservation waiting for exactly this object.
+--
+-- This is a function rather than a subquery inside the policy for two reasons,
+-- both of which silently denied every upload when it was written inline.
+--
+-- `note_attachments` forces RLS and its select policy hides reservations, so a
+-- subquery evaluated as the caller could never see the row it was looking for.
+-- And a policy on `storage.objects` that joins `workspaces` has two `name`
+-- columns in scope: the bare `name` bound to `workspaces.name` rather than the
+-- object key, so the check compared an object key to a Workspace title. Naming
+-- the key as a parameter removes both traps.
+create function public.note_attachment_reservation_exists(p_object_key text)
+returns boolean
+language sql
+security definer
+set search_path = pg_catalog, public
+stable
+as $$
+  select exists (
+    select 1 from public.note_attachments attachment
+    join public.workspaces workspace on workspace.id = attachment.workspace_id
+    where attachment.object_key = p_object_key
+      and attachment.upload_state = 'reserved'
+      and workspace.owner_user_id = auth.uid()
+  );
+$$;
+
+revoke all on function public.note_attachment_reservation_exists(text)
+from public, anon, authenticated;
+grant execute on function public.note_attachment_reservation_exists(text) to authenticated;
+
+-- Whether the caller owns the attachment an object belongs to.
+--
+-- The read policy written with the bucket in 20260906060643 has the same
+-- shadowing fault: inside its subquery the bare `name` bound to
+-- `workspaces.name`, so it compared a Workspace id to a path segment of the
+-- Workspace's own title and granted nothing to anybody. Nothing noticed,
+-- because every read went through the service-role client, which does not
+-- consult policies at all. This branch is what starts depending on it.
+--
+-- The replacement is also narrower than the original intent: ownership of the
+-- attachment row, not merely of the Workspace prefix the key sits under.
+create function public.note_attachment_object_is_readable(p_object_key text)
+returns boolean
+language sql
+security definer
+set search_path = pg_catalog, public
+stable
+as $$
+  select exists (
+    select 1 from public.note_attachments attachment
+    join public.workspaces workspace on workspace.id = attachment.workspace_id
+    where attachment.object_key = p_object_key
+      and attachment.upload_state = 'stored'
+      and workspace.owner_user_id = auth.uid()
+  );
+$$;
+
+revoke all on function public.note_attachment_object_is_readable(text)
+from public, anon, authenticated;
+grant execute on function public.note_attachment_object_is_readable(text) to authenticated;
+
+drop policy note_attachments_select_owner on storage.objects;
+create policy note_attachments_select_owner on storage.objects
+  for select to authenticated
+  using (
+    bucket_id = 'note-attachments'
+    and public.note_attachment_object_is_readable(name)
+  );
+
 -- Storage authorizes the person, not a trusted key. The grant is deliberately
--- narrower than the Workspace prefix the read policy uses: a person may write
--- exactly the object a reservation of their own is waiting for, and nothing
--- else. There is no delete policy, because no request path needs one -- an
+-- narrower still on the write side: a person may write exactly the object a
+-- reservation of their own is waiting for, and nothing else. There is no delete policy, because no request path needs one -- an
 -- object whose row never finalized is reconciled by the purge job.
 create policy note_attachments_insert_reserved on storage.objects
   for insert to authenticated
   with check (
     bucket_id = 'note-attachments'
-    and exists (
-      select 1 from public.note_attachments attachment
-      join public.workspaces workspace on workspace.id = attachment.workspace_id
-      where workspace.owner_user_id = (select auth.uid())
-        and attachment.object_key = name
-        and attachment.upload_state = 'reserved'
-    )
+    and public.note_attachment_reservation_exists(name)
   );
 
 -- Reserve. The Workspace comes from ownership, the Note must be the caller's
