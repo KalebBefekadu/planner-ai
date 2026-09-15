@@ -2,19 +2,20 @@
 
 Roadmap stage: **2 - Workspace, Planner And Delivery Hardening**
 
-## Codex handoff ready: preview deferred screens
+## Codex handoff ready: one Operation router
 
-- **Contract:** `.agents/tasks/preview-deferred-screens.md`
-- **Branch:** `codex/remove-preview`
-- **Scope:** increment 2 of the `/preview` retirement. The six deferred screens
-  are gone; the route stays. 996 lines removed, no production file touched.
-- **Foundation:** everything below is pushed and open as PRs #243-#250.
-- **Handoff:** `.agents/handoffs/preview-deferred-screens.md`
-- **Blocked:** increment 5, deleting the route, needs increment 3 first — six
-  unbuilt features under five tickets (WS-01, WS-02 x2, WS-03, WS-04). That is
-  product work, not cleanup, and the audit says each keeps its Preview screen
-  alive as the reference until its port lands.
-- **Next:** the `dispatch_trusted_operation` chain.
+- **Contract:** `.agents/tasks/operation-dispatch-router.md`
+- **Branch:** `codex/operation-dispatch-router`
+- **Scope:** the large half of EH-04. Seven dispatch functions become one, and
+  the surface and contract-exposure checks move in front of the routing --
+  closing a gap where six Operation families were never checked against the
+  contract at all.
+- **Foundation:** everything below is pushed and open as PRs #243-#251.
+- **Handoff:** `.agents/handoffs/operation-dispatch-router.md`
+- **Next:** EH-06 and EH-07 are the untouched outcomes. The nearest small item
+  is constraining `mcp_access_tokens.allowed_operations` against
+  `operation_contracts`, so a token naming an unexposed Operation is refused at
+  creation rather than at use.
 
 ## CI runs again, and integration itself is red
 

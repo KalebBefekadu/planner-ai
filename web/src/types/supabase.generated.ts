@@ -2772,60 +2772,6 @@ export type Database = {
         };
         Returns: Json;
       };
-      dispatch_trusted_operation_action_template_base: {
-        Args: {
-          p_idempotency_key: string;
-          p_input: Json;
-          p_operation_id: string;
-          p_surface: string;
-        };
-        Returns: Json;
-      };
-      dispatch_trusted_operation_capture_action_base: {
-        Args: {
-          p_idempotency_key: string;
-          p_input: Json;
-          p_operation_id: string;
-          p_surface: string;
-        };
-        Returns: Json;
-      };
-      dispatch_trusted_operation_capture_proposal_base: {
-        Args: {
-          p_idempotency_key: string;
-          p_input: Json;
-          p_operation_id: string;
-          p_surface: string;
-        };
-        Returns: Json;
-      };
-      dispatch_trusted_operation_conversation_base: {
-        Args: {
-          p_idempotency_key: string;
-          p_input: Json;
-          p_operation_id: string;
-          p_surface: string;
-        };
-        Returns: Json;
-      };
-      dispatch_trusted_operation_note_appearance_base: {
-        Args: {
-          p_idempotency_key: string;
-          p_input: Json;
-          p_operation_id: string;
-          p_surface: string;
-        };
-        Returns: Json;
-      };
-      dispatch_trusted_operation_notification_base: {
-        Args: {
-          p_idempotency_key: string;
-          p_input: Json;
-          p_operation_id: string;
-          p_surface: string;
-        };
-        Returns: Json;
-      };
       execute_account_deletion_schedule_undo: {
         Args: {
           p_idempotency_key: string;
