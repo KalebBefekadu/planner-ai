@@ -3,6 +3,7 @@
 import { revalidatePlannerAndRecords } from '@/lib/planner-revalidation';
 import { periodBounds } from '@/lib/planning-period';
 import { ReviewIntentError, reviewCompletionKey } from '@/lib/reviews/completion-intent';
+import { payloadFingerprint } from '@/lib/reviews/submission';
 import type { CoachingIntensity } from '@/lib/coaching';
 import { dateInTimezone } from '@/lib/date';
 import { executeOperation, OperationFailure } from '@/lib/operations';
@@ -492,7 +493,7 @@ export async function completeWeeklyReview(input: {
   const { intentId, ...operationInput } = input;
   let idempotencyKey: string;
   try {
-    idempotencyKey = reviewCompletionKey('weekly', input.startsOn, intentId);
+    idempotencyKey = `${reviewCompletionKey('weekly', input.startsOn, intentId)}:${payloadFingerprint(operationInput)}`;
   } catch (error) {
     throw new OperationFailure(
       'invalid_review_intent',
@@ -657,7 +658,7 @@ export async function completePeriodReview(input: {
   const { intentId, ...operationInput } = input;
   let idempotencyKey: string;
   try {
-    idempotencyKey = reviewCompletionKey(input.kind, input.startsOn, intentId);
+    idempotencyKey = `${reviewCompletionKey(input.kind, input.startsOn, intentId)}:${payloadFingerprint(operationInput)}`;
   } catch (error) {
     throw new OperationFailure(
       'invalid_review_intent',
