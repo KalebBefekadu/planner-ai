@@ -24,37 +24,50 @@ const disconnectMessages = new Set([
   'premature close',
 ]);
 
-export function isClientDisconnectError(error: unknown): boolean {
-  if (typeof error !== 'object' || error === null) return false;
+/**
+ * Which of the known signatures this error matched, or null if none did.
+ *
+ * The signature rather than the message, because the message is whatever the
+ * thrower put there. Today the predicate below only admits a fixed set, so the
+ * two are nearly the same thing -- but logging the match keeps that true if the
+ * predicate is ever widened, and knowing *which* signature fired is the useful
+ * signal anyway.
+ */
+export function clientDisconnectSignature(error: unknown): string | null {
+  if (typeof error !== 'object' || error === null) return null;
   const candidate = error as { code?: unknown; name?: unknown; message?: unknown };
-  if (typeof candidate.code === 'string' && disconnectCodes.has(candidate.code)) return true;
-  if (candidate.name === 'AbortError') return true;
-  return (
-    typeof candidate.message === 'string' &&
-    disconnectMessages.has(candidate.message.trim().toLowerCase())
-  );
+  if (typeof candidate.code === 'string' && disconnectCodes.has(candidate.code)) {
+    return candidate.code;
+  }
+  if (candidate.name === 'AbortError') return 'AbortError';
+  if (typeof candidate.message === 'string') {
+    const normalized = candidate.message.trim().toLowerCase();
+    if (disconnectMessages.has(normalized)) return normalized;
+  }
+  return null;
+}
+
+export function isClientDisconnectError(error: unknown): boolean {
+  return clientDisconnectSignature(error) !== null;
 }
 
 export type DisconnectGuardHooks = {
-  warn: (line: string) => void;
+  /** Receives the matched signature, which is already content-free. */
+  warn: (signature: string) => void;
   fatal: (error: unknown) => void;
 };
 
 // Returns whether the error was absorbed, so the decision can be asserted
 // directly rather than inferred from whether a server process is still up.
 export function handleUncaughtException(error: unknown, hooks: DisconnectGuardHooks): boolean {
-  if (!isClientDisconnectError(error)) {
+  const signature = clientDisconnectSignature(error);
+  if (signature === null) {
     // Keep Node's contract: report it and end the process rather than
     // continuing from unknown state.
     hooks.fatal(error);
     return false;
   }
   // Not fatal, but never silent: a rise in disconnects is worth seeing.
-  hooks.warn(
-    JSON.stringify({
-      event: 'client_disconnected',
-      message: error instanceof Error ? error.message : String(error),
-    })
-  );
+  hooks.warn(signature);
   return true;
 }

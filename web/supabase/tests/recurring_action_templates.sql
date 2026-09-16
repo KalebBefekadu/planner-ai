@@ -1,5 +1,5 @@
 begin;
-select plan(32);
+select plan(41);
 
 select has_table('public', 'action_templates', 'recurring Action templates exist');
 select row_security_active('public.action_templates'), 'Action templates have RLS';
@@ -171,7 +171,7 @@ select lives_ok(
       'firstOccurrenceOn', (date_trunc('month', current_date) + interval '1 month 14 days')::date
     )::text
   ),
-  'a monthly template can be created on a safe day of month'
+  'a monthly template can be created on a mid-month day'
 );
 select lives_ok(
   $$select public.execute_ui_operation(
@@ -188,6 +188,89 @@ select is((select count(*)::integer from public.action_templates), 1,
   'create Undo removes only the new template');
 select is((select count(*)::integer from public.actions where title = 'Close the month deliberately'), 0,
   'create Undo removes its generated Action');
+
+-- See PL-11. Month-end recurrences used to be refused outright at creation
+-- because a template stored only its next date and nothing could carry a 31st
+-- through February. The anchor carries it, so the last day of the month is a
+-- schedule someone is allowed to ask for. The first 31 January on or after
+-- today is used so the case is exercised whenever the suite runs.
+select lives_ok(
+  format(
+    'select public.execute_ui_operation(''action-template.create.v1'', %L::jsonb, ''template-create-0003'')',
+    jsonb_build_object(
+      'title', 'Close the books on the last day',
+      'descriptionMarkdown', null,
+      'goalId', null,
+      'cadence', 'monthly',
+      'firstOccurrenceOn', case
+        when current_date <= (date_trunc('year', current_date) + interval '1 month - 1 day')::date
+          then (date_trunc('year', current_date) + interval '1 month - 1 day')::date
+        else (date_trunc('year', current_date) + interval '1 year 1 month - 1 day')::date
+      end
+    )::text
+  ),
+  'a monthly template can be created on the 31st'
+);
+select is(
+  (select monthly_anchor_day::integer from public.action_templates
+   where title = 'Close the books on the last day'),
+  31, 'the chosen day of month is recorded on the template'
+);
+select is(
+  (select extract(day from scheduled_on)::integer from public.actions
+   where title = 'Close the books on the last day'),
+  31, 'the first occurrence lands on the day that was asked for'
+);
+select is(
+  (select next_occurrence_on from public.action_templates
+   where title = 'Close the books on the last day'),
+  (select (date_trunc('month', scheduled_on) + interval '2 months - 1 day')::date
+   from public.actions where title = 'Close the books on the last day'),
+  'the occurrence after a 31 January is the last day of February, not 3 March'
+);
+
+select lives_ok(
+  format(
+    'select public.execute_ui_operation(''action-template.update.v1'', %L::jsonb, ''template-update-0003'')',
+    jsonb_build_object(
+      'id', (select id from public.action_templates where title = 'Close the books on the last day'),
+      'expectedVersion', 1,
+      'title', 'Close the books mid month',
+      'descriptionMarkdown', null,
+      'goalId', null,
+      'cadence', 'monthly',
+      'nextOccurrenceOn', (date_trunc('month', current_date) + interval '1 month 14 days')::date
+    )::text
+  ),
+  'the next date can be moved to a different day of month'
+);
+select is(
+  (select monthly_anchor_day::integer from public.action_templates
+   where title = 'Close the books mid month'),
+  15, 'moving the next date moves the anchor with it, not just that one occurrence'
+);
+select lives_ok(
+  $$select public.execute_ui_operation(
+    'operation.undo.v1',
+    jsonb_build_object(
+      'receiptId', (select id from public.operation_receipts
+                    where idempotency_key = 'template-update-0003')
+    ),
+    'template-update-undo-0003'
+  )$$,
+  'an unchanged reschedule can be undone'
+);
+select is(
+  (select monthly_anchor_day::integer from public.action_templates
+   where title = 'Close the books on the last day'),
+  31, 'Undo restores the anchor along with the date, so the series repeats as it did'
+);
+
+select ok(
+  (select bool_and(monthly_anchor_day is null) from public.action_templates
+   where cadence = 'weekly'),
+  'weekly templates carry no day-of-month anchor'
+);
 
 select set_config('request.jwt.claim.sub', 'd1000000-0000-0000-0000-000000000002', true);
 select is((select count(*)::integer from public.action_templates), 0,

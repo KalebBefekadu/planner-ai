@@ -13,6 +13,10 @@ function note(index: number, overrides: Partial<ExportNote> = {}): ExportNote {
     body_markdown: `Body ${index}`,
     sort_key: index * 1000,
     ai_excluded: false,
+    icon_emoji: null,
+    cover_key: null,
+    cover_position: 50,
+    favorited_at: null,
     created_at: '2026-09-06T00:00:00.000Z',
     updated_at: '2026-09-06T00:00:00.000Z',
     ...overrides,
@@ -110,5 +114,85 @@ describe('Notes vault export/import round trip', () => {
       'Second body.',
       'Third body.',
     ]);
+  });
+});
+
+/* How the owner had the page arranged.
+ *
+ * The manifest already carried sibling order and AI Exclusion, so a restored
+ * Note came back in the right place and stayed out of retrieval. It carried
+ * nothing about the icon, the cover, where the cover sat, or whether the page
+ * was pinned -- so exporting a workspace of illustrated, favourited pages and
+ * restoring it returned an undifferentiated list, with no error, because
+ * nothing had failed. */
+describe('appearance and favourites survive a vault round trip', () => {
+  it('carries the icon, cover, position and favourite through the archive', async () => {
+    const [restored] = await roundTrip([
+      note(1, {
+        icon_emoji: '🌄',
+        cover_key: 'preview-dawn',
+        cover_position: 23,
+        favorited_at: '2026-09-01T09:30:00.000Z',
+      }),
+    ]);
+
+    expect(restored.appearance).toEqual({
+      iconEmoji: '🌄',
+      coverKey: 'preview-dawn',
+      coverPosition: 23,
+      favoritedAt: '2026-09-01T09:30:00.000Z',
+    });
+  });
+
+  it('restores a plain page as plain rather than inventing an appearance', async () => {
+    const [restored] = await roundTrip([note(1)]);
+    expect(restored.appearance).toEqual({
+      iconEmoji: null,
+      coverKey: null,
+      coverPosition: 50,
+      favoritedAt: null,
+    });
+  });
+
+  it('gives an imported folder of Markdown no appearance at all', async () => {
+    /* A Notion page has no Planner AI appearance. Inventing one would be
+       choosing on the owner's behalf and calling it a restore, so anything that
+       is not a vault carries null rather than defaults. */
+    const [candidate] = candidatesFromVaultOrFiles([
+      { path: 'Notes/Imported.md', bytes: Buffer.from('# Imported\n\nBody.', 'utf8') },
+    ]);
+    expect(candidate.appearance).toBeNull();
+  });
+});
+
+/* A manifest is a file the owner can edit, and a restore is exactly the moment
+   a hand-edited one turns up. Each field falls back to its own absence, so one
+   bad value does not cost the others. */
+describe('a manifest with values the database would refuse', () => {
+  async function restoreWithManifest(patch: Record<string, unknown>) {
+    const archive = await zipNotes([note(1)], [], noAttachments);
+    const files = await filesFromZip(archive);
+    const manifestFile = files.find((file) => file.path === 'planner-ai-vault.json')!;
+    const manifest = JSON.parse(manifestFile.bytes.toString('utf8'));
+    Object.assign(manifest.notes[0], patch);
+    manifestFile.bytes = Buffer.from(JSON.stringify(manifest), 'utf8');
+    return candidatesFromVaultOrFiles(files);
+  }
+
+  it('falls back to the default cover position rather than failing the import', async () => {
+    const [restored] = await restoreWithManifest({ coverPosition: 4000, iconEmoji: '📌' });
+    expect(restored.appearance?.coverPosition).toBe(50);
+    // The icon is untouched by the bad position, which is the point.
+    expect(restored.appearance?.iconEmoji).toBe('📌');
+  });
+
+  it('treats an empty icon as no icon rather than as an empty one', async () => {
+    const [restored] = await restoreWithManifest({ iconEmoji: '' });
+    expect(restored.appearance?.iconEmoji).toBeNull();
+  });
+
+  it('ignores a favourite timestamp that is not a string', async () => {
+    const [restored] = await restoreWithManifest({ favoritedAt: 1_234_567 });
+    expect(restored.appearance?.favoritedAt).toBeNull();
   });
 });

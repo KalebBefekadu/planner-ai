@@ -1,6 +1,6 @@
 # Planner AI Target Architecture
 
-Status: **Approved architecture authority.** See the [ADRs](../adr/README.md) for rationale and the [roadmap](../roadmap.md) for staged evolution.
+Status: **Approved architecture authority.** See the [ADRs](../adr/README.md) for rationale, the [roadmap](../roadmap.md) for staged evolution, the [product shape](../product/product-shape.md) for the two-pillar direction, and the [engineering improvement program](improvement-program.md) for measurable convergence work.
 
 ## Architecture Goals
 
@@ -39,13 +39,18 @@ flowchart TB
 
 ### 1. `web`: the product
 
-The existing Next.js App Router application remains the only product shell. It owns Today, Plan, Notes, Review, Settings, authentication UX, onboarding, PWA behavior, and the embedded assistant container.
+The existing Next.js App Router application remains the only product shell. It
+owns the Knowledge and Planning pillars, Settings, authentication UX,
+onboarding, PWA behavior, and the embedded assistant container. Knowledge and
+Planning have distinct navigation and domain behavior but share identity,
+search, links, Operations, Activity, Trash, and recovery.
 
 - Deploy to Vercel using Node.js 24 LTS.
 - Server Components may read through authenticated repositories.
 - Server Actions are thin UI adapters; they do not contain domain business logic.
 - Route Handlers are used for protocol-shaped needs such as internal Operation HTTP, OAuth callbacks, streaming, and uploads.
 - Browser code receives no service-role, database, provider, or integration secrets.
+- Vercel Functions reject a request body over 4.5 MB at the platform edge, before any handler runs, and the response is not this application's JSON. Any route that accepts an upload must advertise and enforce a bound under that ceiling rather than an application limit the deployment cannot honour. Notes import derives every one of its size bounds and user-facing messages from `web/src/lib/notes/import-limits.ts`, whose upload bound is 4 MB — the platform ceiling minus headroom for multipart framing. A larger migration is imported in batches, and the dialog says so.
 
 ### 2. Operation service: the product authority
 
@@ -69,6 +74,7 @@ Supabase provides Auth, authoritative Postgres domain data, and private Storage.
 - Composite Workspace foreign keys prevent cross-owner relationships.
 - A pooled, restricted, non-`BYPASSRLS` server database role supports transaction-capable Operations; the verified actor and Workspace are set transaction-locally and cleared automatically at commit or rollback. Ordinary user-scoped reads may use the verified Supabase JWT. Multi-record writes never simulate transactions with independent HTTP calls.
 - The service-role credential is restricted to isolated lifecycle jobs such as final account purge and is never available to the agent runtime.
+- CI maintains an explicit allowlist of modules permitted to construct a service-role client; an ordinary authenticated Route Handler is not on that list.
 - Authenticated browser roles have no direct mutation grants on protected domain tables; an endpoint is not trusted merely because it runs server-side.
 - Physical changes use reviewed Supabase CLI migrations. Historical prototype SQL is retained only in Git history and is not a migration source.
 
@@ -154,8 +160,10 @@ Operational telemetry is content-free: Operation ID/version, result, latency, st
 ## Toolchain And Repository Boundary
 
 - Standardize production packages on Node.js 24 LTS and one pinned package manager during foundation work.
+- Match Node type definitions to the runtime, match framework tooling to the framework release, and pin direct security-sensitive dependencies with a committed lockfile.
 - Add CI before domain migration: lint, format, typecheck, unit, migration, RLS, build, dependency audit, and browser smoke tests.
 - Keep generated Supabase types synchronized in CI.
+- Give concurrent worker branches isolated database state or serialize their database work explicitly; generated types are never produced from a shared, partially migrated stack.
 - Keep production in `web` with reusable contract/test fixtures. Do not import the standalone Agent Native application UI.
 
 ## Migration Strategy
@@ -195,7 +203,13 @@ Do not equate a service worker or browser cache with local-first architecture. A
 
 ### Collaboration
 
-Move from single-owner Workspace authorization to explicit memberships, roles, object grants, share links, comments, presence, and revocation only after RLS and Operation contracts model every permission. Real-time transport is an optimization; authorization and conflict resolution remain server-verifiable domain behavior.
+After personal dogfood, move first from single-owner authorization to explicit
+memberships with exactly two identities: owner and a flat member role. The owner
+alone manages membership and Workspace deletion; members otherwise see and edit
+the whole Workspace. Richer roles, object grants, share links, comments,
+presence, and revocation remain later gates. Real-time transport is an
+optimization; authorization and conflict resolution remain server-verifiable
+domain behavior.
 
 ### Extension platform
 

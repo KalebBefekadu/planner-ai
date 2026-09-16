@@ -5,7 +5,14 @@ import { scanTest as test, expect, goTo } from './support/workspace';
 // person has asked the operating system for less motion. Both are read-only
 // checks, so they use the shared scan Workspace rather than creating data.
 
-const surfaces = ['/', '/planner', '/notes', '/review', '/settings/preferences'] as const;
+const surfaces = [
+  '/',
+  '/planner',
+  '/notes',
+  '/review',
+  '/settings/preferences',
+  '/settings/account',
+] as const;
 
 // Both of these set the conditions they measure -- the viewport for reflow, the
 // media preference for motion -- so the device profile a project supplies makes

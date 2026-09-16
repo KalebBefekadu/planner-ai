@@ -1,6 +1,6 @@
 # Planner AI Product Requirements
 
-Status: **Approved first-release PRD.** Product language comes from [`CONTEXT.md`](../../CONTEXT.md); architecture and delivery details come from the [architecture](../engineering/architecture.md) and [roadmap](../roadmap.md).
+Status: **Approved product requirements.** The [roadmap](../roadmap.md) defines which requirements belong to the personal MVP, invite beta, or later stages. Product language comes from [`CONTEXT.md`](../../CONTEXT.md); architecture comes from [architecture](../engineering/architecture.md).
 
 ## 1. Product Definition
 
@@ -33,7 +33,12 @@ The product succeeds when a person can repeatedly:
 
 ### Today
 
-- Show at most three highlighted daily priorities, overdue Actions, Goal context, recent Captures, and the next Review.
+- Show at most five committed daily Actions, overdue Actions, Goal context, recent Captures, and the next Review.
+  The limit is five, not the three this document previously specified. Five is what `daily-focus.set.v1`
+  enforces, what the stored daily focus list holds, and what the product has shipped and tested since the
+  Operation was introduced. Lowering it to three would be a data change requiring a migration for anyone
+  already committing four or five, so the requirement is corrected to the implemented and enforced limit
+  rather than the implementation being changed silently to match the document.
 - Allow completion, rescheduling, blocker, and replacement decisions without opening chat.
 - Keep ordinary screens quiet; proactive coaching appears only at decision points.
 
@@ -153,7 +158,16 @@ Onboarding is skippable and targets one real planning loop in about ten minutes:
 
 Microphone permission is requested only after the person initiates voice Capture. Incomplete onboarding never blocks the empty Workspace.
 
-## 9. Launch Scope
+## 9. Release Scope
+
+### Required for the personal MVP
+
+- private authentication and one owner-isolated Workspace;
+- Today, Plan, Notes, Capture, Review, Settings, and Activity through the real UI;
+- representative Notion import with item-level reconciliation, complete export, and verified restore;
+- embedded assistant parity for critical Note and Planner Operations with graceful provider failure;
+- one authenticated external MCP client using narrow, revocable grants;
+- responsive desktop/mobile workflows, production migration, monitoring, backup, rollback, and seven-day owner dogfood.
 
 ### Required before invite beta
 

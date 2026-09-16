@@ -121,7 +121,7 @@ export function MemoryManager({ memories }: { memories: MemoryView[] }) {
                 <div>
                   <p>{memory.statement}</p>
                   <span>
-                    Source: {memory.source_type}
+                    Source: <span className="enum-label">{memory.source_type}</span>
                     {sourceHref(memory) ? (
                       <>
                         {' '}

@@ -2,6 +2,7 @@
 
 import { randomUUID } from 'node:crypto';
 import { revalidatePath } from 'next/cache';
+import { revalidatePlannerAndRecords } from '@/lib/planner-revalidation';
 import { executeOperation, type OperationInput } from '@/lib/operations';
 import { createClient } from '@/lib/supabase/server';
 
@@ -72,9 +73,16 @@ export async function completeGuidedOnboarding(
   });
   revalidatePath('/', 'layout');
   revalidatePath('/onboarding');
-  revalidatePath('/vision');
-  revalidatePath('/planner');
-  revalidatePath('/today');
-  revalidatePath('/inbox');
+  // '/today' was named here but is not a route -- Today is served by '/' and
+  // '/planner/today' -- so that call had never invalidated anything.
+  revalidatePlannerAndRecords();
   return result;
+}
+
+/* The wizard keeps a device-local draft so an interrupted setup can be resumed.
+   That draft is scoped to the owner, which means the client needs to know who
+   it is holding a draft for. Only the identifier crosses the boundary. */
+export async function getOnboardingOwnerId(): Promise<string> {
+  const { user } = await authenticatedClient();
+  return user.id;
 }

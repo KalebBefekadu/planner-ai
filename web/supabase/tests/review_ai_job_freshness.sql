@@ -6,8 +6,8 @@ select has_column('public', 'ai_jobs', 'source_starts_on', 'Review jobs retain p
 select has_column('public', 'ai_jobs', 'source_ends_on', 'Review jobs retain period end');
 select function_privs_are(
   'public', 'persist_review_ai_proposal_job',
-  array['uuid', 'uuid', 'text', 'date', 'date', 'jsonb', 'text', 'text'],
-  'service_role', array['EXECUTE'], 'only the trusted route can publish a job result'
+  array['uuid', 'text', 'date', 'date', 'jsonb', 'text', 'text'],
+  'service_role', array[]::text[], 'publishing a job result no longer needs a trusted role'
 );
 
 insert into auth.users (
@@ -40,9 +40,12 @@ select '83100000-0000-4000-8000-000000000002', id,
   'weekly', '2026-08-17', '2026-08-23', '2026-08-17T10:01:00Z'
 from public.workspaces where owner_user_id = '83000000-0000-4000-8000-000000000001';
 
+set local role authenticated;
+select set_config('request.jwt.claim.role', 'authenticated', true);
+select set_config('request.jwt.claim.sub', '83000000-0000-4000-8000-000000000001', true);
 select throws_ok(
   $$select public.persist_review_ai_proposal_job(
-    '83000000-0000-4000-8000-000000000001', '83100000-0000-4000-8000-000000000001',
+    '83100000-0000-4000-8000-000000000001',
     'weekly', '2026-08-17', '2026-08-23',
     '{"summary":"Stale","priorityActionIds":[],"recommendations":[],"reflectionPrompts":["Old?"]}',
     'test-model', 'review-analysis-v1'
@@ -50,7 +53,7 @@ select throws_ok(
 );
 select lives_ok(
   $$select public.persist_review_ai_proposal_job(
-    '83000000-0000-4000-8000-000000000001', '83100000-0000-4000-8000-000000000002',
+    '83100000-0000-4000-8000-000000000002',
     'weekly', '2026-08-17', '2026-08-23',
     '{"summary":"Newest","priorityActionIds":[],"recommendations":[],"reflectionPrompts":["What changed?"]}',
     'test-model', 'review-analysis-v1'
@@ -58,6 +61,8 @@ select lives_ok(
 );
 select is((select count(*)::integer from public.review_ai_proposals), 1, 'only one proposal persists');
 select is((select payload ->> 'summary' from public.review_ai_proposals), 'Newest', 'the newest payload wins');
+set local role service_role;
+select set_config('request.jwt.claim.role', 'service_role', true);
 select throws_ok(
   $$insert into public.ai_jobs (
     workspace_id, actor_user_id, operation, request_id, status, source_review_kind

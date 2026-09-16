@@ -7,6 +7,12 @@ import {
 } from '@/lib/markdown/rich-editor';
 import { plannerMarkdownIsSemanticallyEquivalent } from '@/lib/markdown/contract';
 
+/* Escapes a serializer may add on its own. Mirrors the gate in rich-editor.ts;
+   kept here as an independent expression of the rule rather than an import, so
+   the test still fails if the gate's own definition quietly changes. */
+const backslashEscape = /\\[\\`*_{}[\]()#+\-.!~=|<>]/g;
+const countEscapes = (markdown: string) => (markdown.match(backslashEscape) ?? []).length;
+
 describe('Planner rich Markdown adapter', () => {
   it.each(markdownGoldenCorpus)(
     'does not lose semantics for supported $name documents',
@@ -20,7 +26,15 @@ describe('Planner rich Markdown adapter', () => {
       const roundTripped = richDocumentToPlannerMarkdown(document);
       expect(roundTripped).not.toBeNull();
       expect(plannerMarkdownIsSemanticallyEquivalent(markdown, roundTripped!)).toBe(true);
-      expect(plannerMarkdownSupportsRichEditing(markdown)).toBe(true);
+
+      /* Converting is necessary for rich mode, and is no longer sufficient.
+         A document can survive the round trip with its meaning intact and still
+         come back carrying escapes nobody typed -- which is how every Obsidian
+         wikilink was being broken while this very assertion passed. What is
+         pinned now is the weaker, true claim: rich mode is offered exactly when
+         the round trip added nothing. */
+      const gainedEscapes = countEscapes(roundTripped!) > countEscapes(markdown);
+      expect(plannerMarkdownSupportsRichEditing(markdown)).toBe(!gainedEscapes);
     }
   );
 

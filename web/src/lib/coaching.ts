@@ -48,8 +48,20 @@ export function inboxCoachingCue(intensity: CoachingIntensity, captureCount: num
 
 export function weeklyReviewCoachingCue(
   intensity: CoachingIntensity,
-  state: { actionCount: number; blockedCount: number }
+  state: { actionCount: number; blockedCount: number; stalledCount?: number }
 ) {
+  // The advice has to track what the screen now asks for. Telling someone to
+  // resolve every unfinished Action while the screen deliberately no longer
+  // requires it is worse than saying nothing: it reads as a rule they are
+  // breaking.
+  if (state.stalledCount) {
+    return cue(
+      intensity,
+      state.stalledCount === 1
+        ? 'One Action has outlived three reviews. Name what would move it, or let it go.'
+        : 'A few Actions have outlived three reviews. Name what would move each, or let them go.'
+    );
+  }
   if (state.blockedCount > 0) {
     return cue(
       intensity,
@@ -57,7 +69,7 @@ export function weeklyReviewCoachingCue(
     );
   }
   if (state.actionCount > 0) {
-    return cue(intensity, 'Resolve every unfinished Action before choosing next week priorities.');
+    return cue(intensity, 'Leave what is still moving alone, and choose next week priorities.');
   }
   return cue(intensity, 'Use the quiet week to record what worked and protect it next week.');
 }

@@ -4,7 +4,6 @@ import { createHash } from 'node:crypto';
 import { headers } from 'next/headers';
 import { revalidatePath } from 'next/cache';
 import { redirect } from 'next/navigation';
-import { createAdminClient } from '@/lib/supabase/admin';
 import { createClient } from '@/lib/supabase/server';
 import { postLoginPath } from '@/lib/auth/post-login';
 
@@ -51,20 +50,34 @@ async function appOrigin() {
   throw new Error('NEXT_PUBLIC_APP_URL must be configured.');
 }
 
-async function claimInvite(email: string, inviteCode: string) {
-  const admin = createAdminClient();
+type ClaimedInvite = { inviteId: string; tokenHash: string };
+type AuthClient = Awaited<ReturnType<typeof createClient>>;
+
+/**
+ * The invite code is the credential. Nobody is signed in yet, so there is no
+ * identity to derive anything from; the caller proves they hold an invite by
+ * presenting a value that hashes into the table, and that is the whole of the
+ * authorization. The hash is kept so the release can be tied to this claim.
+ */
+async function claimInvite(
+  supabase: AuthClient,
+  email: string,
+  inviteCode: string
+): Promise<ClaimedInvite | null> {
   const tokenHash = createHash('sha256').update(inviteCode).digest('hex');
-  const { data, error } = await admin.rpc('claim_beta_invite', {
+  const { data, error } = await supabase.rpc('claim_beta_invite', {
     p_email: email.toLowerCase(),
     p_token_hash: tokenHash,
   });
   if (error || typeof data !== 'string') return null;
-  return data;
+  return { inviteId: data, tokenHash };
 }
 
-async function releaseInvite(inviteId: string) {
-  const admin = createAdminClient();
-  await admin.rpc('release_beta_invite', { p_invite_id: inviteId });
+async function releaseInvite(supabase: AuthClient, invite: ClaimedInvite) {
+  await supabase.rpc('release_beta_invite', {
+    p_invite_id: invite.inviteId,
+    p_token_hash: invite.tokenHash,
+  });
 }
 
 export async function login(formData: FormData) {
@@ -112,8 +125,8 @@ export async function signup(formData: FormData) {
   const inviteCode = readField(formData, 'invite_code', '/signup');
   validatePassword(password, '/signup');
 
-  const inviteId = await claimInvite(email, inviteCode);
-  if (!inviteId) {
+  const invite = await claimInvite(supabase, email, inviteCode);
+  if (!invite) {
     redirect(messageUrl('/signup', 'Signup is currently available by invitation only.'));
   }
 
@@ -125,7 +138,7 @@ export async function signup(formData: FormData) {
   });
 
   if (error) {
-    await releaseInvite(inviteId);
+    await releaseInvite(supabase, invite);
     redirect(
       messageUrl(
         '/signup',

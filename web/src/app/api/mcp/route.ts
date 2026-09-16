@@ -2,7 +2,6 @@ import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { WebStandardStreamableHTTPServerTransport } from '@modelcontextprotocol/sdk/server/webStandardStreamableHttp.js';
 import { createClient as createSupabaseClient, type SupabaseClient } from '@supabase/supabase-js';
 import { NextResponse } from 'next/server';
-import { createAdminClient } from '@/lib/supabase/admin';
 import {
   hashMcpToken,
   isJwtCredential,
@@ -24,7 +23,15 @@ type SharedClaims = {
   owner_user_id: string;
   allowed_operations: string[];
 };
-type TokenClaims = SharedClaims & { credential: 'manual'; token_id: string };
+// Both credentials now carry the client they were verified with, because both
+// execute as that same caller. The manual half presents the token hash, which
+// is the only proof of holding the token; the OAuth half presents the person's
+// JWT. Neither path needs an admin client.
+type TokenClaims = SharedClaims & {
+  credential: 'manual';
+  token_hash: string;
+  client: SupabaseClient;
+};
 type OAuthClaims = SharedClaims & {
   credential: 'oauth';
   grant_id: string;
@@ -63,11 +70,12 @@ async function authenticate(request: Request): Promise<McpClaims | null> {
     const client = createSupabaseClient(url, publicKey, {
       auth: { autoRefreshToken: false, persistSession: false },
     });
+    const tokenHash = await hashMcpToken(manualToken);
     const { data, error } = await client.rpc('authenticate_mcp_token', {
-      p_token_hash: await hashMcpToken(manualToken),
+      p_token_hash: tokenHash,
     });
     if (error || !Array.isArray(data) || data.length !== 1) return null;
-    const claims = data[0] as Partial<TokenClaims>;
+    const claims = data[0] as Partial<SharedClaims & { token_id: string }>;
     if (
       typeof claims.token_id !== 'string' ||
       typeof claims.workspace_id !== 'string' ||
@@ -76,7 +84,14 @@ async function authenticate(request: Request): Promise<McpClaims | null> {
     ) {
       return null;
     }
-    return { ...(claims as TokenClaims), credential: 'manual' };
+    return {
+      credential: 'manual',
+      workspace_id: claims.workspace_id,
+      owner_user_id: claims.owner_user_id,
+      allowed_operations: claims.allowed_operations,
+      token_hash: tokenHash,
+      client,
+    };
   }
 
   if (!isJwtCredential(credential)) return null;
@@ -121,7 +136,6 @@ function toolError() {
 function buildServer(claims: McpClaims) {
   const server = new McpServer({ name: 'Planner AI', version: '1.0.0' });
   const allowed = new Set(claims.allowed_operations);
-  const admin = claims.credential === 'manual' ? createAdminClient() : null;
 
   if (allowed.has(workspaceSnapshotGrant.id)) {
     server.registerTool(
@@ -135,7 +149,9 @@ function buildServer(claims: McpClaims) {
       async () => {
         const { data, error } =
           claims.credential === 'manual'
-            ? await admin!.rpc('read_mcp_workspace_snapshot', { p_token_id: claims.token_id })
+            ? await claims.client.rpc('read_mcp_workspace_snapshot', {
+                p_token_hash: claims.token_hash,
+              })
             : await claims.client.rpc('read_mcp_oauth_workspace_snapshot', {
                 p_grant_id: claims.grant_id,
               });
@@ -173,8 +189,8 @@ function buildServer(claims: McpClaims) {
         };
         const { data, error } =
           claims.credential === 'manual'
-            ? await admin!.rpc('execute_mcp_operation', {
-                p_token_id: claims.token_id,
+            ? await claims.client.rpc('execute_mcp_operation', {
+                p_token_hash: claims.token_hash,
                 ...params,
               })
             : await claims.client.rpc('execute_mcp_oauth_operation', {

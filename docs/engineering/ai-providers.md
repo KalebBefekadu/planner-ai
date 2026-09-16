@@ -77,12 +77,34 @@ Provider request normalization is explicit. Groq tool turns disable parallel too
 - Provider failure never blocks click-first planning, Notes, exact search, or raw Capture storage.
 - Operational records contain no prompts, outputs, filenames, Note titles, transcript text, or raw user identifiers.
 
+## Cost Ceiling Per Workflow
+
+Every AI workflow has a hard output-token cap and a hard request-body cap in code, so a per-workflow worst case can be derived from the approved price version without spending anything. At the `2026-08-17-gpt-oss-120b` price of $0.15 per million input tokens and $0.60 per million output tokens, the ceilings are:
+
+| Workflow          | Output cap                  | Request body cap | Derived worst case per request |
+| ----------------- | --------------------------- | ---------------- | ------------------------------ |
+| Assistant turn    | 1,000 tokens, twice on a read-tool turn | 48,000 bytes | about $0.005 |
+| Capture analysis  | 1,600 tokens                | 2,000 bytes, 12,000 source characters | about $0.002 |
+| Review analysis   | 1,200 tokens                | 2,000 bytes      | about $0.001 |
+| Socratic prompt   | 320 tokens                  | 12,000 bytes     | about $0.001 |
+| Transcription     | not token priced            | 25 MB audio      | $0.04 per audio hour, 10 seconds minimum billed |
+
+These are ceilings, not measurements. Typical turns are far below them because the bound assumes a maximum-length body and a completion that runs to the cap. The figures are useful as the shape of the exposure rather than as a forecast: the enforced limit on actual spend is the $20 monthly platform cap and the per-minute quotas, both of which apply before any provider call and neither of which depends on these estimates being right.
+
+A read-tool assistant turn is the only workflow that bills twice for one user action. That turn is pinned to the provider that served its first call, so it cannot silently double by failing over mid-turn, and it is structurally limited to a single read round -- there is no loop that could add a third call. `tests/unit/ai-provider-turn.test.ts` holds the pinning and single-attempt guarantees.
+
+## Local Outage Drill
+
+`tests/e2e/journey-assistant.spec.ts` runs the drill deterministically: every AI route is refused at the network layer, and a Note is written and persisted, an Action is added to Today and completed, and both survive a reload. Nothing is mocked into succeeding. The same spec proves that a failed assistant turn keeps the typed message and offers a retry, and that a failed Proposal approval leaves the Proposal on screen instead of discarding it with the outage.
+
+This drill covers the application's behavior when the provider is unreachable. It does not cover a real Groq incident, degraded-but-responding behavior, or partial responses from a live endpoint, and it is not a substitute for the production drill recorded below.
+
 ## Required External Verification
 
 - Enable and capture evidence of Groq Zero Data Retention for the production organization.
 - Confirm billing spend limits and model permissions in the production Groq project.
 - Recheck prices, retention, data location, subprocessors, and model lifecycle before beta and at least quarterly.
-- Complete a provider outage drill and verify that the click-first product remains available.
+- Complete a provider outage drill against the real provider in the deployed environment. The local drill above covers an unreachable provider only.
 - Before enabling the OpenAI agent fallback, pass the full `assistant-v11` and assistant-read live corpora on OpenAI, verify project retention and spend limits, and record the result here.
 
 ## Sources

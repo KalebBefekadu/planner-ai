@@ -2,7 +2,7 @@ name: Planner AI CI
 
 on:
   push:
-    branches: [main]
+    branches: [main, integration/dogfood]
     paths:
       - 'web/**'
       - '.github/workflows/ci.yml'
@@ -27,10 +27,10 @@ jobs:
   application:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
         with:
-          node-version: 24
+          node-version: 24.21.0
           cache: npm
           cache-dependency-path: web/package-lock.json
       - run: npm ci
@@ -38,6 +38,7 @@ jobs:
       - run: npm run lint
       - run: npm run typecheck
       - run: npm test
+      - run: npm run test:coverage
       - run: npm run audit
       - run: npm run build
         env:
@@ -49,29 +50,22 @@ jobs:
   database:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
         with:
-          node-version: 24
+          node-version: 24.21.0
           cache: npm
           cache-dependency-path: web/package-lock.json
       - run: npm ci
-      - run: npx supabase start
-      - run: npm run test:db
-      - name: Verify generated Supabase types
-        run: |
-          npm run types:generate
-          test -s src/types/supabase.generated.ts
-          npx prettier --write src/types/supabase.generated.ts
-          git diff --exit-code -- src/types/supabase.generated.ts
+      - run: npm run verify:db
 
   browser:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
         with:
-          node-version: 24
+          node-version: 24.21.0
           cache: npm
           cache-dependency-path: web/package-lock.json
       - run: npm ci
@@ -83,21 +77,34 @@ jobs:
           echo "NEXT_PUBLIC_SUPABASE_URL=$API_URL" >> "$GITHUB_ENV"
           echo "NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY=$ANON_KEY" >> "$GITHUB_ENV"
           echo "SUPABASE_SERVICE_ROLE_KEY=$SERVICE_ROLE_KEY" >> "$GITHUB_ENV"
-      - run: npm run test:e2e
+      # Every journey, on every pull request, on one browser project.
+      #
+      # This used to be a --grep list of nine test titles. It failed open: a
+      # renamed test silently stopped being selected, a new spec file was
+      # never covered until someone remembered to edit the list, and nothing
+      # reported that coverage had shrunk. Two MVP-blocking defects reached
+      # the integration branch through that gap -- an import report that
+      # described a committed Note as "New", and a Notes editor that discarded
+      # the last edit when you opened another Note. Both were found by running
+      # the suite by hand.
+      #
+      # The mobile project used to run only after merge, justified here by the
+      # claim that it doubles the runtime and "has never been the project that
+      # caught a defect first". The first post-merge run after that comment was
+      # written is the run that falsified it: mobile-chromium, and only
+      # mobile-chromium, caught a rich editor that showed a task ticked and
+      # then wrote the unticked line back to the Note. Completion was silently
+      # discarded on a phone, which is where a checkbox is the natural way to
+      # work through a list.
+      #
+      # It reached the integration branch precisely because the project that
+      # could see it ran after the merge rather than before it. A saving that
+      # defers the only check capable of catching a class of defect is not a
+      # saving, so both projects run on pull requests now and the runtime cost
+      # is accepted.
+      - name: Run browser suite
+        run: npm run test:e2e
         env:
           PLANNER_DATA_MODEL: canonical
           PLANNER_UI_PREVIEW: enabled
-          PLANNER_UI_V2: enabled
           NEXT_PUBLIC_APP_URL: http://127.0.0.1:3000
-
-  dependency-review:
-    if: github.event_name == 'pull_request'
-    runs-on: ubuntu-latest
-    defaults:
-      run:
-        working-directory: .
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/dependency-review-action@v4
-        with:
-          fail-on-severity: high
