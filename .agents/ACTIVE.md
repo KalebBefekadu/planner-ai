@@ -2,18 +2,21 @@
 
 Roadmap stage: **2 - Workspace, Planner And Delivery Hardening**
 
-## Codex handoff ready: MCP grants follow the contract
+## Codex handoff ready: account deletion is never stuck
 
-- **Contract:** `.agents/tasks/mcp-grant-contract.md`
-- **Branch:** `codex/mcp-grant-contract`
-- **Scope:** the follow-up from the router branch. An MCP grant can no longer
-  name an Operation the contract does not expose to MCP, refused at creation
-  rather than at use.
-- **Foundation:** everything below is pushed and open as PRs #243-#252.
-- **Handoff:** `.agents/handoffs/mcp-grant-contract.md`
-- **Next:** EH-06 and EH-07 are the two untouched outcomes, and both are large.
-  Eleven branches are stacked unreviewed; landing some of them matters more
-  than adding a twelfth.
+- **Contract:** `.agents/tasks/durable-job-model.md`
+- **Branch:** `codex/durable-job-model`
+- **Scope:** first slice of EH-07. A deletion request abandoned by a dead
+  worker was never retried, because the cron only looked at `scheduled` and
+  nothing released a `processing` claim. It now has the same visibility
+  timeout, attempt counting and backoff that notification delivery already had.
+- **Foundation:** everything below is pushed and open as PRs #243-#253.
+- **Handoff:** `.agents/handoffs/durable-job-model.md`
+- **Open decision:** attempts are deliberately uncapped. Whether a deletion
+  request should ever be abandoned is a product question, and answering it
+  needs somewhere for a stalled request to surface.
+- **Next:** EH-06 is the last untouched outcome. Twelve branches are stacked
+  unreviewed; landing them matters more than a thirteenth.
 
 ## CI runs again, and integration itself is red
 

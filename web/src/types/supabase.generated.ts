@@ -5,10 +5,12 @@ export type Database = {
     Tables: {
       account_deletion_requests: {
         Row: {
+          attempt_count: number;
           canceled_at: string | null;
           completed_at: string | null;
           id: string;
           last_error_code: string | null;
+          next_attempt_at: string | null;
           processing_started_at: string | null;
           requested_at: string;
           scheduled_for: string;
@@ -18,10 +20,12 @@ export type Database = {
           workspace_id: string | null;
         };
         Insert: {
+          attempt_count?: number;
           canceled_at?: string | null;
           completed_at?: string | null;
           id?: string;
           last_error_code?: string | null;
+          next_attempt_at?: string | null;
           processing_started_at?: string | null;
           requested_at?: string;
           scheduled_for: string;
@@ -31,10 +35,12 @@ export type Database = {
           workspace_id?: string | null;
         };
         Update: {
+          attempt_count?: number;
           canceled_at?: string | null;
           completed_at?: string | null;
           id?: string;
           last_error_code?: string | null;
+          next_attempt_at?: string | null;
           processing_started_at?: string | null;
           requested_at?: string;
           scheduled_for?: string;
@@ -2715,6 +2721,14 @@ export type Database = {
         Returns: Json;
       };
       capture_proposal_item_json: { Args: { p_item_id: string }; Returns: Json };
+      claim_account_deletion_batch: {
+        Args: { p_limit: number };
+        Returns: {
+          deletion_attempt_count: number;
+          deletion_request_id: string;
+          deletion_user_id: string;
+        }[];
+      };
       claim_beta_invite: {
         Args: { p_email: string; p_token_hash: string };
         Returns: string;
@@ -2730,6 +2744,10 @@ export type Database = {
           user_id: string;
           workspace_id: string;
         }[];
+      };
+      complete_account_deletion: {
+        Args: { p_request_id: string };
+        Returns: undefined;
       };
       complete_ai_job: {
         Args: { p_job_id: string; p_result_target_id: string };
@@ -3476,6 +3494,10 @@ export type Database = {
         Returns: undefined;
       };
       refresh_all_workspace_notifications: { Args: never; Returns: number };
+      release_account_deletion: {
+        Args: { p_error_code: string; p_request_id: string };
+        Returns: undefined;
+      };
       release_ai_quota_reservation: {
         Args: { p_request_id: string };
         Returns: undefined;

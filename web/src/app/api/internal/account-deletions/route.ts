@@ -12,13 +12,7 @@ export async function POST(request: Request) {
   }
   const admin = createAdminClient();
   const runId = await startLifecycleJobRun(admin, 'account_deletion');
-  const { data: due, error } = await admin
-    .from('account_deletion_requests')
-    .select('id,user_id')
-    .eq('status', 'scheduled')
-    .lte('scheduled_for', new Date().toISOString())
-    .order('scheduled_for')
-    .limit(25);
+  const { data: due, error } = await admin.rpc('claim_account_deletion_batch', { p_limit: 25 });
   if (error) {
     await finishLifecycleJobRun(admin, runId, {
       status: 'failed',
@@ -32,39 +26,26 @@ export async function POST(request: Request) {
 
   let completed = 0;
   let failed = 0;
-  for (const requestRow of due ?? []) {
-    const { data: claimed } = await admin
-      .from('account_deletion_requests')
-      .update({ status: 'processing', processing_started_at: new Date().toISOString() })
-      .eq('id', requestRow.id)
-      .eq('status', 'scheduled')
-      .select('id,user_id')
-      .maybeSingle();
-    if (!claimed?.user_id) continue;
-
-    const deletion = await admin.auth.admin.deleteUser(claimed.user_id, false);
-    if (deletion.error) {
+  let reclaimed = 0;
+  for (const claim of due ?? []) {
+    // A second attempt means an earlier one did not finish. Counting them is
+    // what makes a request that keeps stalling visible at all.
+    if (claim.deletion_attempt_count > 1) reclaimed += 1;
+    try {
+      const deletion = await admin.auth.admin.deleteUser(claim.deletion_user_id, false);
+      if (deletion.error) throw new Error('auth_delete_failed');
+      await admin.rpc('complete_account_deletion', { p_request_id: claim.deletion_request_id });
+      completed += 1;
+    } catch {
+      // Hand the claim back with a widening backoff. Letting this throw out of
+      // the loop instead would leave the request claimed until the visibility
+      // timeout expires -- recoverable, but slower than saying so now.
       failed += 1;
-      await admin
-        .from('account_deletion_requests')
-        .update({
-          status: 'scheduled',
-          processing_started_at: null,
-          last_error_code: 'auth_delete_failed',
-        })
-        .eq('id', claimed.id)
-        .eq('status', 'processing');
-      continue;
+      await admin.rpc('release_account_deletion', {
+        p_request_id: claim.deletion_request_id,
+        p_error_code: 'auth_delete_failed',
+      });
     }
-    await admin
-      .from('account_deletion_requests')
-      .update({
-        status: 'completed',
-        completed_at: new Date().toISOString(),
-        last_error_code: null,
-      })
-      .eq('id', claimed.id);
-    completed += 1;
   }
 
   await finishLifecycleJobRun(admin, runId, {
@@ -76,7 +57,7 @@ export async function POST(request: Request) {
   });
 
   return NextResponse.json(
-    { processed: due?.length ?? 0, completed },
+    { processed: due?.length ?? 0, completed, reclaimed },
     { headers: { 'Cache-Control': 'no-store' } }
   );
 }
