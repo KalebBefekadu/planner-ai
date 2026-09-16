@@ -5,6 +5,7 @@ import { revalidatePlannerAndRecords } from '@/lib/planner-revalidation';
 import type { CoachingIntensity } from '@/lib/coaching';
 import { dateInTimezone } from '@/lib/date';
 import { executeOperation, operationFailureMessage } from '@/lib/operations';
+import { periodBounds } from '@/lib/planning-period';
 import {
   nextFocusIds,
   planTodayAction,
@@ -47,6 +48,23 @@ export type CreateTodayActionResult = {
   focusFailureMessage: string | null;
 };
 
+// planTodayAction anchors its weekly horizon to a Monday-first week because it
+// has no workspace to ask. The workspace's own week start is the authoritative
+// boundary for "this week", so it is applied here from periodBounds rather
+// than duplicating that rule inside the composer.
+//
+// This has to stay an async function: every value a 'use server' module
+// exports is wired up as a Server Action, and Next.js rejects a synchronous
+// export from one.
+export async function applyWorkspaceWeekStart<Create extends { horizonKind: 'week' | 'month' }>(
+  create: Create,
+  scheduledOn: string,
+  weekStartsOn: number
+): Promise<Create> {
+  if (create.horizonKind !== 'week') return create;
+  return { ...create, ...periodBounds('week', scheduledOn, weekStartsOn) };
+}
+
 function ensureCanonical() {
   if (process.env.PLANNER_DATA_MODEL !== 'canonical') {
     throw new Error('Today execution requires the canonical data model.');
@@ -62,7 +80,7 @@ async function todayClient() {
   if (!user) throw new Error('Please sign in to continue.');
   const { data: workspace, error } = await supabase
     .from('workspaces')
-    .select('id,timezone,coaching_intensity')
+    .select('id,timezone,coaching_intensity,week_starts_on')
     .eq('owner_user_id', user.id)
     .single();
   if (error || !workspace) throw new Error('Unable to load your Workspace.');
@@ -71,6 +89,7 @@ async function todayClient() {
     workspaceId: workspace.id as string,
     timezone: workspace.timezone as string,
     coachingIntensity: workspace.coaching_intensity as CoachingIntensity,
+    weekStartsOn: Number(workspace.week_starts_on),
   };
 }
 
@@ -234,7 +253,7 @@ export async function editTodayAction(input: {
 export async function createTodayAction(
   input: TodayComposerInput
 ): Promise<CreateTodayActionResult> {
-  const { supabase, timezone } = await todayClient();
+  const { supabase, timezone, weekStartsOn } = await todayClient();
   const localDate = dateInTimezone(timezone);
 
   let plan;
@@ -247,10 +266,12 @@ export async function createTodayAction(
     throw new Error('Check this Action and try again.');
   }
 
+  const create = await applyWorkspaceWeekStart(plan.create, input.scheduledOn, weekStartsOn);
+
   // A replayed idempotency key returns the originally recorded Action, so a
   // double submission and a retry after a focus failure both resolve to the
   // same row.
-  const created = await executeOperation(supabase, 'action.create.v1', plan.create, {
+  const created = await executeOperation(supabase, 'action.create.v1', create, {
     idempotencyKey: plan.idempotencyKey,
     surface: 'ui',
   });
