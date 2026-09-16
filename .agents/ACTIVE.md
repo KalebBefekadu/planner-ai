@@ -2,22 +2,19 @@
 
 Roadmap stage: **2 - Workspace, Planner And Delivery Hardening**
 
-## Codex handoff ready: Operations name their domain
+## Codex handoff ready: the Weekly Review reads through a view model
 
-- **Contract:** `.agents/tasks/operation-owning-domain.md`
-- **Branch:** `codex/operation-owning-domain`
-- **Scope:** EH-04's last bullet. The owning domain becomes a manifest field, a
-  contract column and a pure function the router reads, instead of control flow
-  nobody could ask a question of. **EH-04 is now complete.**
-- **Correction:** two earlier claims about EH-04 were wrong. Deriving the
-  assistant and MCP catalogs from the manifest was already done before this
-  program began, and "undo strategy" is not one of the fields the roadmap asks
-  the manifest to carry -- I added it. Owning domain was the only bullet left.
-- **Foundation:** everything below is pushed and open as PRs #243-#255.
-- **Handoff:** `.agents/handoffs/operation-owning-domain.md`
-- **Next:** nothing unblocked remains. What is left needs a decision (capped
-  deletion retries, `/preview` increment 3), production traffic (the rest of
-  EH-06), or the personal MVP gate (EH-05).
+- **Contract:** `.agents/tasks/actions-as-adapters.md`
+- **Branch:** `codex/actions-as-adapters`
+- **Scope:** first slice of EH-03's second bullet. The Weekly Review's
+  view-model assembly leaves its Server Action; the queries stay. No behaviour
+  change, 20 new tests over cases a database was previously needed to reach.
+- **Correction:** I had been reporting this bullet as blocked. It was only
+  deferred, by me. `src/app/actions.ts` (992 lines) and
+  `src/app/notes/actions.ts` (868) are in the same position and are also not
+  blocked.
+- **Foundation:** everything below is pushed and open as PRs #243-#256.
+- **Handoff:** `.agents/handoffs/actions-as-adapters.md`
 
 ## CI runs again, and integration itself is red
 

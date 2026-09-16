@@ -12,6 +12,15 @@ import {
   FINISHED_LIST_LIMIT,
   WEEKLY_CHECKPOINT_WINDOW,
 } from '@/lib/reviews/checkpoints';
+import {
+  buildParentIndex,
+  buildWeeklyGoals,
+  dedupeActions,
+  finishedSinceWindow,
+  goalIdsInWeek,
+  lastCompletionByGoal,
+  type ActionRow,
+} from '@/lib/reviews/weekly-view-model';
 import { parsePersistedReviewProposal, type ResolvedReviewProposal } from '@/lib/review-proposals';
 import { createClient } from '@/lib/supabase/server';
 import { selectAll, SUPABASE_PAGE_SIZE } from '@/lib/supabase/select-all';
@@ -266,8 +275,7 @@ export async function getWeeklyReviewData(): Promise<WeeklyReviewData> {
     .limit(WEEKLY_CHECKPOINT_WINDOW);
   if (checkpointsResult.error) throw new Error('Unable to load Weekly Review.');
   const checkpoints = (checkpointsResult.data ?? []).map((row) => String(row.completed_at));
-  const finishedSinceIsFallback = checkpoints.length === 0;
-  const finishedSince = finishedSinceIsFallback ? `${startsOn}T00:00:00.000Z` : checkpoints[0];
+  const { finishedSince, finishedSinceIsFallback } = finishedSinceWindow(checkpoints, startsOn);
 
   const unfinished =
     'id,title,status,version,scheduled_on,created_at,recurrence_template_id,planning_horizons!inner(kind,starts_on),goals(id,title,version,kind,status,definition_of_done,parent_goal_id)';
@@ -387,96 +395,33 @@ export async function getWeeklyReviewData(): Promise<WeeklyReviewData> {
   ) {
     throw new Error('Unable to load Weekly Review.');
   }
-  // Two reads, one list. An Action can only be asked about once, and a
-  // duplicate decision is rejected by the Operation as duplicate_review_action.
-  const actionRows = [
-    ...(weekHorizonResult.data ?? []),
-    ...(scheduledIntoWeekResult.data ?? []),
-  ].filter((row, index, rows) => rows.findIndex((other) => other.id === row.id) === index);
-  // The last time anything closed under each Goal the week has work under.
-  //
-  // Scoped to those Goals rather than read from a page of the workspace's most
-  // recent completions: this number decides whether the screen offers to pause
-  // a project, and a Goal whose last completion fell off the end of a
-  // workspace-wide page would have been reported as never having finished
-  // anything, with a Pause button beside it.
-  const goalIdsInWeek = [
-    ...new Set(
-      actionRows
-        .map((action) => (action.goals as unknown as { id: string } | null)?.id)
-        .filter((id): id is string => Boolean(id))
-    ),
-  ];
-  const lastCompletionByGoal = new Map<string, string>();
-  if (goalIdsInWeek.length > 0) {
+  const actionRows = dedupeActions(
+    weekHorizonResult.data ?? [],
+    scheduledIntoWeekResult.data ?? []
+  );
+  const weekGoalIds = goalIdsInWeek(actionRows as unknown as ActionRow[]);
+  let completionsByGoal = new Map<string, string>();
+  if (weekGoalIds.length > 0) {
     const momentumResult = await supabase
       .from('actions')
       .select('goal_id,completed_at')
       .eq('workspace_id', workspaceId)
       .eq('status', 'done')
-      .in('goal_id', goalIdsInWeek)
+      .in('goal_id', weekGoalIds)
       .not('completed_at', 'is', null)
       .is('archived_at', null)
       .is('trashed_at', null)
       .order('completed_at', { ascending: false })
       .limit(SUPABASE_PAGE_SIZE);
     if (momentumResult.error) throw new Error('Unable to load Weekly Review.');
-    for (const row of momentumResult.data ?? []) {
-      const goalId = row.goal_id as string | null;
-      if (!goalId || lastCompletionByGoal.has(goalId)) continue;
-      lastCompletionByGoal.set(goalId, String(row.completed_at));
-    }
+    completionsByGoal = lastCompletionByGoal(momentumResult.data);
   }
-  const parentOf = new Map<string, { title: string; parentGoalId: string | null }>();
-  for (const row of goalTreeResult.data ?? []) {
-    parentOf.set(String(row.id), {
-      title: String(row.title),
-      parentGoalId: (row.parent_goal_id as string | null) ?? null,
-    });
-  }
-  // Outermost ancestor first, and the Goal itself left off -- the chain says
-  // what this sits under, and the header already says what it is. A malformed
-  // parent link would loop forever, so the walk is bounded by the tree.
-  function directionChainFor(goalId: string): string[] {
-    const chain: string[] = [];
-    const seen = new Set<string>([goalId]);
-    let cursor = parentOf.get(goalId)?.parentGoalId ?? null;
-    while (cursor && !seen.has(cursor) && chain.length < parentOf.size) {
-      const node = parentOf.get(cursor);
-      if (!node) break;
-      chain.unshift(node.title);
-      seen.add(cursor);
-      cursor = node.parentGoalId;
-    }
-    return chain;
-  }
-
-  const goals = new Map<string, WeeklyReviewGoal>();
-  for (const action of actionRows) {
-    const goal = action.goals as unknown as {
-      id: string;
-      title: string;
-      version: number;
-      kind: 'outcome' | 'initiative';
-      status: string;
-      definition_of_done: string | null;
-    } | null;
-    if (!goal || goals.has(goal.id)) continue;
-    const lastCompletion = lastCompletionByGoal.get(goal.id);
-    goals.set(goal.id, {
-      id: goal.id,
-      title: goal.title,
-      version: Number(goal.version),
-      kind: goal.kind ?? 'outcome',
-      status: goal.status,
-      definitionOfDone: goal.definition_of_done ?? null,
-      directionChain: directionChainFor(goal.id),
-      // Nothing has ever closed here, so every checkpoint has been quiet.
-      quietCheckpoints: lastCompletion
-        ? countCheckpointsSince(checkpoints, lastCompletion)
-        : checkpoints.length,
-    });
-  }
+  const goals = buildWeeklyGoals(
+    actionRows as unknown as ActionRow[],
+    buildParentIndex(goalTreeResult.data),
+    completionsByGoal,
+    checkpoints
+  );
 
   return {
     startsOn,
@@ -485,7 +430,7 @@ export async function getWeeklyReviewData(): Promise<WeeklyReviewData> {
     coachingIntensity,
     finishedSince,
     finishedSinceIsFallback,
-    goals: [...goals.values()],
+    goals,
     recurring: (recurringResult.data ?? []).map((row) => ({
       id: String(row.id),
       title: String(row.title),
