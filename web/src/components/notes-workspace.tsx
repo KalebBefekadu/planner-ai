@@ -278,7 +278,11 @@ export function NotesWorkspace({
     title: selected?.title ?? '',
     bodyMarkdown: selected?.bodyMarkdown ?? '',
   });
-  const saveInFlightRef = useRef(false);
+  /* The save currently in flight, held as the promise itself rather than a
+     flag. A caller that must not let the page be torn down mid-save -- search
+     submitting a document load, say -- needs something to await, not merely
+     the knowledge that something is happening. */
+  const saveInFlightRef = useRef<Promise<boolean> | null>(null);
   const queuedDraftRef = useRef<{ title: string; bodyMarkdown: string } | null>(null);
   // The autosave pipeline is bound to the Note it belongs to. Switching Notes
   // used to clear the pending timer and drop whatever had been typed in the
@@ -600,94 +604,132 @@ export function NotesWorkspace({
     []
   );
 
-  // The Note being saved is passed in rather than read from the closure. The
-  // save that matters most is the one for the Note a person has just left, and
-  // by then activeNoteId already names a different Note.
+  /* The Note being saved is passed in rather than read from the closure. The
+     save that matters most is the one for the Note a person has just left, and
+     by then activeNoteId already names a different Note.
+
+     Resolves to whether everything queued reached the server. A caller about
+     to tear the page down needs that answer, not just the knowledge that
+     something happened: navigating away from words that were refused is the
+     loss this whole pipeline exists to prevent. */
   const queueAutosave = useCallback(
-    async (noteId: string, draft: { title: string; bodyMarkdown: string }) => {
+    (noteId: string, draft: { title: string; bodyMarkdown: string }): Promise<boolean> => {
       queuedDraftRef.current = draft;
-      if (saveInFlightRef.current) return;
+      // A second caller joins the save already running rather than starting
+      // its own -- and now gets something it can await.
+      const inFlight = saveInFlightRef.current;
+      if (inFlight) return inFlight;
 
-      saveInFlightRef.current = true;
-      setSaveState('saving');
-      try {
-        /* The inner loop stops when the queue is empty; the flag clears a
-           moment later. A draft handed over in between is queued by a caller
-           that sees a save still in flight, and then waited for by a loop that
-           has already finished -- so it is never written.
+      /* The drain loop re-arms the handle with its own promise, which it
+         cannot name from inside its own initialiser. A holder gives it one
+         reference that is filled in before any await can reach it. */
+      const handle: { promise: Promise<boolean> | null } = { promise: null };
+      const work: Promise<boolean> = (async () => {
+        setSaveState('saving');
+        try {
+          /* The inner loop stops when the queue is empty; the handle clears a
+             moment later. A draft handed over in between is queued by a caller
+             that sees a save still in flight, and then waited for by a loop that
+             has already finished -- so it is never written.
 
-           That window is exactly when leaving a Note flushes its pending edit,
-           while the debounced save of the keystroke before it may still be
-           settling. The last thing typed is therefore the most likely thing to
-           fall into it, which is the one edit a person would notice losing.
+             That window is exactly when leaving a Note flushes its pending edit,
+             while the debounced save of the keystroke before it may still be
+             settling. The last thing typed is therefore the most likely thing to
+             fall into it, which is the one edit a person would notice losing.
 
-           Clearing the flag and re-reading the queue with no `await` between
-           them closes it: nothing else can run in that gap, so a draft is
-           either seen here or arrives to find the flag already down and starts
-           its own save. */
-        for (;;) {
-          while (queuedDraftRef.current) {
-            const nextDraft = queuedDraftRef.current;
-            queuedDraftRef.current = null;
-            try {
-              const saved = await updateNote({
-                id: noteId,
-                title: nextDraft.title.trim() || 'Untitled',
-                bodyMarkdown: nextDraft.bodyMarkdown,
-                expectedVersion: versionRef.current,
-              });
-              versionRef.current = saved.version;
-              persistedDraftRef.current = nextDraft;
-              pendingSaveRef.current = null;
-              forgetNoteDraft(noteId);
-            } catch (caught) {
-              queuedDraftRef.current ??= nextDraft;
-              // A refused save is the moment the words are least safe: they
-              // exist only in this tab. Keep a local copy so a reload, a crash
-              // or a closed laptop does not take them with it.
-              rememberNoteDraft({
-                noteId,
-                title: nextDraft.title,
-                bodyMarkdown: nextDraft.bodyMarkdown,
-                savedAt: Date.now(),
-                expectedVersion: versionRef.current,
-              });
-              /* A version conflict is not an error to report and move on
-               from: the person is now holding two versions of their own
-               writing, and the only advice the copy can give -- refresh -- is
-               the action that discards theirs. Keep the refused draft and show
-               the comparison instead. The stored side is read directly, so
-               the panel is built from the version that caused the refusal
-               rather than from whatever render the page happens to hold;
-               `router.refresh()` then brings the rest of the page up to date
-               without touching the editor. */
-              if (operationFailureCode(caught) === 'version_conflict') {
-                const captured = await captureConflict(noteId, nextDraft);
-                setSaveState('error');
-                if (!captured) {
-                  setError(errorMessage(caught));
-                  return;
+             Clearing the handle and re-reading the queue with no `await` between
+             them closes it: nothing else can run in that gap, so a draft is
+             either seen here or arrives to find the handle already empty and
+             starts its own save. */
+          for (;;) {
+            while (queuedDraftRef.current) {
+              const nextDraft = queuedDraftRef.current;
+              queuedDraftRef.current = null;
+              try {
+                const saved = await updateNote({
+                  id: noteId,
+                  title: nextDraft.title.trim() || 'Untitled',
+                  bodyMarkdown: nextDraft.bodyMarkdown,
+                  expectedVersion: versionRef.current,
+                });
+                versionRef.current = saved.version;
+                persistedDraftRef.current = nextDraft;
+                // An older save completing must not clear a newer edit still
+                // holding its timer -- that edit has not been written yet, and
+                // forgetting it is how the newest words get dropped.
+                if (pendingSaveRef.current?.draft === nextDraft) pendingSaveRef.current = null;
+                forgetNoteDraft(noteId);
+              } catch (caught) {
+                queuedDraftRef.current ??= nextDraft;
+                // A refused save is the moment the words are least safe: they
+                // exist only in this tab. Keep a local copy so a reload, a crash
+                // or a closed laptop does not take them with it.
+                rememberNoteDraft({
+                  noteId,
+                  title: nextDraft.title,
+                  bodyMarkdown: nextDraft.bodyMarkdown,
+                  savedAt: Date.now(),
+                  expectedVersion: versionRef.current,
+                });
+                /* A version conflict is not an error to report and move on
+                 from: the person is now holding two versions of their own
+                 writing, and the only advice the copy can give -- refresh -- is
+                 the action that discards theirs. Keep the refused draft and show
+                 the comparison instead. The stored side is read directly, so
+                 the panel is built from the version that caused the refusal
+                 rather than from whatever render the page happens to hold;
+                 `router.refresh()` then brings the rest of the page up to date
+                 without touching the editor. */
+                if (operationFailureCode(caught) === 'version_conflict') {
+                  const captured = await captureConflict(noteId, nextDraft);
+                  setSaveState('error');
+                  if (!captured) setError(errorMessage(caught));
+                  else router.refresh();
+                  return false;
                 }
-                router.refresh();
-                return;
+                setError(errorMessage(caught));
+                setSaveState('error');
+                return false;
               }
-              setError(errorMessage(caught));
-              setSaveState('error');
-              return;
             }
+            saveInFlightRef.current = null;
+            if (!queuedDraftRef.current) break;
+            saveInFlightRef.current = handle.promise;
           }
-          saveInFlightRef.current = false;
-          if (!queuedDraftRef.current) break;
-          saveInFlightRef.current = true;
+          setSaveState('saved');
+          router.refresh();
+          return true;
+        } finally {
+          saveInFlightRef.current = null;
         }
-        setSaveState('saved');
-        router.refresh();
-      } finally {
-        saveInFlightRef.current = false;
-      }
+      })();
+      handle.promise = work;
+      saveInFlightRef.current = work;
+      return work;
     },
     [captureConflict, router]
   );
+
+  /* Everything the editor still owes the server, finished before the page can
+     be torn down, and whether it all landed.
+   *
+   * Waiting on the save already in flight is not enough. The edit most likely
+   * to be lost is the one typed a moment ago, which is still holding its
+   * debounce timer and has never been sent -- so the timer is pre-empted here
+   * rather than waited out. The loop repeats because finishing one save can
+   * reveal the next: a newer draft queued behind the one that was in flight. */
+  const flushPendingSave = useCallback(async () => {
+    for (;;) {
+      const pending = pendingSaveRef.current;
+      if (pending) {
+        if (!(await queueAutosave(pending.noteId, pending.draft))) return false;
+        continue;
+      }
+      const inFlight = saveInFlightRef.current;
+      if (!inFlight) return true;
+      if (!(await inFlight)) return false;
+    }
+  }, [queueAutosave]);
 
   useEffect(() => {
     if (!activeNoteId) return;
@@ -939,15 +981,34 @@ export function NotesWorkspace({
             the server: the Note stayed where it was and nothing said so. Under
             load that swallowed the move about half the time, and a person
             filing a Note and immediately searching would see the same silent
-            no-op. Durable work finishes before the page is torn down. */}
+            no-op. Durable work finishes before the page is torn down.
+
+            Writing is durable work too, and it was not waited for. Only moves
+            were, so a sentence typed and then searched for was torn down with
+            the page -- and searching for a word you have just written is one
+            of the most ordinary things to do in a Notes app. Worse, a save
+            that was *refused* navigated away regardless, leaving the words in
+            local storage with nothing on screen to say so. A refused save
+            stops the navigation and keeps the draft and its error where a
+            person can act on them. */}
         <form
           className="notes-search"
           onSubmit={(event) => {
-            const pending = pendingWorkRef.current;
-            if (!pending) return;
+            const pendingMove = pendingWorkRef.current;
+            if (!pendingMove && !pendingSaveRef.current && !saveInFlightRef.current) return;
             event.preventDefault();
             const form = event.currentTarget;
-            void pending.finally(() => form.requestSubmit());
+            void (async () => {
+              try {
+                await pendingMove;
+                if (!(await flushPendingSave())) return;
+                // The re-submit passes the guard above -- nothing is owed by
+                // then -- and goes through as an ordinary document load.
+                if (form.isConnected) form.requestSubmit();
+              } catch (caught) {
+                setError(errorMessage(caught));
+              }
+            })();
           }}
         >
           <Search size={15} aria-hidden="true" />
