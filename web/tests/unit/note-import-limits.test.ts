@@ -1,5 +1,8 @@
 import { describe, expect, it } from 'vitest';
 import {
+  IMPORT_BATCH_CEILING_MESSAGE,
+  IMPORT_COMMIT_BATCH_CEILING,
+  IMPORT_COMMIT_BATCH_SIZE,
   IMPORT_LIMITS,
   IMPORT_TOO_LARGE_MESSAGE,
   IMPORT_UPLOAD_LIMIT_LABEL,
@@ -108,5 +111,37 @@ describe('bounded expansion and unsafe content', () => {
     // The ZIP reader rejects it first and safePath would reject it after, so
     // the entry never becomes a candidate either way.
     await expect(filesFromZip(escaping)).rejects.toThrow(/relative path|unsafe file path/);
+  });
+});
+
+// The commit loop used to stop after a literal 12 batches of 50 -- a ceiling
+// of 600 items sitting next to an unrelated candidate limit of 500. Whoever
+// raised the candidate limit past 600 would have stranded imports partway
+// through, under a message that read like a transient pause.
+describe('Import commit batching', () => {
+  it('can always reach the last staged candidate', () => {
+    expect(IMPORT_COMMIT_BATCH_CEILING * IMPORT_COMMIT_BATCH_SIZE).toBeGreaterThanOrEqual(
+      IMPORT_LIMITS.candidates
+    );
+  });
+
+  it('still reaches the last candidate after the import limit is raised', () => {
+    // The check that matters is the relationship, not today's numbers, so this
+    // asks the same question of a limit nobody has set yet.
+    const raised = 2_000;
+    const ceiling = Math.ceil(raised / IMPORT_COMMIT_BATCH_SIZE) + 1;
+    expect(ceiling * IMPORT_COMMIT_BATCH_SIZE).toBeGreaterThanOrEqual(raised);
+  });
+
+  it('asks for no larger a batch than the Operation contract allows', () => {
+    expect(IMPORT_COMMIT_BATCH_SIZE).toBeLessThanOrEqual(50);
+  });
+
+  // Reaching the ceiling is a hard stop, not a pause: nothing resumes on its
+  // own, and the owner has to reopen the import to continue.
+  it('describes the ceiling as a limit rather than a pause', () => {
+    expect(IMPORT_BATCH_CEILING_MESSAGE).toContain('limit');
+    expect(IMPORT_BATCH_CEILING_MESSAGE).not.toContain('paused');
+    expect(IMPORT_BATCH_CEILING_MESSAGE).toContain('Reopen this import');
   });
 });

@@ -1,4 +1,5 @@
-import { test, expect, goTo } from './support/workspace';
+import { createClient } from '@supabase/supabase-js';
+import { test, expect, goTo, localStackOrSkip, signIn } from './support/workspace';
 
 test('a completed workspace can return to the onboarding center and start a guarded import', async ({
   workspace,
@@ -91,4 +92,75 @@ test('a CSV import states what the conversion left behind before anything is cre
   );
   // Still a preview: the notice has to arrive before the commit, not with it.
   await expect(dialog.getByText('Preview only. Your Notes are unchanged.')).toBeVisible();
+});
+
+// A person who starts setup, gets pulled away and closes the browser has still
+// written real material into the wizard. Losing it is the difference between an
+// interruption and starting over, so resumability is checked as its own
+// journey rather than as a detail of the happy path.
+test.describe('interrupted setup', () => {
+  test('work typed into the wizard survives closing the browser', async ({ browser }, testInfo) => {
+    const local = localStackOrSkip();
+    test.skip(local === null, 'Restricted to the isolated local Supabase stack.');
+
+    const admin = createClient(local!.url, local!.serviceRoleKey, {
+      auth: { autoRefreshToken: false, persistSession: false },
+    });
+    const email = `resume-${testInfo.project.name}-w${testInfo.workerIndex}-${Date.now()}@planner-ai.test`;
+    const { data, error } = await admin.auth.admin.createUser({
+      email,
+      password: 'Planner-local-journey-test!9',
+      email_confirm: true,
+    });
+    expect(error).toBeNull();
+    const userId = data.user!.id;
+
+    const vision = 'Build a studio practice that outlives any single project.';
+    const goal = 'Take on four commissioned pieces this year.';
+
+    try {
+      // First visit: type a Vision and a Goal, then abandon setup mid-flow.
+      const first = await browser.newContext();
+      const page = await first.newPage();
+      await signIn(page, email, testInfo.project.use.baseURL);
+      await expect(page.getByRole('heading', { name: 'Set your direction' })).toBeVisible({
+        timeout: 60_000,
+      });
+      await page.getByRole('button', { name: 'Continue', exact: true }).click();
+      await page.getByRole('textbox', { name: 'Vision' }).fill(vision);
+      await page.getByRole('textbox', { name: 'First yearly Goal' }).fill(goal);
+      const storageState = await first.storageState();
+      await first.close();
+
+      // Second visit: same person, same device, a new browser session.
+      const second = await browser.newContext({ storageState });
+      const returning = await second.newPage();
+      await returning.goto(`${testInfo.project.use.baseURL}/onboarding`);
+      await expect(returning.getByRole('heading', { name: 'Set your direction' })).toBeVisible({
+        timeout: 60_000,
+      });
+      // Resuming lands on the step the person left, not back at the beginning:
+      // the Direction fields are on screen without navigating forward again.
+      await expect(returning.getByRole('textbox', { name: 'Vision' })).toHaveValue(vision);
+      await expect(returning.getByRole('textbox', { name: 'First yearly Goal' })).toHaveValue(goal);
+      await expect(returning.getByText('We kept what you had already written.')).toBeVisible();
+
+      // And the resumed setup still completes through the same Operation, so an
+      // interruption costs nothing but the time away.
+      await returning.getByRole('button', { name: 'Continue', exact: true }).click();
+      await returning.getByRole('textbox', { name: 'First Action' }).fill('Draft the first brief.');
+      await returning.getByRole('button', { name: 'Enter workspace', exact: true }).click();
+      await expect(returning).toHaveURL(/\/$/, { timeout: 60_000 });
+
+      // Once committed the scratch copy is gone, so returning to /onboarding
+      // shows the finished workspace rather than resurrecting old text.
+      await returning.goto(`${testInfo.project.use.baseURL}/onboarding`);
+      await expect(
+        returning.getByRole('heading', { name: 'Make Planner AI your daily workspace' })
+      ).toBeVisible({ timeout: 60_000 });
+      await second.close();
+    } finally {
+      await admin.auth.admin.deleteUser(userId);
+    }
+  });
 });

@@ -3,6 +3,7 @@ import { NextResponse } from 'next/server';
 import type { SupabaseClient } from '@supabase/supabase-js';
 import type { z } from 'zod';
 import { createClient } from '@/lib/supabase/server';
+import { errorClassOf, recordServerEvent } from '@/lib/api/telemetry';
 
 export type AiOperation =
   | 'smart_goal'
@@ -244,14 +245,12 @@ export async function recordAiUsage(context: RequestContext, details: AiUsageDet
       if (releaseError) throw releaseError;
     }
   } catch (error) {
-    console.error(
-      JSON.stringify({
-        event: 'ai_usage_record_failed',
-        operation: context.operation,
-        requestId: context.requestId,
-        errorClass: error instanceof Error ? error.name : 'UnknownError',
-      })
-    );
+    recordServerEvent({
+      event: 'ai_usage_record_failed',
+      subject: context.operation,
+      requestId: context.requestId,
+      errorClass: errorClassOf(error),
+    });
   }
 }
 
@@ -300,15 +299,13 @@ export function aiError(error: unknown, operation: AiOperation) {
     new ApiProblem(500, 'ai_request_failed', 'AI assistance could not complete this request.');
   const requestId = randomUUID();
 
-  console.error(
-    JSON.stringify({
-      event: 'ai_request_failed',
-      operation,
-      requestId,
-      errorCode: problem.code,
-      errorClass: error instanceof Error ? error.name : 'UnknownError',
-    })
-  );
+  recordServerEvent({
+    event: 'ai_request_failed',
+    subject: operation,
+    requestId,
+    errorCode: problem.code,
+    errorClass: errorClassOf(error),
+  });
 
   const retryAfter =
     problem.code === 'provider_rate_limited'

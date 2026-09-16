@@ -54,6 +54,7 @@ import {
 } from '@/lib/ai/provider';
 import { createClient } from '@/lib/supabase/server';
 import { serializeUntrustedAiData } from '@/lib/ai/untrusted-data';
+import { assistantDecisionProblem, type AssistantDecisionKind } from '@/lib/ai/proposal-failures';
 import { assistantSafetyIntercept } from '@/lib/assistant/safety';
 import { buildReadOnlyAssistantGenUi } from '@/lib/genui/assistant';
 import { boundedAssistantHistory, MAX_ASSISTANT_HISTORY_MESSAGES } from '@/lib/assistant/history';
@@ -90,6 +91,16 @@ const inputSchema = z
       ].filter(Boolean).length === 1,
     'Send one message or one proposal decision.'
   );
+
+/* A decision failure that the database already explained precisely must not
+   be flattened into the generic AI failure. `aiError` keeps an ApiProblem
+   intact, so translating here is what carries the reason to the dock. */
+function decisionProblem(error: unknown, kind: AssistantDecisionKind, fallback: string) {
+  const problem = assistantDecisionProblem(error, kind);
+  return problem
+    ? new ApiProblem(problem.status, problem.code, problem.message)
+    : new Error(fallback);
+}
 
 function hydrateMessageClaims(message: {
   claims?: unknown;
@@ -464,12 +475,16 @@ export async function POST(request: Request) {
           409
         );
       }
-      await executeOperation(
-        supabase,
-        'operation.undo.v1',
-        { receiptId: input.undoReceiptId },
-        { idempotencyKey: context.requestId, surface: 'ui' }
-      );
+      try {
+        await executeOperation(
+          supabase,
+          'operation.undo.v1',
+          { receiptId: input.undoReceiptId },
+          { idempotencyKey: context.requestId, surface: 'ui' }
+        );
+      } catch (undoError) {
+        throw decisionProblem(undoError, 'undo', 'Undo failed.');
+      }
       await recordAiUsage(context, { ...usageIdentity, outcome: 'succeeded' });
       return aiSuccess(
         { reply: 'Undone.', conversationId: input.conversationId, undoableReceiptId: null },
@@ -494,7 +509,7 @@ export async function POST(request: Request) {
       const { data, error } = await supabase.rpc('execute_assistant_proposal', {
         p_proposal_id: input.approvedProposalId,
       });
-      if (error) throw new Error('Proposal execution failed.');
+      if (error) throw decisionProblem(error, 'approval', 'Proposal execution failed.');
       const conversationClosed =
         Boolean(data.result?.deleted) || data.result?.status === 'archived';
       await recordAiUsage(context, { ...usageIdentity, outcome: 'succeeded' });
@@ -519,7 +534,7 @@ export async function POST(request: Request) {
         const { error } = await supabase.rpc('dismiss_assistant_proposal', {
           p_proposal_id: input.dismissedProposalId,
         });
-        if (error) throw new Error('Proposal dismissal failed.');
+        if (error) throw decisionProblem(error, 'dismissal', 'Proposal dismissal failed.');
       }
       await recordAiUsage(context, { ...usageIdentity, outcome: 'succeeded' });
       return aiSuccess(

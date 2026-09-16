@@ -34,7 +34,7 @@ test('the horizon filter narrows the plan without deleting anything', async ({ w
   const { page } = workspace;
   await goTo(page, '/planner');
 
-  const horizons = page.getByRole('navigation', { name: 'Filter plan by horizon' });
+  const horizons = page.getByRole('group', { name: 'Filter plan by horizon' });
   await expect(horizons.getByRole('button', { name: /All horizons/ })).toHaveAttribute(
     'aria-pressed',
     'true'
@@ -119,7 +119,7 @@ test('the period filter excludes other periods without hiding the work', async (
   await expect(composer).toContainText('is saved');
 
   await page.goto('/planner');
-  const horizons = page.getByRole('navigation', { name: 'Filter plan by horizon' });
+  const horizons = page.getByRole('group', { name: 'Filter plan by horizon' });
   const weekTab = horizons.getByRole('button', { name: /^Week/ });
   const monthTab = horizons.getByRole('button', { name: /^Month/ });
 
@@ -170,7 +170,7 @@ test('choosing a horizon names the actual period it covers', async ({ workspace 
   await goTo(page, '/planner');
 
   await page
-    .getByRole('navigation', { name: 'Filter plan by horizon' })
+    .getByRole('group', { name: 'Filter plan by horizon' })
     .getByRole('button', { name: /^Week/ })
     .click();
   await expect(page).toHaveURL(/horizon=weekly/);
@@ -182,7 +182,160 @@ test('choosing a horizon names the actual period it covers', async ({ workspace 
   await page.reload();
   await expect(
     page
-      .getByRole('navigation', { name: 'Filter plan by horizon' })
+      .getByRole('group', { name: 'Filter plan by horizon' })
       .getByRole('button', { name: /^Week/ })
   ).toHaveAttribute('aria-pressed', 'true');
+});
+
+test('the sidebar marks the planner destination that was chosen', async ({
+  workspace,
+}, testInfo) => {
+  // The contextual sidebar is the desktop frame; on mobile it lives in the
+  // drawer, which keyboard-navigation.spec.ts covers.
+  test.skip(testInfo.project.name !== 'chromium', 'The sidebar is the desktop navigation frame.');
+  const { page } = workspace;
+  await goTo(page, '/planner');
+
+  const sidebar = page.getByRole('navigation', { name: 'Planner' });
+  const thisWeek = sidebar.getByRole('link', { name: 'This week', exact: true });
+  const goals = sidebar.getByRole('link', { name: 'Goals & horizons', exact: true });
+
+  await expect(thisWeek).toHaveAttribute('aria-current', 'page');
+  await expect(goals).not.toHaveAttribute('aria-current', 'page');
+
+  /* Goals & horizons used to point at /goals, a permanent redirect to
+     /planner, so choosing it landed on the page This week is marked as and
+     the sidebar claimed you were somewhere you had not clicked. */
+  await goals.click();
+  await expect(page).toHaveURL(/\/planner\?period=all/);
+  await expect(
+    sidebar.getByRole('link', { name: 'Goals & horizons', exact: true })
+  ).toHaveAttribute('aria-current', 'page');
+  await expect(sidebar.getByRole('link', { name: 'This week', exact: true })).not.toHaveAttribute(
+    'aria-current',
+    'page'
+  );
+
+  // And the page it lands on is actually showing every period.
+  await expect(page.getByText('Every period on record')).toBeVisible();
+});
+
+test('a written vision is something to read, and still something to change', async ({
+  workspace,
+}) => {
+  const { page } = workspace;
+  await goTo(page, '/vision');
+
+  // Onboarding wrote one, so this workspace opens on the statement rather than
+  // on a form field left open. Scoped to the statement: the editor is only
+  // hidden, so it still holds the same words.
+  const statement = page.locator('.vision-statement');
+  await expect(statement).toHaveText(onboardingSeed.vision);
+  await expect(page.getByRole('textbox', { name: 'Vision draft' })).toBeHidden();
+
+  await page.getByRole('button', { name: 'Edit vision' }).click();
+  const draft = page.getByRole('textbox', { name: 'Vision draft' });
+  await expect(draft).toBeVisible();
+  await expect(draft).toHaveValue(onboardingSeed.vision);
+
+  const rewritten = 'Build a calm week that still moves the long arc forward.';
+  await draft.fill(rewritten);
+  await page.getByRole('button', { name: 'Save vision' }).click();
+
+  /* Back to reading, showing what was just written. Nothing refreshes this
+     route after a save, so reading the server value back would have shown the
+     previous vision to the person who had just replaced it. */
+  await expect(statement).toHaveText(rewritten);
+  await expect(page.getByRole('textbox', { name: 'Vision draft' })).toBeHidden();
+
+  // And it really reached the server.
+  await page.reload();
+  await expect(page.locator('.vision-statement')).toHaveText(rewritten);
+});
+
+test('work nests, and the nesting is how a task keeps its context', async ({ workspace }) => {
+  const { page } = workspace;
+
+  // "wait to hear back" means nothing on its own. actions.parent_action_id has
+  // always been able to hold this; the interface spent it on the monthly
+  // rollup and read it straight back out, so a task could never sit under a
+  // task.
+  await goTo(page, '/');
+  const today = page.getByRole('region', { name: 'New Action' });
+  for (const title of ['Reach out to Baily', 'wait to hear back']) {
+    await today.getByRole('textbox', { name: 'What needs doing' }).fill(title);
+    await today.getByRole('button', { name: 'Add Action' }).click();
+    await expect(today).toContainText(`"${title}" is saved`);
+  }
+
+  await goTo(page, '/planner');
+  await page
+    .getByRole('group', { name: 'Filter plan by horizon' })
+    .getByRole('button', { name: /^Week/ })
+    .click();
+
+  const child = page.getByRole('button', {
+    name: 'Indent wait to hear back under the Action above it',
+  });
+  await expect(child).toBeEnabled();
+  await child.click();
+  await expect(page.getByText('wait to hear back moved.')).toBeVisible();
+
+  // One level down, and its own row says so.
+  const nested = page.locator('.plan-item.plan-depth-1').filter({ hasText: 'wait to hear back' });
+  await expect(nested).toHaveCount(1);
+
+  // The first Action has nothing above it, so there is nowhere to indent to.
+  await expect(
+    page.getByRole('button', { name: 'Indent Reach out to Baily under the Action above it' })
+  ).toBeDisabled();
+
+  // And it comes back out again.
+  await page.getByRole('button', { name: 'Outdent wait to hear back' }).click();
+  await expect(page.locator('.plan-item.plan-depth-1')).toHaveCount(0);
+});
+
+test('a breakdown is an offer, and an initiative works without one', async ({ workspace }) => {
+  const { page } = workspace;
+
+  await goTo(page, '/planner');
+  await page.getByRole('button', { name: 'Add yearly goal' }).last().click();
+  const composer = page.locator('section.goal-composer');
+  await expect(composer).toBeVisible();
+  await composer.locator('textarea').fill('Real estate agent business');
+  await composer.locator('input[type=checkbox]').check();
+  await composer.getByRole('button', { name: 'Save initiative' }).click();
+  await expect(page.getByText('Real estate agent business is now an initiative')).toBeVisible();
+
+  // A second yearly item, this time an outcome, to pin that the offer is tied
+  // to the kind rather than to the horizon.
+  await page.getByRole('button', { name: 'Add yearly goal' }).last().click();
+  await expect(composer).toBeVisible();
+  await composer.locator('textarea').fill('Steady income by December');
+  await composer.getByRole('button', { name: /^Save yearly goal/ }).click();
+  await expect(page.getByText('Yearly goal added to your plan.')).toBeVisible();
+
+  const initiative = page
+    .locator('.plan-item')
+    .filter({ hasText: 'Real estate agent business' })
+    .first();
+  const outcome = page.locator('.plan-item').filter({ hasText: 'Steady income by' }).first();
+  await expect(initiative.getByRole('button', { name: 'Suggest tasks' })).toBeVisible();
+  await expect(outcome.getByRole('button', { name: 'Suggest tasks' })).toHaveCount(0);
+
+  // The invariant the offer has to respect: an initiative with an empty list is
+  // fully usable, and nothing about the week depends on a provider.
+  await goTo(page, '/');
+  const today = page.getByRole('region', { name: 'New Action' });
+  await today.getByRole('textbox', { name: 'What needs doing' }).fill('Write the listing script');
+  await today
+    .getByRole('combobox', { name: 'Goal' })
+    .selectOption({ label: 'Real estate agent business' });
+  await today.getByRole('button', { name: 'Add Action' }).click();
+  await expect(today).toContainText('"Write the listing script" is saved');
+
+  await goTo(page, '/review');
+  await expect(
+    page.getByRole('button', { name: /^Initiative Real estate agent business/ })
+  ).toBeVisible();
 });

@@ -1,4 +1,5 @@
 import { NextResponse } from 'next/server';
+import { selectAll } from '@/lib/supabase/select-all';
 import { z } from 'zod';
 import { createClient } from '@/lib/supabase/server';
 
@@ -20,20 +21,32 @@ export async function GET(_request: Request, context: { params: Promise<{ id: st
     .is('trashed_at', null)
     .single();
   if (error || !conversation) return NextResponse.json({ error: 'Not found.' }, { status: 404 });
+  /* Paged, for the same reason the Notes vault is: PostgREST caps a response
+     at max_rows without saying so, and an export that is quietly short is
+     worse than one that fails. A long-running conversation passes a thousand
+     messages without being remarkable. */
   const [{ data: messages, error: messagesError }, { data: proposals, error: proposalsError }] =
     await Promise.all([
-      supabase
-        .from('conversation_messages')
-        .select('id,role,content,route,sources,claims,created_at')
-        .eq('conversation_id', parsedId.data)
-        .order('created_at', { ascending: true }),
-      supabase
-        .from('ai_proposals')
-        .select(
-          'id,operation_id,input_json,summary,risk_class,status,result_json,created_at,decided_at,applied_at'
-        )
-        .eq('conversation_id', parsedId.data)
-        .order('created_at', { ascending: true }),
+      selectAll((from, to) =>
+        supabase
+          .from('conversation_messages')
+          .select('id,role,content,route,sources,claims,created_at')
+          .eq('conversation_id', parsedId.data)
+          .order('created_at', { ascending: true })
+          .order('id')
+          .range(from, to)
+      ),
+      selectAll((from, to) =>
+        supabase
+          .from('ai_proposals')
+          .select(
+            'id,operation_id,input_json,summary,risk_class,status,result_json,created_at,decided_at,applied_at'
+          )
+          .eq('conversation_id', parsedId.data)
+          .order('created_at', { ascending: true })
+          .order('id')
+          .range(from, to)
+      ),
     ]);
   if (messagesError || proposalsError) {
     return NextResponse.json({ error: 'Export could not be created.' }, { status: 500 });

@@ -2,6 +2,12 @@
 
 Planner AI is a private, voice-first life planning and knowledge Workspace. It helps a person connect long-term direction to meaningful outcomes, concrete work, reflection, and durable Notes without forcing them to choose between a traditional interface and an AI assistant.
 
+The product has two co-equal pillars: **Knowledge** is the front door for Notes,
+Captures, links, search, files, and light structure; **Planning** holds Vision,
+Goals, Actions, Today, Week, and Review. They share one authorized Operation,
+search, link, Activity, Trash, and recovery spine without becoming one generic
+entity.
+
 ## The Product Promise
 
 A person can always click, type, navigate, and review their own system. The assistant can perform the same authorized Operations through conversation, but it never becomes the only interface, a hidden source of truth, or an uncontrolled administrator.
@@ -34,8 +40,19 @@ It is not yet local-first, collaborative, a general database builder, a habit ga
 
 ## Long-Term Direction
 
-After the core product proves reliability and repeated usefulness, Planner AI may grow into a customizable workspace with structured databases and multiple views, graph and canvas, stronger offline and local ownership, collaboration, trusted integrations, native clients, and sandboxed extensions. Each expansion must preserve the same rule: a capability becomes an explicit Planner AI Operation with a user-facing control before it becomes an AI power.
+After the single-owner product proves reliability through personal dogfood,
+Planner AI first expands to simple shared Workspaces with an owner and one flat
+member role. It may then grow into a customizable Knowledge workspace with typed
+properties and multiple views, graph and canvas, stronger offline and local
+ownership, richer collaboration, trusted integrations, native clients, and
+sandboxed extensions. Each expansion must preserve the same rule: a capability
+becomes an explicit Planner AI Operation with a user-facing control before it
+becomes an AI power.
 
 The long-term product should combine Obsidian's ownership, Markdown, links, graph, offline use, and version-control friendliness with Notion's structured databases, approachable composition, collaboration, and visual identity. Planner AI's contribution is a coherent planning model and a governed assistant that can operate the same system without becoming its hidden administrator.
 
-The approved sequence is maintained in the [roadmap](../roadmap.md). Long-term capabilities remain gated until their architecture, privacy, conflict, permission, cost, and recovery decisions are accepted.
+The approved sequence is maintained in the [roadmap](../roadmap.md); the
+[product-shape decision](product-shape.md) defines the two pillars. True
+local-first editing, richer permissions, and extensions remain gated until their
+architecture, privacy, conflict, permission, cost, and recovery decisions are
+accepted.

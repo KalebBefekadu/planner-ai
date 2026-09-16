@@ -167,6 +167,12 @@ const noteOutput = z
     body_markdown: z.string(),
     sort_key: z.union([z.number(), z.string()]),
     ai_excluded: z.boolean(),
+    /* Optional so a receipt replayed from before the appearance migration
+       still parses. The columns are non-null-defaulted going forward. */
+    icon_emoji: z.string().nullable().optional(),
+    cover_key: z.string().nullable().optional(),
+    cover_position: z.union([z.number(), z.string()]).optional(),
+    favorited_at: timestamp.nullable(),
     version,
     created_at: timestamp,
     updated_at: timestamp,
@@ -218,10 +224,13 @@ const noteLinkOutput = z
 const captureFileOutput = z
   .object({ captureId: id, noteId: id, state: z.literal('reviewed') })
   .strict();
+const captureFileActionOutput = z
+  .object({ captureId: id, actionId: id, state: z.literal('reviewed') })
+  .strict();
 const noteImportOutput = z
   .object({
     jobId: id,
-    status: z.enum(['preview', 'committing', 'completed']),
+    status: z.enum(['preview', 'committing', 'completed', 'canceled']),
     totalCount: z.number().int().nonnegative().max(500),
     createCount: z.number().int().nonnegative().max(500),
     duplicateCount: z.number().int().nonnegative().max(500),
@@ -309,14 +318,16 @@ export const operationDefinitions = {
     risk: 'low',
     exposure: ['ui', 'chat', 'mcp'],
     reversible: true,
+    domain: 'planner',
     input: z.object({ bodyMarkdown: z.string().min(3).max(50_000) }).strict(),
     output: visionOutput,
   },
   'goal.create.v1': {
-    summary: 'Create a yearly or quarterly Goal.',
+    summary: 'Create a yearly or quarterly Goal, or a standing initiative.',
     risk: 'low',
     exposure: ['ui', 'chat', 'mcp'],
     reversible: true,
+    domain: 'planner',
     input: z
       .object({
         title: z.string().trim().min(3).max(1_000),
@@ -324,6 +335,14 @@ export const operationDefinitions = {
         startsOn: date,
         endsOn: date,
         parentGoalId: id.nullable(),
+        /**
+         * An 'initiative' is a Goal that is never finished -- a business, a
+         * project, a standing concern that recurs every week with new work
+         * under it. It has no due date and is anchored to the year only
+         * because goals.horizon_id cannot be null. Optional, so every existing
+         * caller keeps working and keeps meaning 'outcome'.
+         */
+        kind: z.enum(['outcome', 'initiative']).optional(),
       })
       .strict(),
     output: goalOutput,
@@ -333,6 +352,7 @@ export const operationDefinitions = {
     risk: 'low',
     exposure: ['ui', 'chat', 'mcp'],
     reversible: true,
+    domain: 'planner',
     input: z
       .object({
         id,
@@ -347,6 +367,7 @@ export const operationDefinitions = {
     risk: 'low',
     exposure: ['ui', 'chat', 'mcp'],
     reversible: true,
+    domain: 'plan_edit',
     input: z
       .object({
         id,
@@ -358,6 +379,13 @@ export const operationDefinitions = {
         currentValue: z.number().finite().nonnegative().nullable(),
         unit: z.string().trim().min(1).max(80).nullable(),
         dueOn: date.nullable(),
+        /**
+         * What good looks like, in the owner's words. Optional rather than
+         * nullable: omitting the key leaves the stored value alone, because
+         * every caller written before this field existed omits it and none of
+         * them means to erase it. Send an empty string to clear it.
+         */
+        definitionOfDone: z.string().max(2_000).optional(),
       })
       .strict(),
     output: goalOutput,
@@ -367,6 +395,7 @@ export const operationDefinitions = {
     risk: 'medium',
     exposure: ['ui', 'chat', 'mcp'],
     reversible: true,
+    domain: 'planner',
     input: z.object({ id, expectedVersion: version }).strict(),
     output: goalOutput,
   },
@@ -375,6 +404,7 @@ export const operationDefinitions = {
     risk: 'low',
     exposure: ['ui', 'chat', 'mcp'],
     reversible: true,
+    domain: 'planner',
     input: z
       .object({
         title: z.string().trim().min(3).max(1_000),
@@ -393,6 +423,7 @@ export const operationDefinitions = {
     risk: 'low',
     exposure: ['ui', 'chat', 'mcp'],
     reversible: true,
+    domain: 'daily_execution',
     input: z
       .object({
         id,
@@ -405,15 +436,18 @@ export const operationDefinitions = {
     output: actionOutput,
   },
   'action.move.v1': {
-    summary: 'Move an Action to another Goal, parent Action, and planning horizon.',
+    summary: 'Move an Action under another Action, Goal, and planning horizon.',
     risk: 'low',
     exposure: ['ui', 'chat', 'mcp'],
     reversible: true,
+    domain: 'plan_edit',
     input: z
       .object({
         id,
         expectedVersion: version,
-        goalId: id,
+        // Nullable since 20260915130000: this operation now carries indent and
+        // outdent, and unfiled work has to be able to nest with unfiled work.
+        goalId: id.nullable(),
         parentActionId: id.nullable(),
         horizonKind: z.enum(['month', 'week']),
         startsOn: date,
@@ -428,6 +462,7 @@ export const operationDefinitions = {
     risk: 'low',
     exposure: ['ui', 'chat', 'mcp'],
     reversible: true,
+    domain: 'daily_execution',
     input: z
       .object({
         id,
@@ -442,6 +477,7 @@ export const operationDefinitions = {
     risk: 'medium',
     exposure: ['ui', 'chat', 'mcp'],
     reversible: true,
+    domain: 'planner',
     input: z.object({ id, expectedVersion: version }).strict(),
     output: actionOutput,
   },
@@ -450,6 +486,7 @@ export const operationDefinitions = {
     risk: 'low',
     exposure: ['ui', 'chat', 'mcp'],
     reversible: true,
+    domain: 'action_template',
     input: z
       .object({
         title: z.string().trim().min(3).max(1_000),
@@ -466,6 +503,7 @@ export const operationDefinitions = {
     risk: 'low',
     exposure: ['ui', 'chat', 'mcp'],
     reversible: true,
+    domain: 'action_template',
     input: z
       .object({
         id,
@@ -484,6 +522,7 @@ export const operationDefinitions = {
     risk: 'low',
     exposure: ['ui', 'chat', 'mcp'],
     reversible: true,
+    domain: 'action_template',
     input: z
       .object({
         id,
@@ -498,6 +537,7 @@ export const operationDefinitions = {
     risk: 'low',
     exposure: ['ui', 'chat', 'mcp', 'automation'],
     reversible: true,
+    domain: 'action_template',
     input: z
       .object({
         id,
@@ -512,6 +552,7 @@ export const operationDefinitions = {
     risk: 'medium',
     exposure: ['ui', 'chat', 'mcp'],
     reversible: true,
+    domain: 'action_template',
     input: z.object({ id, expectedVersion: version }).strict(),
     output: actionTemplateOutput,
   },
@@ -520,6 +561,7 @@ export const operationDefinitions = {
     risk: 'low',
     exposure: ['ui', 'chat', 'mcp', 'automation'],
     reversible: true,
+    domain: 'notification',
     input: z.object({}).strict(),
     output: notificationRefreshOutput,
   },
@@ -528,6 +570,7 @@ export const operationDefinitions = {
     risk: 'low',
     exposure: ['ui', 'chat', 'mcp'],
     reversible: true,
+    domain: 'notification',
     input: z.object({ id, expectedVersion: version }).strict(),
     output: notificationOutput,
   },
@@ -536,6 +579,7 @@ export const operationDefinitions = {
     risk: 'low',
     exposure: ['ui', 'chat', 'mcp'],
     reversible: true,
+    domain: 'notification',
     input: z.object({ id, expectedVersion: version }).strict(),
     output: notificationOutput,
   },
@@ -544,6 +588,7 @@ export const operationDefinitions = {
     risk: 'low',
     exposure: ['ui', 'chat', 'mcp'],
     reversible: true,
+    domain: 'notification',
     input: z
       .object({
         inAppEnabled: z.boolean(),
@@ -560,6 +605,7 @@ export const operationDefinitions = {
     risk: 'low',
     exposure: ['ui', 'chat', 'mcp'],
     reversible: true,
+    domain: 'conversation',
     input: z
       .object({
         id,
@@ -574,6 +620,7 @@ export const operationDefinitions = {
     risk: 'low',
     exposure: ['ui', 'chat', 'mcp'],
     reversible: true,
+    domain: 'conversation',
     input: z
       .object({
         id,
@@ -588,6 +635,7 @@ export const operationDefinitions = {
     risk: 'high',
     exposure: ['ui', 'chat'],
     reversible: false,
+    domain: 'conversation',
     input: z
       .object({
         id,
@@ -602,6 +650,7 @@ export const operationDefinitions = {
     risk: 'low',
     exposure: ['ui'],
     reversible: true,
+    domain: 'capture_proposal',
     input: z
       .object({
         id,
@@ -618,6 +667,7 @@ export const operationDefinitions = {
     risk: 'low',
     exposure: ['ui', 'chat'],
     reversible: true,
+    domain: 'capture_proposal',
     input: z.object({ id, expectedVersion: version }).strict(),
     output: captureProposalBatchOutput,
   },
@@ -626,6 +676,7 @@ export const operationDefinitions = {
     risk: 'medium',
     exposure: ['ui', 'chat'],
     reversible: false,
+    domain: 'capture_proposal',
     input: z.object({ id, expectedVersion: version }).strict(),
     output: captureProposalBatchOutput,
   },
@@ -634,6 +685,7 @@ export const operationDefinitions = {
     risk: 'low',
     exposure: ['ui', 'chat', 'mcp'],
     reversible: true,
+    domain: 'planner',
     input: z
       .object({
         rawText: z
@@ -650,6 +702,7 @@ export const operationDefinitions = {
     risk: 'low',
     exposure: ['ui', 'chat', 'mcp'],
     reversible: true,
+    domain: 'note',
     input: z
       .object({
         title: z.string().trim().min(1).max(300),
@@ -664,6 +717,7 @@ export const operationDefinitions = {
     risk: 'low',
     exposure: ['ui', 'chat', 'mcp'],
     reversible: true,
+    domain: 'note',
     input: z
       .object({
         id,
@@ -679,6 +733,7 @@ export const operationDefinitions = {
     risk: 'low',
     exposure: ['ui', 'chat', 'mcp'],
     reversible: true,
+    domain: 'note',
     input: z
       .object({ id, parentNoteId: id.nullable(), sortKey: z.number(), expectedVersion: version })
       .strict(),
@@ -689,6 +744,7 @@ export const operationDefinitions = {
     risk: 'medium',
     exposure: ['ui', 'chat', 'mcp'],
     reversible: true,
+    domain: 'note',
     input: z.object({ id, expectedVersion: version }).strict(),
     output: noteOutput,
   },
@@ -697,7 +753,42 @@ export const operationDefinitions = {
     risk: 'low',
     exposure: ['ui', 'chat', 'mcp'],
     reversible: true,
+    domain: 'note',
     input: z.object({ id, aiExcluded: z.boolean(), expectedVersion: version }).strict(),
+    output: noteOutput,
+  },
+  /* Appearance is its own operation rather than three more fields on
+     note.update.v1. That contract is already called by chat and MCP, and it
+     writes a Note revision on every call -- nudging a cover two percent is not
+     an edit to the writing, and it should not push the previous draft into the
+     history panel. */
+  'note.appearance.v1': {
+    summary: 'Set or clear one Note page icon, cover image and cover position.',
+    risk: 'low',
+    exposure: ['ui'],
+    /* No operation_undo_support row backs this, so operation.undo.v1 would
+       have nothing to replay. Reset is offered directly in the document
+       header instead. */
+    reversible: false,
+    domain: 'note_appearance',
+    input: z
+      .object({
+        id,
+        iconEmoji: z.string().min(1).max(32).nullable(),
+        coverKey: z.enum(['focus', 'north', 'health', 'product']).nullable(),
+        coverPosition: z.number().int().min(0).max(100),
+        expectedVersion: version,
+      })
+      .strict(),
+    output: noteOutput,
+  },
+  'note.favorite.v1': {
+    summary: 'Mark or unmark one Note as a favourite.',
+    risk: 'low',
+    exposure: ['ui', 'chat', 'mcp'],
+    reversible: true,
+    domain: 'note',
+    input: z.object({ id, favorite: z.boolean(), expectedVersion: version }).strict(),
     output: noteOutput,
   },
   'note.import-preview.v1': {
@@ -706,6 +797,7 @@ export const operationDefinitions = {
     risk: 'low',
     exposure: ['ui'],
     reversible: true,
+    domain: 'note_import',
     input: z
       .object({
         sourceName: z.string().trim().min(1).max(255),
@@ -729,6 +821,19 @@ export const operationDefinitions = {
                 // the source, and stored as the item's reason so the
                 // pre-commit report can say what the conversion cost.
                 conversionNotice: z.string().max(500).nullable(),
+                // How the owner had the page arranged. Only an exported vault
+                // carries any of it; every other source sends null, because
+                // inventing an appearance for an imported Notion page would be
+                // choosing on the owner's behalf and calling it a restore.
+                appearance: z
+                  .object({
+                    iconEmoji: z.string().min(1).max(32).nullable(),
+                    coverKey: z.string().min(1).max(200).nullable(),
+                    coverPosition: z.number().int().min(0).max(100),
+                    favoritedAt: z.string().datetime({ offset: true }).nullable(),
+                  })
+                  .strict()
+                  .nullable(),
               })
               .strict()
           )
@@ -743,7 +848,20 @@ export const operationDefinitions = {
     risk: 'low',
     exposure: ['ui', 'chat'],
     reversible: true,
+    domain: 'note_import',
     input: z.object({ jobId: id, batchSize: z.number().int().min(1).max(50) }).strict(),
+    output: noteImportOutput,
+  },
+  // Deciding not to import something is a decision. Without this the only way
+  // to leave a staged import was to close the dialog, which left the job in
+  // 'preview' and brought it back as unfinished business every time.
+  'note.import-cancel.v1': {
+    summary: 'Record that a reviewed Notes import will not be committed.',
+    risk: 'low',
+    exposure: ['ui'],
+    reversible: false,
+    domain: 'note_import',
+    input: z.object({ jobId: id }).strict(),
     output: noteImportOutput,
   },
   'memory.create.v1': {
@@ -751,6 +869,7 @@ export const operationDefinitions = {
     risk: 'low',
     exposure: ['ui', 'chat', 'mcp'],
     reversible: true,
+    domain: 'memory',
     input: z
       .object({
         statement: z.string().trim().min(1).max(2_000),
@@ -773,6 +892,7 @@ export const operationDefinitions = {
     risk: 'low',
     exposure: ['ui', 'chat', 'mcp'],
     reversible: true,
+    domain: 'memory',
     input: z
       .object({ id, statement: z.string().trim().min(1).max(2_000), expectedVersion: version })
       .strict(),
@@ -783,6 +903,7 @@ export const operationDefinitions = {
     risk: 'medium',
     exposure: ['ui', 'chat', 'mcp'],
     reversible: true,
+    domain: 'trash',
     input: trashMoveInput,
     output: trashOutput,
   },
@@ -791,6 +912,7 @@ export const operationDefinitions = {
     risk: 'low',
     exposure: ['ui', 'chat', 'mcp'],
     reversible: true,
+    domain: 'trash',
     input: z.object({ batchId: id }).strict(),
     output: trashOutput,
   },
@@ -799,6 +921,7 @@ export const operationDefinitions = {
     risk: 'high',
     exposure: ['ui', 'chat'],
     reversible: false,
+    domain: 'trash',
     input: z
       .object({ retentionDays: z.literal(30), confirmation: z.literal('EMPTY TRASH') })
       .strict(),
@@ -809,6 +932,7 @@ export const operationDefinitions = {
     risk: 'medium',
     exposure: ['ui'],
     reversible: false,
+    domain: 'operation_undo',
     input: z.object({ receiptId: id }).strict(),
     output: operationUndoOutput,
   },
@@ -817,6 +941,7 @@ export const operationDefinitions = {
     risk: 'low',
     exposure: ['ui', 'chat', 'mcp'],
     reversible: true,
+    domain: 'knowledge',
     input: z
       .object({
         noteId: id,
@@ -830,6 +955,7 @@ export const operationDefinitions = {
     risk: 'low',
     exposure: ['ui', 'chat', 'mcp'],
     reversible: true,
+    domain: 'knowledge',
     input: z
       .object({
         sourceNoteId: id,
@@ -844,6 +970,7 @@ export const operationDefinitions = {
     risk: 'low',
     exposure: ['ui', 'chat', 'mcp'],
     reversible: true,
+    domain: 'knowledge',
     input: z.object({ linkId: id }).strict(),
     output: noteLinkOutput,
   },
@@ -852,14 +979,38 @@ export const operationDefinitions = {
     risk: 'low',
     exposure: ['ui', 'chat', 'mcp'],
     reversible: true,
+    domain: 'knowledge',
     input: z.object({ captureId: id, noteId: id }).strict(),
     output: captureFileOutput,
   },
+  'capture.file-to-action.v1': {
+    summary:
+      'Create one Action from an immutable Capture, record the link back to it, and mark the Capture reviewed.',
+    risk: 'low',
+    exposure: ['ui', 'chat', 'mcp'],
+    reversible: true,
+    domain: 'capture_action_filing',
+    input: z
+      .object({
+        captureId: id,
+        title: z.string().trim().min(3).max(1_000),
+        startsOn: date,
+        endsOn: date,
+        descriptionMarkdown: z.string().max(50_000).nullable(),
+      })
+      .strict(),
+    output: captureFileActionOutput,
+  },
   'review.complete-weekly.v1': {
-    summary: 'Complete Weekly Review with an explicit decision for every unfinished Action.',
+    // Widened in 20260915090000 rather than versioned: the decision set went
+    // from exhaustive to "everything past three checkpoints", and 'keep' was
+    // added to the resolutions. Both are relaxations, so every payload that
+    // was valid before is still valid and still does the same thing.
+    summary: 'Complete Weekly Review, deciding the work that has stopped moving.',
     risk: 'medium',
     exposure: ['ui', 'chat'],
     reversible: true,
+    domain: 'review',
     input: z
       .object({
         startsOn: date,
@@ -871,7 +1022,14 @@ export const operationDefinitions = {
               .object({
                 actionId: id,
                 expectedVersion: version,
-                resolution: z.enum(['done', 'next_week', 'blocked', 'dropped', 'left_overdue']),
+                resolution: z.enum([
+                  'done',
+                  'next_week',
+                  'keep',
+                  'blocked',
+                  'dropped',
+                  'left_overdue',
+                ]),
                 reason: z.string().trim().max(500).nullable(),
                 priority: z.boolean(),
               })
@@ -887,6 +1045,7 @@ export const operationDefinitions = {
     risk: 'low',
     exposure: ['ui', 'chat'],
     reversible: true,
+    domain: 'period_review',
     input: z
       .object({
         kind: z.enum(['monthly', 'quarterly']),
@@ -902,6 +1061,7 @@ export const operationDefinitions = {
     risk: 'low',
     exposure: ['ui', 'chat', 'mcp'],
     reversible: true,
+    domain: 'note_relation',
     input: z.object({ noteId: id, goalId: id }).strict(),
     output: notePlanningLinkOutput,
   },
@@ -910,6 +1070,7 @@ export const operationDefinitions = {
     risk: 'low',
     exposure: ['ui', 'chat', 'mcp'],
     reversible: true,
+    domain: 'note_relation',
     input: z.object({ noteId: id, goalId: id }).strict(),
     output: notePlanningLinkOutput,
   },
@@ -918,6 +1079,7 @@ export const operationDefinitions = {
     risk: 'low',
     exposure: ['ui', 'chat', 'mcp'],
     reversible: true,
+    domain: 'note_relation',
     input: z.object({ noteId: id, actionId: id }).strict(),
     output: notePlanningLinkOutput,
   },
@@ -926,6 +1088,7 @@ export const operationDefinitions = {
     risk: 'low',
     exposure: ['ui', 'chat', 'mcp'],
     reversible: true,
+    domain: 'note_relation',
     input: z.object({ noteId: id, actionId: id }).strict(),
     output: notePlanningLinkOutput,
   },
@@ -934,6 +1097,7 @@ export const operationDefinitions = {
     risk: 'medium',
     exposure: ['ui', 'chat'],
     reversible: true,
+    domain: 'workspace',
     input: z
       .object({
         timezone: z.string().min(1).max(80),
@@ -950,6 +1114,7 @@ export const operationDefinitions = {
     risk: 'medium',
     exposure: ['ui'],
     reversible: true,
+    domain: 'guided_onboarding',
     input: z
       .object({
         timezone: z.string().min(1).max(80),
@@ -975,6 +1140,7 @@ export const operationDefinitions = {
     risk: 'medium',
     exposure: ['ui', 'chat'],
     reversible: true,
+    domain: 'ai_budget',
     input: z.object({ softBudgetCents: z.number().int().min(100).max(2000) }).strict(),
     output: aiBudgetOutput,
   },
@@ -983,6 +1149,7 @@ export const operationDefinitions = {
     risk: 'low',
     exposure: ['ui', 'chat', 'mcp'],
     reversible: true,
+    domain: 'daily_execution',
     input: z.object({ focusOn: date, actionIds: z.array(id).max(5) }).strict(),
     output: dailyFocusOutput,
   },
@@ -991,6 +1158,7 @@ export const operationDefinitions = {
     risk: 'high',
     exposure: ['ui'],
     reversible: true,
+    domain: 'account',
     input: z.object({ confirmation: z.literal('DELETE MY ACCOUNT') }).strict(),
     output: accountDeletionOutput,
   },
@@ -999,6 +1167,7 @@ export const operationDefinitions = {
     risk: 'low',
     exposure: ['ui'],
     reversible: false,
+    domain: 'account',
     input: z.object({ requestId: id }).strict(),
     output: accountDeletionOutput,
   },
@@ -1031,11 +1200,13 @@ export const undoableOperationIds = [
   'daily-focus.set.v1',
   'capture.create.v1',
   'capture.file-to-note.v1',
+  'capture.file-to-action.v1',
   'note.create.v1',
   'note.update.v1',
   'note.move.v1',
   'note.archive.v1',
   'note.ai-exclusion.v1',
+  'note.favorite.v1',
   'note.import-preview.v1',
   'note.import-commit.v1',
   'note.tags.set.v1',
@@ -1058,6 +1229,14 @@ export const undoableOperationIds = [
 ] as const satisfies readonly OperationId[];
 
 export type OperationId = keyof typeof operationDefinitions;
+/**
+ * Which domain owns an Operation, and therefore which handler the database
+ * router sends it to. Carried here so the manifest is complete on its own
+ * terms, and compared against `operation_handler_for` in the parity test --
+ * a handler moved on one side and not the other is then a failing check rather
+ * than something found in production.
+ */
+export type OperationDomain = (typeof operationDefinitions)[OperationId]['domain'];
 export type OperationSurface = 'ui' | 'chat' | 'mcp' | 'automation' | 'system';
 export type OperationInput<TId extends OperationId> = z.input<
   (typeof operationDefinitions)[TId]['input']
@@ -1085,6 +1264,18 @@ export class OperationFailure extends Error {
 }
 
 const digestPrefix = /^([a-z0-9_]+): /;
+
+/* The stable code, for the few failures a surface has to react to rather than
+   merely report. The digest carries `<code>: <message>`, so the code has
+   always been there; reading it beats matching on the sentence, which is
+   copy that should be free to change. */
+export function operationFailureCode(error: unknown): string | null {
+  if (error instanceof OperationFailure) return error.code;
+  const digest = (error as { digest?: unknown } | null)?.digest;
+  if (typeof digest !== 'string') return null;
+  const match = digestPrefix.exec(digest);
+  return match ? match[1] : null;
+}
 
 // Reads the message back off whichever side of that boundary it survived on.
 export function operationFailureMessage(error: unknown): string | null {
@@ -1130,6 +1321,12 @@ function stableFailure(message: string) {
     return new OperationFailure(
       'capture_source_is_immutable',
       'A Capture keeps the words you recorded. Save the change as a Note instead.'
+    );
+  }
+  if (message.includes('review_already_completed')) {
+    return new OperationFailure(
+      'review_already_completed',
+      'This period has already been reviewed. Undo the completed review before recording a different one.'
     );
   }
   if (message.includes('vision_required')) {

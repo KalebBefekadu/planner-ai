@@ -1,6 +1,14 @@
 'use client';
 
-import { useCallback, useEffect, useRef, useState } from 'react';
+import {
+  createContext,
+  useCallback,
+  useContext,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from 'react';
 import {
   Check,
   History,
@@ -20,6 +28,7 @@ import type { AssistantEvidence, ResolvedAssistantClaim } from '@/lib/assistant/
 import { GenUiRenderer } from '@/components/genui-renderer';
 import { parseGenUiSpec, type GenUiParseResult } from '@/lib/genui/schema';
 import { actionFailureMessage } from '@/lib/operations/failure-message';
+import { isPermanentAssistantFailure } from '@/lib/ai/proposal-failures';
 
 type Message = {
   id?: string;
@@ -52,6 +61,7 @@ type AssistantResponse = {
   undoableReceiptId?: string | null;
   conversationClosed?: boolean;
   error?: string;
+  code?: string;
 };
 type ConversationResponse = {
   conversations?: Conversation[];
@@ -60,7 +70,20 @@ type ConversationResponse = {
   error?: string;
 };
 
-export function AssistantDock({ className }: { className?: string }) {
+type AssistantControls = { open: () => void };
+
+const AssistantContext = createContext<AssistantControls | null>(null);
+
+/* The dock used to be mounted twice -- once in the sidebar footer, once for
+   the mobile header -- with CSS hiding whichever launcher did not apply. Each
+   mount carried its own conversation, so collapsing the sidebar swapped the
+   visible launcher and with it the entire conversation: an in-flight draft
+   simply vanished. Both panels also rendered the same element id, so one of
+   the two conversation pickers had a label bound to the other's control.
+
+   State and the panel live here once. The launcher is a separate button that
+   can appear wherever the frame needs it. */
+export function AssistantProvider({ children }: { children?: React.ReactNode }) {
   const pathname = usePathname();
   const router = useRouter();
   const [open, setOpen] = useState(false);
@@ -133,10 +156,11 @@ export function AssistantDock({ className }: { className?: string }) {
       dismissedProposalId?: string;
       undoReceiptId?: string;
     },
-    restoreOnFailure?: () => void
+    restoreOnFailure?: (failure: { permanent: boolean }) => void
   ) {
     setPending(true);
     setError(null);
+    let failureCode: string | null = null;
     try {
       const selectedNoteId =
         pathname === '/notes' ? new URLSearchParams(window.location.search).get('note') : null;
@@ -165,7 +189,10 @@ export function AssistantDock({ className }: { className?: string }) {
         }),
       });
       const data = (await response.json()) as AssistantResponse;
-      if (!response.ok && response.status !== 409) {
+      // A 409 that carries a reply is the legacy data model politely declining
+      // to act; a 409 with only an error is a real failure and must be shown.
+      if (!response.ok && !data.reply) {
+        failureCode = data.code ?? null;
         throw new Error(data.error ?? 'Planner AI could not respond.');
       }
       if (data.reply) {
@@ -196,7 +223,7 @@ export function AssistantDock({ className }: { className?: string }) {
     } catch (caught) {
       setError(actionFailureMessage(caught, 'Planner AI could not respond.'));
       if (options.message) setFailedMessage(options.message);
-      restoreOnFailure?.();
+      restoreOnFailure?.({ permanent: isPermanentAssistantFailure(failureCode) });
     } finally {
       setPending(false);
     }
@@ -216,36 +243,45 @@ export function AssistantDock({ className }: { className?: string }) {
     if (!proposal || pending) return;
     const actedOn = proposal;
     setProposal(null);
-    void callAssistant({ approvedProposalId: actedOn.id }, () => setProposal(actedOn));
+    // Putting the card back is what makes a retry possible, but a Proposal the
+    // server has already spent can never be approved, and offering it again is
+    // the approval loop this ticket set out to end.
+    void callAssistant({ approvedProposalId: actedOn.id }, ({ permanent }) => {
+      if (!permanent) setProposal(actedOn);
+    });
   }
 
   function dismissProposal() {
     if (!proposal || pending) return;
     const actedOn = proposal;
     setProposal(null);
-    void callAssistant({ dismissedProposalId: actedOn.id }, () => setProposal(actedOn));
+    void callAssistant({ dismissedProposalId: actedOn.id }, ({ permanent }) => {
+      if (!permanent) setProposal(actedOn);
+    });
   }
 
   function undoLastOperation() {
     if (!undoableReceiptId || pending) return;
     const receiptId = undoableReceiptId;
     setUndoableReceiptId(null);
-    void callAssistant({ undoReceiptId: receiptId }, () => setUndoableReceiptId(receiptId));
+    void callAssistant({ undoReceiptId: receiptId }, ({ permanent }) => {
+      if (!permanent) setUndoableReceiptId(receiptId);
+    });
   }
 
+  const controls = useMemo<AssistantControls>(
+    () => ({
+      open: () => {
+        setOpen(true);
+        void loadConversationIndex();
+      },
+    }),
+    [loadConversationIndex]
+  );
+
   return (
-    <>
-      <button
-        className={`assistant-launch${className ? ` ${className}` : ''}`}
-        type="button"
-        onClick={() => {
-          setOpen(true);
-          void loadConversationIndex();
-        }}
-      >
-        <Sparkles size={16} aria-hidden="true" />
-        Ask Planner AI
-      </button>
+    <AssistantContext.Provider value={controls}>
+      {children}
       {open ? (
         <div className="assistant-panel" role="dialog" aria-label="Planner AI assistant">
           <header className="assistant-header">
@@ -376,10 +412,17 @@ export function AssistantDock({ className }: { className?: string }) {
                   <span>{proposal.risk} risk</span>
                 </div>
                 <div>
+                  {/* Disabled while a decision is in flight, for the same
+                      reason Undo already is. Both handlers ignore a second
+                      click, but a control that still looks pressable invites
+                      one at the moment a person most wants to know whether
+                      their decision landed. */}
                   <button
                     className="btn-secondary button-with-icon"
                     type="button"
+                    disabled={pending}
                     onClick={dismissProposal}
+                    aria-busy={pending}
                   >
                     <X size={15} />
                     Dismiss
@@ -387,10 +430,12 @@ export function AssistantDock({ className }: { className?: string }) {
                   <button
                     className="btn-primary button-with-icon"
                     type="button"
+                    disabled={pending}
                     onClick={approveProposal}
+                    aria-busy={pending}
                   >
                     <Check size={15} />
-                    Approve
+                    {pending ? 'Approving…' : 'Approve'}
                   </button>
                 </div>
               </section>
@@ -403,8 +448,9 @@ export function AssistantDock({ className }: { className?: string }) {
                   type="button"
                   onClick={undoLastOperation}
                   disabled={pending}
+                  aria-busy={pending}
                 >
-                  <RotateCcw size={14} /> Undo
+                  <RotateCcw size={14} /> {pending ? 'Undoing…' : 'Undo'}
                 </button>
               </section>
             ) : null}
@@ -452,6 +498,33 @@ export function AssistantDock({ className }: { className?: string }) {
           </div>
         </div>
       ) : null}
-    </>
+    </AssistantContext.Provider>
+  );
+}
+
+/* Rendered wherever the frame wants an entry point. Outside a provider it
+   would be a button that does nothing, so say so rather than fail silently. */
+export function AssistantLauncher({ className }: { className?: string }) {
+  const controls = useContext(AssistantContext);
+  if (!controls) throw new Error('AssistantLauncher must be rendered inside an AssistantProvider');
+  return (
+    <button
+      className={`assistant-launch${className ? ` ${className}` : ''}`}
+      type="button"
+      onClick={controls.open}
+    >
+      <Sparkles size={16} aria-hidden="true" />
+      Ask Planner AI
+    </button>
+  );
+}
+
+/* One provider and one launcher together, for a surface that needs a single
+   self-contained dock. */
+export function AssistantDock({ className }: { className?: string }) {
+  return (
+    <AssistantProvider>
+      <AssistantLauncher className={className} />
+    </AssistantProvider>
   );
 }

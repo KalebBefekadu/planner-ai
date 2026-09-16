@@ -87,7 +87,15 @@ export function DataSettings({
           <div>
             <h2>Full Workspace export</h2>
             <p>
-              Versioned JSON including Markdown Notes, chat, Memory, Activity, and grant metadata.
+              Versioned JSON including your Vision, Goals, Actions and their schedule history,
+              Planning Horizons, Reviews, Markdown Notes, Captures, chat, Memory, Activity, and
+              grant metadata.
+            </p>
+            <p className="export-scope-note">
+              This is the copy that holds your plan, not only your Notes. It is a readable archive:
+              Planner AI can rebuild a Notes vault from its own export, but nothing here imports
+              this file back, so treat it as a record you keep rather than a way to move a Workspace
+              between installations.
             </p>
           </div>
         </div>
@@ -113,6 +121,12 @@ export function DataSettings({
           <div>
             <h2>Markdown Notes vault</h2>
             <p>Portable Markdown files plus a hierarchy manifest for your personal vault.</p>
+            <p className="export-scope-note">
+              Rebuilds Note bodies, hierarchy, order, tags and AI Exclusion. Attachments are
+              included as files but are not rebuilt by import. Your Vision, Goals, Actions and
+              Reviews are not in this vault at all -- download the full Workspace export above to
+              keep a copy of those.
+            </p>
           </div>
         </div>
         <button

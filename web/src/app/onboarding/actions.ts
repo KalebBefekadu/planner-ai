@@ -78,3 +78,11 @@ export async function completeGuidedOnboarding(
   revalidatePlannerAndRecords();
   return result;
 }
+
+/* The wizard keeps a device-local draft so an interrupted setup can be resumed.
+   That draft is scoped to the owner, which means the client needs to know who
+   it is holding a draft for. Only the identifier crosses the boundary. */
+export async function getOnboardingOwnerId(): Promise<string> {
+  const { user } = await authenticatedClient();
+  return user.id;
+}

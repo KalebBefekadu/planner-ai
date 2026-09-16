@@ -9,6 +9,9 @@ export {
   formatImportBytes,
 } from './import-limits';
 import { IMPORT_LIMITS, IMPORT_UPLOAD_LIMIT_LABEL, formatImportBytes } from './import-limits';
+import { describeLinkOutcome, resolveInternalLinks } from './import-links';
+import { convertNotionHtmlBlocks, describeNotionHtmlOutcome } from './import-notion-html';
+import { isSupportedVaultManifest, VAULT_MANIFEST_PATH } from '@/lib/notes/vault-format';
 
 export type ImportSourceFile = {
   path: string;
@@ -29,6 +32,12 @@ export type NoteImportCandidate = {
   // are normalised to null by candidatesFromVaultOrFiles and fall back to the
   // dependency-safe staging order.
   sourceSortKey?: number | null;
+  // How the owner had this page arranged: its icon, cover, cover position and
+  // whether it was pinned. Only an exported vault carries any of this; files
+  // from any other source are normalised to null, because inventing an
+  // appearance for an imported Notion page would be making a choice on the
+  // owner's behalf and calling it a restore.
+  appearance?: RestorableAppearance | null;
   // Set when the item is imported but not as a faithful copy of the source.
   // It is stored as the item's reason so the pre-commit report can say what a
   // conversion cost, instead of showing a converted row and an intact page
@@ -42,6 +51,35 @@ export type NoteImportCandidate = {
  * knew about itself is left behind. Naming that here keeps the wording in one
  * place and keeps it identical in the preview and in the stored report.
  */
+export type RestorableAppearance = {
+  iconEmoji: string | null;
+  coverKey: string | null;
+  coverPosition: number;
+  favoritedAt: string | null;
+};
+
+/* Read an appearance out of a manifest entry, refusing anything the database
+   would refuse anyway.
+ *
+ * A manifest is a file the owner can edit, and a restore is exactly when a
+ * hand-edited one turns up. Each field falls back to its own absence rather
+ * than to the whole appearance being discarded, so one bad cover position does
+ * not also cost the icon. */
+const COVER_POSITION_DEFAULT = 50;
+
+function restorableAppearance(item: VaultManifestItem): RestorableAppearance {
+  const position = item.coverPosition;
+  return {
+    iconEmoji: typeof item.iconEmoji === 'string' && item.iconEmoji ? item.iconEmoji : null,
+    coverKey: typeof item.coverKey === 'string' && item.coverKey ? item.coverKey : null,
+    coverPosition:
+      typeof position === 'number' && Number.isInteger(position) && position >= 0 && position <= 100
+        ? position
+        : COVER_POSITION_DEFAULT,
+    favoritedAt: typeof item.favoritedAt === 'string' && item.favoritedAt ? item.favoritedAt : null,
+  };
+}
+
 export const CSV_ROW_CONVERSION_NOTICE =
   'Converted from a CSV row. Column types, formulas, relations, filters and views are not imported.';
 
@@ -59,7 +97,8 @@ const textExtensions = new Set(['.md', '.markdown', '.txt', '.csv']);
 
 // The vault manifest is not a Note, but it must still be readable from a ZIP so
 // that an exported vault re-imports with its own identity and hierarchy.
-const VAULT_MANIFEST_PATH = 'planner-ai-vault.json';
+// The path, the format name and the version all live in vault-format.ts,
+// shared with the writer so the two cannot drift apart.
 
 function safePath(value: string) {
   const normalized = value.normalize('NFC');
@@ -84,10 +123,52 @@ function decodeText(bytes: Buffer) {
   return text.replace(/^\uFEFF/, '');
 }
 
+/**
+ * Notion appends the page's own 32-character hexadecimal ID to every exported
+ * file and folder name, so a page the owner called "Weekly Review" arrives as
+ * "Weekly Review 5f2c...c81a". That ID is Notion's internal bookkeeping, not
+ * part of the title anyone wrote, and carrying it into the workspace makes an
+ * imported hierarchy read as a dump of another product's internals.
+ *
+ * Stripping is deliberately narrow, because a title is the owner's text and
+ * damaging one is worse than leaving a suffix on:
+ * - exactly 32 hexadecimal characters, no more and no fewer, so a shorter hex
+ *   run (a commit prefix, say) is left alone and a longer one is not truncated
+ *   to 32;
+ * - preceded by a single space, which is the separator Notion uses; a title
+ *   that runs the hex straight on to a word is not a Notion export name;
+ * - only at the very end of the name;
+ * - and never when it would leave nothing behind, so a page whose whole
+ *   exported name is the ID keeps a title rather than becoming blank.
+ *
+ * It is applied only to titles derived from a path. A title taken from the
+ * document's own `# heading` is text the owner wrote inside the page and is
+ * never rewritten.
+ */
+const NOTION_ID_SUFFIX = / [0-9a-f]{32}$/i;
+
+export function stripNotionIdSuffix(title: string) {
+  const stripped = title.replace(NOTION_ID_SUFFIX, '').trim();
+  return stripped || title;
+}
+
 function titleFrom(pathname: string, body: string) {
   const heading = body.match(/^#\s+(.+)$/m)?.[1]?.trim();
-  const fallback = path.posix.basename(pathname, path.posix.extname(pathname));
-  return (heading || fallback || 'Imported Note').slice(0, 300);
+  if (heading) return heading.slice(0, 300);
+  return titleFromPath(pathname);
+}
+
+/* The name a file gets when nothing inside it offers a better one.
+ *
+ * Split out because the failure paths need it too. A Notion database whose CSV
+ * cannot be parsed still has to appear in the report under the name the owner
+ * would recognise -- "Tasks", not "Tasks 5f2c...c81a.csv". Those rows are the
+ * ones a person reads most carefully, because they are the ones that did not
+ * work, and showing them Notion's internal bookkeeping there is the least
+ * useful moment to do it. */
+function titleFromPath(pathname: string) {
+  const stripped = stripNotionIdSuffix(path.posix.basename(pathname, path.posix.extname(pathname)));
+  return (stripped || 'Imported Note').slice(0, 300);
 }
 
 function markdownCell(value: unknown) {
@@ -109,7 +190,7 @@ function csvCandidates(sourcePath: string, body: string, parentSourcePath: strin
     return [
       {
         sourcePath,
-        title: path.posix.basename(sourcePath),
+        title: titleFromPath(sourcePath),
         bodyMarkdown: '',
         parentSourcePath,
         unsupportedReason: 'CSV could not be parsed safely.',
@@ -120,7 +201,7 @@ function csvCandidates(sourcePath: string, body: string, parentSourcePath: strin
     return [
       {
         sourcePath,
-        title: path.posix.basename(sourcePath),
+        title: titleFromPath(sourcePath),
         bodyMarkdown: '',
         parentSourcePath,
         unsupportedReason: 'CSV contains no data rows.',
@@ -147,7 +228,45 @@ function csvCandidates(sourcePath: string, body: string, parentSourcePath: strin
   });
 }
 
-function addFolders(files: ImportSourceFile[], candidates: NoteImportCandidate[]) {
+/**
+ * Notion writes a page that has children as two entries with the same name:
+ * the page itself, `Weekly review <id>.md`, and a folder, `Weekly review
+ * <id>/`, holding its children. They are one page, and importing them as two
+ * produced a duplicate of every page in the workspace that has anything filed
+ * under it -- one copy holding the text with no children, and an empty copy
+ * beside it holding all of them. On a real workspace that is most of the tree.
+ *
+ * The folder is therefore not a page. It maps to the file it belongs to, and
+ * anything inside it is filed under that page instead.
+ *
+ * A folder with no such sibling is a real container -- that is what a plain
+ * folder of Markdown looks like -- and still becomes a Note of its own.
+ */
+function pageFolderTargets(files: ImportSourceFile[]) {
+  const filePaths = new Set(files.map((file) => file.path));
+  const targets = new Map<string, string>();
+  for (const file of files) {
+    const parts = file.path.split('/').slice(0, -1);
+    for (let index = 0; index < parts.length; index += 1) {
+      const folder = `${parts.slice(0, index + 1).join('/')}/`;
+      if (targets.has(folder)) continue;
+      const withoutSlash = folder.slice(0, -1);
+      // Markdown first: where a database has both a CSV and a folder of row
+      // pages, the folder is the database page and the CSV only indexes it.
+      const paired = [`${withoutSlash}.md`, `${withoutSlash}.markdown`].find((candidate) =>
+        filePaths.has(candidate)
+      );
+      if (paired) targets.set(folder, paired);
+    }
+  }
+  return targets;
+}
+
+function addFolders(
+  files: ImportSourceFile[],
+  candidates: NoteImportCandidate[],
+  pageFolders: Map<string, string>
+) {
   const folders = new Set<string>();
   for (const file of files) {
     const parts = file.path.split('/').slice(0, -1);
@@ -156,30 +275,124 @@ function addFolders(files: ImportSourceFile[], candidates: NoteImportCandidate[]
     }
   }
   for (const folder of [...folders].sort((a, b) => a.split('/').length - b.split('/').length)) {
+    if (pageFolders.has(folder)) continue;
     const withoutSlash = folder.slice(0, -1);
     const parent = withoutSlash.includes('/')
       ? `${withoutSlash.slice(0, withoutSlash.lastIndexOf('/'))}/`
       : null;
     candidates.push({
       sourcePath: folder,
-      title: path.posix.basename(withoutSlash).slice(0, 300),
+      title: stripNotionIdSuffix(path.posix.basename(withoutSlash)).slice(0, 300),
       bodyMarkdown: '',
-      parentSourcePath: parent,
+      parentSourcePath: parent === null ? null : (pageFolders.get(parent) ?? parent),
       unsupportedReason: null,
     });
+  }
+}
+
+/**
+ * Notion exports a database twice: as `Projects <id>.csv`, one row per page,
+ * and as `Projects <id>/`, the row pages themselves with their real bodies.
+ * Importing both gave every row two Notes -- the page, and a stub rebuilt from
+ * the row's columns holding the same title and none of the writing.
+ *
+ * The page wins. A row keeps its CSV stub only when the export has no page for
+ * it, which is what a database row with an empty page looks like, and that
+ * stub is filed inside the database rather than beside it.
+ */
+function dropCsvRowsThatHaveTheirOwnPage(
+  candidates: NoteImportCandidate[],
+  files: ImportSourceFile[]
+) {
+  const filePaths = new Set(files.map((file) => file.path));
+  const pagesByFolder = new Map<string, Set<string>>();
+  for (const candidate of candidates) {
+    if (candidate.unsupportedReason !== null) continue;
+    const separator = candidate.sourcePath.lastIndexOf('/');
+    if (separator < 0 || candidate.sourcePath.endsWith('/')) continue;
+    if (candidate.sourcePath.includes('#row-')) continue;
+    const folder = candidate.sourcePath.slice(0, separator + 1);
+    const titles = pagesByFolder.get(folder) ?? new Set<string>();
+    titles.add(candidate.title.trim().toLowerCase());
+    pagesByFolder.set(folder, titles);
+  }
+
+  for (let index = candidates.length - 1; index >= 0; index -= 1) {
+    const candidate = candidates[index];
+    const rowSeparator = candidate.sourcePath.lastIndexOf('#row-');
+    if (rowSeparator < 0) continue;
+    const csvPath = candidate.sourcePath.slice(0, rowSeparator);
+    const rowFolder = `${csvPath.slice(0, csvPath.length - path.posix.extname(csvPath).length)}/`;
+    // No paired folder means the CSV is the only record of these rows.
+    if (![...filePaths].some((filePath) => filePath.startsWith(rowFolder))) continue;
+    if (pagesByFolder.get(rowFolder)?.has(candidate.title.trim().toLowerCase())) {
+      candidates.splice(index, 1);
+      continue;
+    }
+    candidate.parentSourcePath = rowFolder;
+  }
+}
+
+/**
+ * An exported workspace is a web of pages that link to each other by relative
+ * file path. Those paths mean nothing inside Planner AI, so the links are
+ * rewritten in place to name the item they point at, and the commit turns each
+ * one into the created Note's URL. Resolution is by path rather than by title,
+ * so two pages that share a title still link to the right one.
+ *
+ * Mutates the candidates: their bodies carry the rewritten links, and any item
+ * whose links changed or could not be followed gains a reason saying so before
+ * the owner agrees to the commit.
+ */
+function resolveCandidateLinks(
+  candidates: NoteImportCandidate[],
+  pageFolders: Map<string, string>
+) {
+  const byPath = new Map<string, { sourcePath: string; importable: boolean }>();
+  // A link written at a page's children folder means the page itself, which is
+  // the entry that folder no longer has.
+  for (const [folder, target] of pageFolders) {
+    byPath.set(folder, { sourcePath: target, importable: true });
+  }
+  for (const candidate of candidates) {
+    byPath.set(candidate.sourcePath, {
+      sourcePath: candidate.sourcePath,
+      importable: candidate.unsupportedReason === null,
+    });
+    // A CSV file is not itself a Note: its rows are. A link to the file names
+    // a database view that was not imported as a page, which is a different
+    // answer from "this export does not contain it".
+    const rowSeparator = candidate.sourcePath.lastIndexOf('#row-');
+    if (rowSeparator > 0) {
+      const filePath = candidate.sourcePath.slice(0, rowSeparator);
+      if (!byPath.has(filePath)) byPath.set(filePath, { sourcePath: filePath, importable: false });
+    }
+  }
+  for (const candidate of candidates) {
+    if (candidate.unsupportedReason !== null || !candidate.bodyMarkdown) continue;
+    const outcome = resolveInternalLinks(candidate.bodyMarkdown, candidate.sourcePath, byPath);
+    candidate.bodyMarkdown = outcome.bodyMarkdown;
+    const notice = describeLinkOutcome(outcome);
+    if (!notice) continue;
+    candidate.conversionNotice = candidate.conversionNotice
+      ? `${candidate.conversionNotice} ${notice}`.slice(0, 500)
+      : notice;
   }
 }
 
 export function candidatesFromFiles(files: ImportSourceFile[]) {
   const normalized = files.map((file) => ({ ...file, path: safePath(file.path) }));
   const candidates: NoteImportCandidate[] = [];
-  addFolders(normalized, candidates);
+  const pageFolders = pageFolderTargets(normalized);
+  addFolders(normalized, candidates, pageFolders);
   for (const file of normalized) {
     if (file.path.startsWith('__MACOSX/') || path.posix.basename(file.path).startsWith('.'))
       continue;
     const extension = path.posix.extname(file.path).toLowerCase();
     const directory = path.posix.dirname(file.path);
-    const parentSourcePath = directory === '.' ? null : `${directory}/`;
+    const folder = directory === '.' ? null : `${directory}/`;
+    // A page's own children folder is not a place; the page is.
+    const parentSourcePath = folder === null ? null : (pageFolders.get(folder) ?? folder);
     if (file.unsupportedReason || !textExtensions.has(extension)) {
       candidates.push({
         sourcePath: file.path,
@@ -207,15 +420,25 @@ export function candidatesFromFiles(files: ImportSourceFile[]) {
     if (extension === '.csv') {
       candidates.push(...csvCandidates(file.path, body, parentSourcePath));
     } else {
+      // Notion writes callouts and toggles as raw HTML. Converting them here,
+      // before anything is stored, keeps the body source-authoritative
+      // Markdown and leaves the renderer nothing it has to refuse.
+      const html = convertNotionHtmlBlocks(body);
+      const htmlNotice = describeNotionHtmlOutcome(html);
       candidates.push({
         sourcePath: file.path,
         title: titleFrom(file.path, body),
-        bodyMarkdown: body,
+        bodyMarkdown: html.markdown,
         parentSourcePath,
         unsupportedReason: null,
+        // Carried only when there is something to say, so a page this changed
+        // nothing about keeps the shape it has always had.
+        ...(htmlNotice ? { conversionNotice: htmlNotice } : {}),
       });
     }
   }
+  dropCsvRowsThatHaveTheirOwnPage(candidates, normalized);
+  resolveCandidateLinks(candidates, pageFolders);
   if (candidates.length > IMPORT_LIMITS.candidates) {
     throw new Error(`An import may contain at most ${IMPORT_LIMITS.candidates} Notes.`);
   }
@@ -235,6 +458,14 @@ type VaultManifestItem = {
   path: string;
   title: string;
   sortKey: number;
+  /* Written by every vault this version exports. Older archives predate them,
+     so each is optional and each has a defined absence: no icon, no cover, the
+     default position, not a favourite. An old vault restores exactly as it did
+     before rather than failing to open. */
+  iconEmoji?: string | null;
+  coverKey?: string | null;
+  coverPosition?: number | null;
+  favoritedAt?: string | null;
 };
 
 function vaultCandidates(files: ImportSourceFile[]) {
@@ -246,12 +477,7 @@ function vaultCandidates(files: ImportSourceFile[]) {
   } catch {
     return null;
   }
-  if (
-    manifest.format !== 'planner-ai-notes-vault' ||
-    manifest.schemaVersion !== 1 ||
-    !Array.isArray(manifest.notes)
-  )
-    return null;
+  if (!isSupportedVaultManifest(manifest) || !Array.isArray(manifest.notes)) return null;
   const byPath = new Map(files.map((file) => [file.path, file]));
   const ids = new Set(manifest.notes.map((note) => note.id));
   if (ids.size !== manifest.notes.length)
@@ -282,6 +508,7 @@ function vaultCandidates(files: ImportSourceFile[]) {
       unsupportedReason: null,
       aiExcluded,
       sourceSortKey: note.sortKey,
+      appearance: restorableAppearance(note),
     } satisfies NoteImportCandidate;
   });
 }
@@ -292,6 +519,7 @@ export function candidatesFromVaultOrFiles(files: ImportSourceFile[]) {
     aiExcluded: false,
     sourceSortKey: null,
     conversionNotice: null,
+    appearance: null,
     ...candidate,
   }));
 }

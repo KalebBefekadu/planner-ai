@@ -1,7 +1,11 @@
 'use server';
 
+import type { GoalType } from '@/lib/planner/horizon-labels';
+import { selectAll } from '@/lib/supabase/select-all';
+
 import { randomUUID } from 'node:crypto';
 import { revalidatePath } from 'next/cache';
+import { ancestorDepth, indexActions, nearestMonthlyAncestor } from '@/lib/planner/nesting';
 import { revalidatePlannerAndRecords, revalidatePlannerViews } from '@/lib/planner-revalidation';
 import { periodBounds, type HorizonKind, type PeriodBounds } from '@/lib/planning-period';
 import { dateInTimezone } from '@/lib/date';
@@ -9,7 +13,7 @@ import { executeOperation, OperationFailure } from '@/lib/operations';
 import { createClient } from '@/lib/supabase/server';
 import type { GoalStatus } from '@/types/supabase';
 
-export type GoalType = 'yearly' | 'quarterly' | 'monthly' | 'weekly';
+export type { GoalType };
 export type VisionView = {
   id: string;
   content: string;
@@ -33,7 +37,15 @@ export type GoalView = {
   unit?: string | null;
   scheduled_on?: string | null;
   parent_action_id?: string | null;
+  /** How many Actions this one sits under. Zero for a root. */
+  depth?: number;
   vision_id?: string;
+  /**
+   * 'initiative' is a standing concern that never finishes -- a business, a
+   * project. It carries no deadline and may hang under a yearly Goal.
+   */
+  kind?: 'outcome' | 'initiative';
+  definition_of_done?: string | null;
   yearly_id?: string;
   quarterly_id?: string;
   monthly_id?: string;
@@ -60,6 +72,8 @@ export type GoalsData = {
   currentPeriods: Record<HorizonKind, PeriodBounds>;
   localDate: string;
   weekStartsOn: number;
+  /** Whether a breakdown can be offered. An initiative works without one. */
+  aiEnabled?: boolean;
 };
 export type ActionTemplateView = {
   id: string;
@@ -72,7 +86,18 @@ export type ActionTemplateView = {
   version: number;
 };
 
-type GoalInput = { type: GoalType; parentId: string; content: string };
+type GoalInput = {
+  type: GoalType;
+  parentId: string;
+  content: string;
+  /**
+   * A yearly item may be a standing concern rather than an outcome -- a
+   * business, a project, the thing a weekly folder is named after. It never
+   * finishes, so it carries no deadline and is never asked whether it was
+   * achieved. Only meaningful for 'yearly'.
+   */
+  kind?: 'outcome' | 'initiative';
+};
 type CanonicalGoal = {
   id: string;
   vision_id: string;
@@ -85,6 +110,8 @@ type CanonicalGoal = {
   current_value: number | null;
   unit: string | null;
   due_on: string | null;
+  kind: 'outcome' | 'initiative';
+  definition_of_done: string | null;
   created_at: string;
   updated_at: string;
   archived_at: string | null;
@@ -134,7 +161,7 @@ async function requireWorkspaceId() {
   const { supabase, user } = await requireUser();
   const { data, error } = await supabase
     .from('workspaces')
-    .select('id,timezone,week_starts_on')
+    .select('id,timezone,week_starts_on,ai_enabled')
     .eq('owner_user_id', user.id)
     .single();
   if (error || !data) throw new Error('Unable to load your workspace.');
@@ -144,6 +171,7 @@ async function requireWorkspaceId() {
     workspaceId: data.id as string,
     timezone: data.timezone as string,
     weekStartsOn: Number(data.week_starts_on),
+    aiEnabled: Boolean(data.ai_enabled),
   };
 }
 
@@ -275,22 +303,36 @@ export async function getGoalsHierarchy(): Promise<GoalsData | null> {
   if (!vision) return null;
 
   if (canonicalEnabled) {
-    const { supabase, workspaceId, timezone, weekStartsOn } = await requireWorkspaceId();
+    const { supabase, workspaceId, timezone, weekStartsOn, aiEnabled } = await requireWorkspaceId();
+    /* Paged: PostgREST caps a response at max_rows without saying so, and a
+       plan that has accumulated for a few years passes a thousand rows without
+       being remarkable. Truncated, the screen would show part of the plan as
+       though it were all of it -- and unlike a list, a hierarchy with missing
+       parents silently drops their children too. The id tiebreaks created_at,
+       which is not unique. */
     const [goalsResult, actionsResult] = await Promise.all([
-      supabase
-        .from('goals')
-        .select('*, planning_horizons!inner(kind,starts_on,ends_on)')
-        .eq('workspace_id', workspaceId)
-        .is('archived_at', null)
-        .is('trashed_at', null)
-        .order('created_at'),
-      supabase
-        .from('actions')
-        .select('*, planning_horizons!inner(kind,starts_on,ends_on)')
-        .eq('workspace_id', workspaceId)
-        .is('archived_at', null)
-        .is('trashed_at', null)
-        .order('created_at'),
+      selectAll((from, to) =>
+        supabase
+          .from('goals')
+          .select('*, planning_horizons!inner(kind,starts_on,ends_on)')
+          .eq('workspace_id', workspaceId)
+          .is('archived_at', null)
+          .is('trashed_at', null)
+          .order('created_at')
+          .order('id')
+          .range(from, to)
+      ),
+      selectAll((from, to) =>
+        supabase
+          .from('actions')
+          .select('*, planning_horizons!inner(kind,starts_on,ends_on)')
+          .eq('workspace_id', workspaceId)
+          .is('archived_at', null)
+          .is('trashed_at', null)
+          .order('created_at')
+          .order('id')
+          .range(from, to)
+      ),
     ]);
     if (goalsResult.error || actionsResult.error) throw new Error('Unable to load your plan.');
     const localDate = dateInTimezone(timezone);
@@ -307,6 +349,8 @@ export async function getGoalsHierarchy(): Promise<GoalsData | null> {
       current_value: goal.current_value === null ? null : Number(goal.current_value),
       unit: goal.unit,
       vision_id: goal.vision_id,
+      kind: goal.kind ?? 'outcome',
+      definition_of_done: goal.definition_of_done ?? null,
       yearly_id: goal.parent_goal_id ?? undefined,
       created_at: goal.created_at,
       updated_at: goal.updated_at,
@@ -314,6 +358,17 @@ export async function getGoalsHierarchy(): Promise<GoalsData | null> {
       horizon_starts_on: goal.planning_horizons.starts_on ?? null,
       horizon_ends_on: goal.planning_horizons.ends_on ?? null,
     });
+    // parent_action_id now means "sits under", at any depth, so the monthly
+    // rollup has to be walked to rather than read off the column. Reading it
+    // directly reported a sibling task as the month the moment a weekly Action
+    // had a weekly parent.
+    const actionIndex = indexActions(
+      actions.map((action) => ({
+        id: action.id,
+        parentActionId: action.parent_action_id,
+        horizonKind: action.planning_horizons.kind,
+      }))
+    );
     const mapAction = (action: CanonicalAction): GoalView => ({
       id: action.id,
       content: action.title,
@@ -323,7 +378,8 @@ export async function getGoalsHierarchy(): Promise<GoalsData | null> {
       scheduled_on: action.scheduled_on,
       parent_action_id: action.parent_action_id,
       quarterly_id: action.goal_id ?? undefined,
-      monthly_id: action.parent_action_id ?? undefined,
+      monthly_id: nearestMonthlyAncestor(action.id, actionIndex) ?? undefined,
+      depth: ancestorDepth(action.id, actionIndex),
       created_at: action.created_at,
       updated_at: action.updated_at,
       deleted_at: action.archived_at,
@@ -338,6 +394,9 @@ export async function getGoalsHierarchy(): Promise<GoalsData | null> {
       weekly: actions.filter((action) => action.planning_horizons.kind === 'week').map(mapAction),
       localDate,
       weekStartsOn,
+      // Whether to offer a breakdown at all. An initiative has to be fully
+      // usable with an empty list, so this hides an offer rather than a step.
+      aiEnabled,
       currentPeriods: {
         year: periodBounds('year', localDate, weekStartsOn),
         quarter: periodBounds('quarter', localDate, weekStartsOn),
@@ -417,6 +476,9 @@ export async function createGoal(input: GoalInput) {
           title: content,
           ...range,
           parentGoalId: input.type === 'quarterly' ? input.parentId : null,
+          ...(input.type === 'yearly' && input.kind === 'initiative'
+            ? { kind: 'initiative' as const }
+            : {}),
         },
         { idempotencyKey: randomUUID(), surface: 'ui' }
       );
@@ -693,6 +755,7 @@ export async function updatePlanGoal(input: {
   currentValue: number | null;
   unit: string | null;
   dueOn: string | null;
+  definitionOfDone?: string;
 }) {
   if (!canonicalEnabled) throw new Error('Goal editing requires the canonical data model.');
   const { supabase } = await requireUser();
@@ -726,12 +789,13 @@ export async function movePlanAction(input: {
   type: 'monthly' | 'weekly';
   id: string;
   expectedVersion: number;
-  targetParentId: string;
+  /** Null moves a weekly Action back to the top level, which is where Today puts it. */
+  targetParentId: string | null;
 }) {
   if (!canonicalEnabled) throw new Error('Action moving requires the canonical data model.');
   const { supabase, user } = await requireUser();
   const range = input.type === 'monthly' ? rangeFor('monthly') : rangeFor('weekly');
-  let goalId = input.targetParentId;
+  let goalId: string | null = input.targetParentId;
   let parentActionId: string | null = null;
   if (input.type === 'weekly') {
     const workspace = await supabase
@@ -739,16 +803,18 @@ export async function movePlanAction(input: {
       .select('id')
       .eq('owner_user_id', user.id)
       .single();
-    const parent = await supabase
+    // A child inherits its parent's Goal, including not having one. Outdenting
+    // to the top has no parent to inherit from, so the Action keeps its own.
+    const source = await supabase
       .from('actions')
       .select('goal_id')
-      .eq('id', input.targetParentId)
+      .eq('id', input.targetParentId ?? input.id)
       .eq('workspace_id', workspace.data?.id)
       .is('archived_at', null)
       .is('trashed_at', null)
-      .single();
-    if (!parent.data?.goal_id) throw new Error('The destination monthly Action is unavailable.');
-    goalId = parent.data.goal_id as string;
+      .maybeSingle();
+    if (!source.data) throw new Error('The destination Action is unavailable.');
+    goalId = (source.data.goal_id as string | null) ?? null;
     parentActionId = input.targetParentId;
   }
   const result = await executeOperation(

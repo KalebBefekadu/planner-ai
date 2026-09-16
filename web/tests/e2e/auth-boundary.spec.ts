@@ -165,7 +165,7 @@ test('canonical users see the complete workspace navigation after login', async 
     await expect(
       page.getByRole('heading', { name: 'Plan with a clear line of sight', exact: true })
     ).toBeVisible();
-    await expect(page.getByRole('navigation', { name: 'Filter plan by horizon' })).toBeVisible();
+    await expect(page.getByRole('group', { name: 'Filter plan by horizon' })).toBeVisible();
     await expect(page.getByRole('region', { name: 'Plan overview' })).toBeVisible();
     const weeklyReview = page.getByRole('link', { name: 'Weekly review', exact: true });
     if (!(await weeklyReview.isVisible())) {

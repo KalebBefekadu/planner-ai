@@ -3,6 +3,7 @@
 import { useRef, useState, useTransition } from 'react';
 import { CalendarRange, CheckCircle2, Flag, ListChecks, Target } from 'lucide-react';
 import { completePeriodReview, type PeriodReviewData } from '@/app/review/actions';
+import { newReviewIntent } from '@/lib/reviews/completion-intent';
 import { CoachingCue } from '@/components/coaching-cue';
 import { ReviewTabs } from '@/components/review-tabs';
 import { ReviewAiProposal } from '@/components/review-ai-proposal';
@@ -27,23 +28,27 @@ export function PeriodReview({ data }: { data: PeriodReviewData }) {
   const [completed, setCompleted] = useState(data.completedReview);
   const [error, setError] = useState<string | null>(null);
   const [isPending, startTransition] = useTransition();
-  const submissionIntent = useRef<string | null>(null);
+  // Null until this screen submits, and cleared when a submission succeeds, so
+  // the next completion of the same period is recognised as a new decision
+  // rather than a replay of the one that was undone.
+  const intentRef = useRef<string | null>(null);
   const title = data.kind === 'month' ? 'Monthly Review' : 'Quarterly Review';
 
   function completeReview() {
     setError(null);
     startTransition(async () => {
       try {
-        submissionIntent.current ??= crypto.randomUUID();
-        const result = await completePeriodReview(
-          {
-            kind: data.kind === 'month' ? 'monthly' : 'quarterly',
-            startsOn: data.startsOn,
-            endsOn: data.endsOn,
-            reflectionMarkdown: reflection,
-          },
-          submissionIntent.current
-        );
+        // The same intent for every send of this submission, so a retry
+        // replays rather than writing a second review. Undoing and completing
+        // again mounts the screen afresh and therefore starts a new intent.
+        intentRef.current ??= newReviewIntent();
+        const result = await completePeriodReview({
+          intentId: intentRef.current,
+          kind: data.kind === 'month' ? 'monthly' : 'quarterly',
+          startsOn: data.startsOn,
+          endsOn: data.endsOn,
+          reflectionMarkdown: reflection,
+        });
         setCompleted({
           id: result.reviewId,
           reflectionMarkdown: reflection.trim(),
@@ -152,7 +157,7 @@ export function PeriodReview({ data }: { data: PeriodReviewData }) {
                       <div>
                         <strong>{goal.title}</strong>
                         <span>
-                          {goal.status}
+                          <span className="enum-label">{goal.status}</span>
                           {goal.dueOn ? ` · due ${formatPeriodDate(goal.dueOn)}` : ''}
                         </span>
                       </div>

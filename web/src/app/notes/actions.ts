@@ -2,7 +2,14 @@
 
 import { randomUUID } from 'node:crypto';
 import { revalidatePath } from 'next/cache';
+import {
+  normalizeNoteAppearance,
+  type NoteAppearance,
+  type NoteCoverKey,
+} from '@/lib/notes/appearance';
 import { nextParentMove, nextSiblingMove, placeUnderParent } from '@/lib/notes/sibling-order';
+import { absorbAncestorLevel, markMatches, missingParentIds } from '@/lib/notes/ancestor-hydration';
+import { selectAll } from '@/lib/supabase/select-all';
 import { executeOperation } from '@/lib/operations';
 import { createClient } from '@/lib/supabase/server';
 
@@ -13,8 +20,20 @@ export type NoteView = {
   bodyMarkdown: string;
   sortKey: number;
   aiExcluded: boolean;
+  appearance: NoteAppearance;
+  // The instant this Note was marked a favourite, or null when it is not one.
+  // The instant rather than a flag, because the favourites list has an order a
+  // person builds up, and Undo restores the exact prior instant rather than
+  // guessing one.
+  favoritedAt: string | null;
   version: number;
   updatedAt: string;
+  /**
+   * Whether this Note is a search result, as opposed to an ancestor carried
+   * alongside one so the result can say where it is filed. Undefined when no
+   * search is running, because then every Note is simply itself.
+   */
+  matchesQuery?: boolean;
 };
 
 export type NoteKnowledgeContext = {
@@ -46,7 +65,12 @@ export type NoteKnowledgeContext = {
     id: string;
     originalName: string;
     byteSize: number;
+    mediaType: string;
     scanState: 'quarantined' | 'approved' | 'rejected';
+    // Present only while a removed attachment is still inside its retention
+    // window, which is exactly when a person can still take the removal back.
+    removedAt: string | null;
+    purgeAfter: string | null;
   }>;
 };
 
@@ -72,14 +96,34 @@ async function notesClient() {
   return { supabase, workspaceId: workspace.id as string };
 }
 
+/* What the sidebar needs, which is not the whole Note.
+ *
+ * `select('*')` sent every Note's full Markdown to render a list of titles. On
+ * a workspace the size of a real Notion migration that is the entire vault over
+ * the wire on every navigation, to draw text nobody is reading. The body of the
+ * one Note actually open is fetched on its own, so the cost of opening the
+ * workspace stops scaling with how much has been written in it.
+ *
+ * `search_vector` is excluded deliberately as well: it is a tsvector of the
+ * whole document, so shipping it would undo most of the saving. */
+const TREE_COLUMNS =
+  'id,parent_note_id,title,sort_key,ai_excluded,icon_emoji,cover_key,cover_position,favorited_at,version,updated_at';
+
 function mapNote(note: Record<string, unknown>): NoteView {
   return {
     id: note.id as string,
     parentNoteId: note.parent_note_id as string | null,
     title: note.title as string,
-    bodyMarkdown: note.body_markdown as string,
+    // Absent for every Note but the open one, which fetches its own.
+    bodyMarkdown: (note.body_markdown as string | undefined) ?? '',
     sortKey: Number(note.sort_key),
     aiExcluded: Boolean(note.ai_excluded),
+    appearance: normalizeNoteAppearance({
+      iconEmoji: note.icon_emoji,
+      coverKey: note.cover_key,
+      coverPosition: note.cover_position,
+    }),
+    favoritedAt: (note.favorited_at as string | null) ?? null,
     version: Number(note.version),
     updatedAt: note.updated_at as string,
   };
@@ -87,23 +131,116 @@ function mapNote(note: Record<string, unknown>): NoteView {
 
 export async function getNotes(query?: string) {
   const { supabase, workspaceId } = await notesClient();
-  let request = supabase
+  const normalizedQuery = query?.trim();
+  /* Paged, because PostgREST caps a response at max_rows without saying so:
+     a workspace past a thousand Notes was showing the first thousand and
+     nothing at all about the rest. The id is a tiebreak on sort_key, since
+     paging an order that is not total can repeat one row and drop another. */
+  const { data, error } = await selectAll((from, to) => {
+    let request = supabase
+      .from('notes')
+      .select(TREE_COLUMNS)
+      .eq('workspace_id', workspaceId)
+      .is('archived_at', null)
+      .is('trashed_at', null)
+      .order('sort_key')
+      .order('id')
+      .range(from, to);
+    if (normalizedQuery) {
+      request = request.textSearch('search_vector', normalizedQuery, {
+        config: 'simple',
+        type: 'websearch',
+      });
+    }
+    return request;
+  });
+  if (error) throw new Error('Unable to load Notes.');
+  const matches = (data ?? []).map((note) => mapNote(note as Record<string, unknown>));
+  if (!normalizedQuery) return matches;
+
+  // A result is identified by where it is filed, so the Notes that say where
+  // that is have to come back with it. Without them a match filed two levels
+  // down has no path to show and, once opened, no ancestors to name -- which is
+  // precisely the case a search is for.
+  //
+  // The chain is walked a level at a time rather than a Note at a time, so a
+  // deep vault costs one round trip per level of depth rather than one per
+  // ancestor.
+  const byId = new Map(matches.map((note) => [note.id, note]));
+  let wanted = missingParentIds(byId, matches);
+  while (wanted.length) {
+    const { data: parents, error: parentError } = await supabase
+      .from('notes')
+      .select(TREE_COLUMNS)
+      .eq('workspace_id', workspaceId)
+      .in('id', wanted);
+    if (parentError) throw new Error('Unable to load Notes.');
+    if (!parents?.length) break;
+    wanted = absorbAncestorLevel(
+      byId,
+      parents.map((row) => mapNote(row as Record<string, unknown>))
+    );
+  }
+
+  return markMatches(byId, new Set(matches.map((match) => match.id)));
+}
+
+// Favourites are read on their own rather than filtered out of the tree query.
+// The sidebar tree narrows to matches while a search is running, and pulling
+// favourites from that same list made a person's pinned pages disappear the
+// moment they typed -- exactly when a shortcut out of the results is most
+// useful. This read is bounded by the number of favourites, not the vault.
+export async function getFavoriteNotes(): Promise<NoteView[]> {
+  const { supabase, workspaceId } = await notesClient();
+  const { data, error } = await supabase
     .from('notes')
-    .select('*')
+    .select(TREE_COLUMNS)
     .eq('workspace_id', workspaceId)
     .is('archived_at', null)
     .is('trashed_at', null)
-    .order('sort_key');
-  const normalizedQuery = query?.trim();
-  if (normalizedQuery) {
-    request = request.textSearch('search_vector', normalizedQuery, {
-      config: 'simple',
-      type: 'websearch',
-    });
-  }
-  const { data, error } = await request;
-  if (error) throw new Error('Unable to load Notes.');
+    .not('favorited_at', 'is', null)
+    .order('favorited_at');
+  if (error) throw new Error('Unable to load your favourite Notes.');
   return (data ?? []).map((note) => mapNote(note as Record<string, unknown>));
+}
+
+/* The body of the one Note being read.
+ *
+ * One row rather than the whole workspace. Returns null rather than throwing
+ * when the Note is not there: an id in the address bar can outlive the Note it
+ * named -- it was archived, trashed, or opened from a stale tab -- and that is
+ * an empty editor, not an error page. */
+/* Bodies for a known, already-narrowed set of Notes.
+ *
+ * The tree deliberately arrives without text, which is right for a sidebar and
+ * wrong for the search page: that one ranks and excerpts on what a Note says,
+ * so a query matching only the body would silently return nothing. Bounded by
+ * the number of results rather than by the size of the vault, and capped, so a
+ * two-letter query cannot turn into a request for everything ever written. */
+export async function getNoteBodies(ids: string[]): Promise<Map<string, string>> {
+  if (!ids.length) return new Map();
+  const { supabase, workspaceId } = await notesClient();
+  const { data, error } = await supabase
+    .from('notes')
+    .select('id,body_markdown')
+    .eq('workspace_id', workspaceId)
+    .in('id', ids.slice(0, 200));
+  if (error) throw new Error('Unable to load Notes.');
+  return new Map(
+    (data ?? []).map((row) => [row.id as string, (row.body_markdown as string | null) ?? ''])
+  );
+}
+
+export async function getNoteDocument(id: string): Promise<string | null> {
+  const { supabase, workspaceId } = await notesClient();
+  const { data, error } = await supabase
+    .from('notes')
+    .select('body_markdown')
+    .eq('workspace_id', workspaceId)
+    .eq('id', id)
+    .maybeSingle();
+  if (error) throw new Error('Unable to load this Note.');
+  return data ? ((data.body_markdown as string | null) ?? '') : null;
 }
 
 export async function getNoteKnowledgeContext(noteId: string): Promise<NoteKnowledgeContext> {
@@ -156,26 +293,43 @@ export async function getNoteKnowledgeContext(noteId: string): Promise<NoteKnowl
       .select('action_id')
       .eq('workspace_id', workspaceId)
       .eq('note_id', noteId),
-    supabase
-      .from('goals')
-      .select('id,title')
-      .eq('workspace_id', workspaceId)
-      .is('archived_at', null)
-      .is('trashed_at', null)
-      .order('title'),
-    supabase
-      .from('actions')
-      .select('id,title')
-      .eq('workspace_id', workspaceId)
-      .is('archived_at', null)
-      .is('trashed_at', null)
-      .order('title'),
+    /* These two are the pickers for linking a Note to the plan, and they are
+       workspace-wide rather than per-Note. Truncated at max_rows, a Goal past
+       the first thousand simply could not be chosen, and nothing on the screen
+       would say why it was absent. The rest of the reads here are filtered to
+       one Note and cannot reach the cap. */
+    selectAll((from, to) =>
+      supabase
+        .from('goals')
+        .select('id,title')
+        .eq('workspace_id', workspaceId)
+        .is('archived_at', null)
+        .is('trashed_at', null)
+        .order('title')
+        .order('id')
+        .range(from, to)
+    ),
+    selectAll((from, to) =>
+      supabase
+        .from('actions')
+        .select('id,title')
+        .eq('workspace_id', workspaceId)
+        .is('archived_at', null)
+        .is('trashed_at', null)
+        .order('title')
+        .order('id')
+        .range(from, to)
+    ),
+    // Removed attachments are still listed while they can be restored. Hiding
+    // them made the undo live only in the tab that did the removal: a reload
+    // left the file present in storage, recoverable for another thirty days,
+    // and invisible to the only person who could recover it.
     supabase
       .from('note_attachments')
-      .select('id,original_name,byte_size,scan_state')
+      .select('id,original_name,byte_size,media_type,scan_state,removed_at,purge_after')
       .eq('workspace_id', workspaceId)
       .eq('note_id', noteId)
-      .is('removed_at', null)
+      .or(`removed_at.is.null,purge_after.gt.${new Date().toISOString()}`)
       .order('created_at', { ascending: false }),
   ]);
   if (
@@ -238,9 +392,36 @@ export async function getNoteKnowledgeContext(noteId: string): Promise<NoteKnowl
       id: attachment.id,
       originalName: attachment.original_name,
       byteSize: attachment.byte_size,
+      mediaType: attachment.media_type,
       scanState: attachment.scan_state as NoteKnowledgeContext['attachments'][number]['scanState'],
+      removedAt: attachment.removed_at,
+      purgeAfter: attachment.purge_after,
     })),
   };
+}
+
+/* The version a conflict is actually against.
+ *
+ * When a save is refused the page still holds the render it started from, and
+ * `router.refresh()` is a request, not a fact: it may not have landed by the
+ * time someone reads the comparison and chooses. Resolving from those props
+ * therefore compared the draft against the version that was already stale --
+ * and wrote back with its version number, which the server refused a second
+ * time, leaving the panel up and the person with no way out of it.
+ *
+ * The stored side is read here instead, once, at the moment of the conflict,
+ * so the comparison and the write that follows it are both against the version
+ * that caused the refusal. */
+export async function getStoredNote(id: string): Promise<NoteView | null> {
+  const { supabase, workspaceId } = await notesClient();
+  const { data, error } = await supabase
+    .from('notes')
+    .select('*')
+    .eq('workspace_id', workspaceId)
+    .eq('id', id)
+    .maybeSingle();
+  if (error) throw new Error('Unable to load this Note.');
+  return data ? mapNote(data as Record<string, unknown>) : null;
 }
 
 export async function createNote(parentNoteId: string | null = null) {
@@ -287,6 +468,36 @@ export async function updateNote(input: {
   return mapNote(note);
 }
 
+/* Appearance is normalized here as well as in the operation's schema. The
+ * component sends what the picker produced, and the reset control sends three
+ * nulls; normalizing on the way in means an icon that arrived with stray
+ * whitespace, or a position left behind by a cover that has just been removed,
+ * is corrected before it becomes a durable value rather than after. */
+export async function setNoteAppearance(input: {
+  id: string;
+  iconEmoji: string | null;
+  coverKey: NoteCoverKey | null;
+  coverPosition: number;
+  expectedVersion: number;
+}) {
+  const { supabase } = await notesClient();
+  const appearance = normalizeNoteAppearance(input);
+  const note = await executeOperation(
+    supabase,
+    'note.appearance.v1',
+    {
+      id: input.id,
+      iconEmoji: appearance.iconEmoji,
+      coverKey: appearance.coverKey,
+      coverPosition: appearance.coverPosition,
+      expectedVersion: input.expectedVersion,
+    },
+    { idempotencyKey: randomUUID(), surface: 'ui' }
+  );
+  revalidatePath('/notes');
+  return mapNote(note);
+}
+
 export async function setNoteAiExcluded(id: string, aiExcluded: boolean, expectedVersion: number) {
   const { supabase } = await notesClient();
   const note = await executeOperation(
@@ -297,6 +508,22 @@ export async function setNoteAiExcluded(id: string, aiExcluded: boolean, expecte
       aiExcluded,
       expectedVersion,
     },
+    { idempotencyKey: randomUUID(), surface: 'ui' }
+  );
+  revalidatePath('/notes');
+  return mapNote(note);
+}
+
+// Marking a favourite goes through the same versioned Operation as every other
+// change to a Note, so it survives a version conflict, is recorded in Activity,
+// and can be undone. Holding it in the page instead would have lost it on the
+// next reload and on every other device.
+export async function setNoteFavorite(id: string, favorite: boolean, expectedVersion: number) {
+  const { supabase } = await notesClient();
+  const note = await executeOperation(
+    supabase,
+    'note.favorite.v1',
+    { id, favorite, expectedVersion },
     { idempotencyKey: randomUUID(), surface: 'ui' }
   );
   revalidatePath('/notes');
