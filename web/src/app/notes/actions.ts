@@ -8,6 +8,7 @@ import {
   type NoteCoverKey,
 } from '@/lib/notes/appearance';
 import { nextParentMove, nextSiblingMove, placeUnderParent } from '@/lib/notes/sibling-order';
+import { absorbAncestorLevel, markMatches, missingParentIds } from '@/lib/notes/ancestor-hydration';
 import { selectAll } from '@/lib/supabase/select-all';
 import { executeOperation } from '@/lib/operations';
 import { createClient } from '@/lib/supabase/server';
@@ -166,13 +167,7 @@ export async function getNotes(query?: string) {
   // deep vault costs one round trip per level of depth rather than one per
   // ancestor.
   const byId = new Map(matches.map((note) => [note.id, note]));
-  let wanted = [
-    ...new Set(
-      matches
-        .map((note) => note.parentNoteId)
-        .filter((parentId): parentId is string => parentId !== null && !byId.has(parentId))
-    ),
-  ];
+  let wanted = missingParentIds(byId, matches);
   while (wanted.length) {
     const { data: parents, error: parentError } = await supabase
       .from('notes')
@@ -181,19 +176,13 @@ export async function getNotes(query?: string) {
       .in('id', wanted);
     if (parentError) throw new Error('Unable to load Notes.');
     if (!parents?.length) break;
-    const next = new Set<string>();
-    for (const row of parents) {
-      const mapped = mapNote(row as Record<string, unknown>);
-      byId.set(mapped.id, mapped);
-      if (mapped.parentNoteId && !byId.has(mapped.parentNoteId)) next.add(mapped.parentNoteId);
-    }
-    wanted = [...next];
+    wanted = absorbAncestorLevel(
+      byId,
+      parents.map((row) => mapNote(row as Record<string, unknown>))
+    );
   }
 
-  // Ancestors travel with the results but are not results themselves; marking
-  // them keeps the decision about what to render with the caller.
-  const matchIds = new Set(matches.map((match) => match.id));
-  return [...byId.values()].map((note) => ({ ...note, matchesQuery: matchIds.has(note.id) }));
+  return markMatches(byId, new Set(matches.map((match) => match.id)));
 }
 
 // Favourites are read on their own rather than filtered out of the tree query.

@@ -2,19 +2,20 @@
 
 Roadmap stage: **2 - Workspace, Planner And Delivery Hardening**
 
-## Codex handoff ready: the Weekly Review reads through a view model
+## Codex handoff ready: search hydrates its ancestors through a tested walk
 
-- **Contract:** `.agents/tasks/actions-as-adapters.md`
-- **Branch:** `codex/actions-as-adapters`
-- **Scope:** first slice of EH-03's second bullet. The Weekly Review's
-  view-model assembly leaves its Server Action; the queries stay. No behaviour
-  change, 20 new tests over cases a database was previously needed to reach.
-- **Correction:** I had been reporting this bullet as blocked. It was only
-  deferred, by me. `src/app/actions.ts` (992 lines) and
-  `src/app/notes/actions.ts` (868) are in the same position and are also not
-  blocked.
-- **Foundation:** everything below is pushed and open as PRs #243-#256.
-- **Handoff:** `.agents/handoffs/actions-as-adapters.md`
+- **Contract:** `.agents/tasks/notes-ancestor-hydration.md`
+- **Branch:** `codex/notes-actions-view-model`
+- **Scope:** second slice of EH-03's Server Actions bullet, and deliberately a
+  small one. Most of `notes/actions.ts` is already an adapter: twenty
+  `executeOperation` calls, and `getNoteKnowledgeContext` is translation rather
+  than domain logic. The search ancestor walk was the one real piece, and its
+  termination now has a test.
+- **Foundation:** everything below is pushed and open as PRs #243-#257.
+- **Handoff:** `.agents/handoffs/notes-ancestor-hydration.md`
+- **Next:** `src/app/actions.ts` (992 lines) is the last of the three, and
+  should be audited rather than assumed to need splitting -- length and shape
+  are different questions.
 
 ## CI runs again, and integration itself is red
 
