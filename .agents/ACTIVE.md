@@ -4,7 +4,7 @@ Roadmap stage: **2 - Workspace, Planner And Delivery Hardening**
 
 ## Merged: the engineering improvement program
 
-The stack is merged into `integration/dogfood`. Sixteen slices, 58 commits.
+The stack is merged into `integration/dogfood`. Sixteen slices, 59 commits.
 
 Three decisions the owner delegated, and what was decided:
 
@@ -20,6 +20,30 @@ Three decisions the owner delegated, and what was decided:
    screens are gone and their design is preserved; what remains is six unbuilt
    MVP patterns under WS-01 to WS-04. Building five feature tickets to justify
    deleting a reference implementation is the wrong reason to build them.
+
+## `main` is synced
+
+`main` and `integration/dogfood` are the same tree, and both are green.
+`main` at `cda4fa5` passes `application`, `browser` and `database`, plus Secret
+Scan. The sync went through #262 (195 commits from integration, plus `LICENSE`,
+which `main` had never carried despite the repository being public).
+
+Two things about that merge are worth knowing before the next one:
+
+- **`README.md` was the only conflict in 344 files, and it was resolved in
+  favour of `main`.** Both branches edited it on 2026-09-09: integration added
+  a licensing section at 09:44, and `main` was trimmed by hand to a single line
+  at 10:16. The later edit is the owner's and it is the public face of a public
+  repository, so the merge was not allowed to reverse it. `main` keeps its
+  one-line README; integration keeps its own. A future sync will hit this
+  conflict again -- resolve it the same way unless the owner says otherwise.
+- **#239 was closed rather than merged.** It predated the program merge by 63
+  commits, and its branch still has four commits unpushed in the local worktree
+  at `.worktrees/release-main-sync`. Nothing was lost; #262 carries it all.
+
+Merging to `main` applies no migrations. The only automation on the branch is
+`ci.yml` and `secret-scan.yml`; Vercel builds the application and nothing
+touches the production database.
 
 ## Open, and owner-facing
 
