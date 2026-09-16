@@ -45,6 +45,30 @@ Merging to `main` applies no migrations. The only automation on the branch is
 `ci.yml` and `secret-scan.yml`; Vercel builds the application and nothing
 touches the production database.
 
+## PL-11 is merged, mostly as a no-op
+
+#185 sat as a draft since 2026-09-09 behind one stated condition -- its browser
+tests had never been run -- and GitHub Actions was unavailable on billing
+grounds at the time. The repository went public on 2026-09-09, which made
+Actions free, and the condition quietly stopped applying. Nobody went back.
+
+The tests were run. 26 passed on both projects. Merging it then found that
+integration had reached the same design independently
+(`lib/reviews/completion-intent.ts`), so every conflict was resolved in
+integration's favour -- `getWeeklyReview` had been rewritten wholesale and
+reconstructing a 127-commit-old branch's edits on top of it would have risked a
+core surface for nothing.
+
+One thing survived, and it was a live defect: the idempotency key was bound to
+the submission intent alone. The intent is minted once per mount and cleared
+only on success, so a *failed* submission leaves it in place -- and a correction
+typed afterwards travels under the failed attempt's intent, replays its receipt,
+and is silently discarded. The key is now bound to the payload as well. With the
+fingerprint removed, all three period tests fail on exactly that assertion.
+
+The lesson worth keeping: a hold written for a reason that later expires does
+not expire with it. Read the reason, not the label.
+
 ## Open, and owner-facing
 
 - ~~The rich editor silently discards task completion on a phone.~~ Fixed. It
@@ -71,6 +95,15 @@ touches the production database.
   that has actually shipped before -- a Notes editor discarding the last edit --
   so a retry hiding it is the wrong kind of quiet. Worth a task; a journey that
   only passes on the second attempt is not evidence that the journey works.
+- A completed **weekly** review still reopens as an editable form, while a
+  completed month or quarter reopens as a saved record. PL-11 (#185) built the
+  weekly saved-record view, and it was deliberately not carried across when that
+  branch was merged: `getWeeklyReview` had been rewritten underneath it by the
+  weekly initiative ritual, and rebuilding the UI on the new shape is separate
+  work rather than a merge resolution. The server still refuses a second review
+  of a reviewed period, so nothing is lost -- but the week is the one period
+  that answers a second completion with an error instead of by showing what is
+  already saved. The original implementation is in #185's history if it helps.
 - `src/app/actions.ts` is the last of the three large action files. Audit it
   before assuming it needs splitting; the lesson from `notes/actions.ts` is
   that length and shape are different questions.
