@@ -611,33 +611,48 @@ export function NotesWorkspace({
       saveInFlightRef.current = true;
       setSaveState('saving');
       try {
-        while (queuedDraftRef.current) {
-          const nextDraft = queuedDraftRef.current;
-          queuedDraftRef.current = null;
-          try {
-            const saved = await updateNote({
-              id: noteId,
-              title: nextDraft.title.trim() || 'Untitled',
-              bodyMarkdown: nextDraft.bodyMarkdown,
-              expectedVersion: versionRef.current,
-            });
-            versionRef.current = saved.version;
-            persistedDraftRef.current = nextDraft;
-            pendingSaveRef.current = null;
-            forgetNoteDraft(noteId);
-          } catch (caught) {
-            queuedDraftRef.current ??= nextDraft;
-            // A refused save is the moment the words are least safe: they
-            // exist only in this tab. Keep a local copy so a reload, a crash
-            // or a closed laptop does not take them with it.
-            rememberNoteDraft({
-              noteId,
-              title: nextDraft.title,
-              bodyMarkdown: nextDraft.bodyMarkdown,
-              savedAt: Date.now(),
-              expectedVersion: versionRef.current,
-            });
-            /* A version conflict is not an error to report and move on
+        /* The inner loop stops when the queue is empty; the flag clears a
+           moment later. A draft handed over in between is queued by a caller
+           that sees a save still in flight, and then waited for by a loop that
+           has already finished -- so it is never written.
+
+           That window is exactly when leaving a Note flushes its pending edit,
+           while the debounced save of the keystroke before it may still be
+           settling. The last thing typed is therefore the most likely thing to
+           fall into it, which is the one edit a person would notice losing.
+
+           Clearing the flag and re-reading the queue with no `await` between
+           them closes it: nothing else can run in that gap, so a draft is
+           either seen here or arrives to find the flag already down and starts
+           its own save. */
+        for (;;) {
+          while (queuedDraftRef.current) {
+            const nextDraft = queuedDraftRef.current;
+            queuedDraftRef.current = null;
+            try {
+              const saved = await updateNote({
+                id: noteId,
+                title: nextDraft.title.trim() || 'Untitled',
+                bodyMarkdown: nextDraft.bodyMarkdown,
+                expectedVersion: versionRef.current,
+              });
+              versionRef.current = saved.version;
+              persistedDraftRef.current = nextDraft;
+              pendingSaveRef.current = null;
+              forgetNoteDraft(noteId);
+            } catch (caught) {
+              queuedDraftRef.current ??= nextDraft;
+              // A refused save is the moment the words are least safe: they
+              // exist only in this tab. Keep a local copy so a reload, a crash
+              // or a closed laptop does not take them with it.
+              rememberNoteDraft({
+                noteId,
+                title: nextDraft.title,
+                bodyMarkdown: nextDraft.bodyMarkdown,
+                savedAt: Date.now(),
+                expectedVersion: versionRef.current,
+              });
+              /* A version conflict is not an error to report and move on
                from: the person is now holding two versions of their own
                writing, and the only advice the copy can give -- refresh -- is
                the action that discards theirs. Keep the refused draft and show
@@ -646,20 +661,24 @@ export function NotesWorkspace({
                rather than from whatever render the page happens to hold;
                `router.refresh()` then brings the rest of the page up to date
                without touching the editor. */
-            if (operationFailureCode(caught) === 'version_conflict') {
-              const captured = await captureConflict(noteId, nextDraft);
-              setSaveState('error');
-              if (!captured) {
-                setError(errorMessage(caught));
+              if (operationFailureCode(caught) === 'version_conflict') {
+                const captured = await captureConflict(noteId, nextDraft);
+                setSaveState('error');
+                if (!captured) {
+                  setError(errorMessage(caught));
+                  return;
+                }
+                router.refresh();
                 return;
               }
-              router.refresh();
+              setError(errorMessage(caught));
+              setSaveState('error');
               return;
             }
-            setError(errorMessage(caught));
-            setSaveState('error');
-            return;
           }
+          saveInFlightRef.current = false;
+          if (!queuedDraftRef.current) break;
+          saveInFlightRef.current = true;
         }
         setSaveState('saved');
         router.refresh();
