@@ -1,17 +1,8 @@
 # Active Agent Work
 
-Roadmap stage: Workspace and delivery hardening.
+Active: `WS-02-search-draft`, Codex lead on `codex/ws-02-search-draft`.
+Contract: [WS-02-search-draft](tasks/WS-02-search-draft.md).
 
-## Ready for integration review
+Base: `7a956e5`, the verified fresh-workspace fixture repair atop integration `d155f47`. This branch depends on that repair; neither branch is merged.
 
-`QA-220-notes-search`: Codex lead, isolated branch `codex/qa-220-notes-search`.
-Contract: [QA-220](tasks/QA-220-notes-search.md).
-Handoff: [verification and limitations](reports/QA-220-notes-search.md).
-
-The reproduced failure was in fresh-workspace test setup. That bounded repair is verified. The original nested-search defect remains unconfirmed; issue #220 must not be closed from this evidence.
-
-No implementation remains active in this worktree. Integration review is next; workers never merge their own work.
-
-## Boundaries
-
-Other workers retain their worktrees. Use the running local Supabase stack without restarting or resetting it. Generate throwaway test configuration from local CLI status; never read or copy the owner's environment files. Run `npm ci` in each worktree. Production changes still require explicit approval.
+Scope: protect recent Note edits when submitting Notes search. Other workers retain their worktrees. No database resets, production changes, or Preview behavior.

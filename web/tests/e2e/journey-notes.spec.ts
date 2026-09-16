@@ -762,6 +762,107 @@ test('unsupported Markdown survives a round trip through the editor', async ({ w
   await expect(page.getByRole('textbox', { name: 'Note body, Markdown' })).toHaveValue(awkward);
 });
 
+test('search keeps a refused draft open and can retry it', async ({ workspace }) => {
+  const { page } = workspace;
+  await goTo(page, '/notes');
+  await createRootNote(page, 'Search recovery', 'The original body.');
+  const before = page.url();
+  const search = page.getByRole('textbox', { name: 'Search notes' });
+  await search.fill('recoveryneedle');
+  await page.route('**/notes**', (route) =>
+    route.request().method() === 'POST' ? route.abort('failed') : route.continue()
+  );
+  await page.clock.install();
+  await page.clock.pauseAt(new Date(Date.now() + 1_000));
+  const body = 'Do not lose this recoveryneedle if saving fails.';
+  const editor = page.getByRole('textbox', { name: 'Note body, Markdown' });
+  await editor.fill(body);
+  await search.press('Enter');
+  await page.clock.resume();
+
+  await expect(page.locator('.status-message-error[role="alert"]')).toBeVisible();
+  await expect(page).toHaveURL(before);
+  await expect(editor).toHaveValue(body);
+  await expect(search).toHaveValue('recoveryneedle');
+
+  await page.unroute('**/notes**');
+  await search.press('Enter');
+  await expect(page).toHaveURL(/q=recoveryneedle/);
+  await page.reload();
+  await expect(editor).toHaveValue(body);
+});
+
+test('search waits for an in-flight save and the newer draft', async ({ workspace }) => {
+  const { page } = workspace;
+  await goTo(page, '/notes');
+  await createRootNote(page, 'Writing in flight', 'The original body.');
+  const search = page.getByRole('textbox', { name: 'Search notes' });
+  await search.fill('newestneedle');
+
+  let releaseSave!: () => void;
+  let saveReceived!: () => void;
+  const release = new Promise<void>((resolve) => {
+    releaseSave = resolve;
+  });
+  const received = new Promise<void>((resolve) => {
+    saveReceived = resolve;
+  });
+  let holdFirstSave = true;
+  await page.route('**/notes**', async (route) => {
+    if (route.request().method() !== 'POST' || !holdFirstSave) return route.continue();
+    holdFirstSave = false;
+    const response = await route.fetch();
+    saveReceived();
+    await release;
+    await route.fulfill({ response });
+  });
+
+  const editor = page.getByRole('textbox', { name: 'Note body, Markdown' });
+  try {
+    await editor.fill('An earlier edit awaiting its save response.');
+    await received;
+    await page.clock.install();
+    await page.clock.pauseAt(new Date(Date.now() + 1_000));
+    const newest = 'Keep the newestneedle, not just the earlier edit.';
+    await editor.fill(newest);
+    await search.press('Enter');
+    releaseSave();
+    await page.clock.resume();
+
+    await expect(page).toHaveURL(/q=newestneedle/);
+    await expect(treeNote(page, 'Writing in flight')).toBeVisible();
+    await expect(editor).toHaveValue(newest);
+    await page.reload();
+    await expect(editor).toHaveValue(newest);
+  } finally {
+    releaseSave();
+  }
+});
+
+test('search preserves a Note edited before autosave begins', async ({ workspace }, testInfo) => {
+  const { page } = workspace;
+  await goTo(page, '/notes');
+  await createRootNote(page, 'Recent writing', 'The original body.');
+  const search = page.getByRole('textbox', { name: 'Search notes' });
+  await search.fill('unsavedneedle');
+
+  // Hold the debounce timer so this exercises leaving before autosave starts,
+  // regardless of machine speed. Search must flush the edit itself.
+  await page.clock.install();
+  await page.clock.pauseAt(new Date(Date.now() + 1_000));
+  const body = 'Keep this unsavedneedle when I search.';
+  await page.getByRole('textbox', { name: 'Note body, Markdown' }).fill(body);
+  await search.press('Enter');
+  await page.clock.resume();
+
+  await expect(page).toHaveURL(/q=unsavedneedle/);
+  await expect(treeNote(page, 'Recent writing')).toBeVisible();
+  await expect(page.getByRole('textbox', { name: 'Note body, Markdown' })).toHaveValue(body);
+  await page.reload();
+  await expect(page.getByRole('textbox', { name: 'Note body, Markdown' })).toHaveValue(body);
+  await page.screenshot({ path: testInfo.outputPath('search-preserved.png'), fullPage: true });
+});
+
 // The Notes list draws the hierarchy from the roots downwards, which is right
 // while browsing and wrong while searching: a match nested under a Note that
 // does not itself match has no rendered ancestor to hang from, so it was

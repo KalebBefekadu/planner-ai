@@ -237,7 +237,7 @@ export function NotesWorkspace({
     title: selected?.title ?? '',
     bodyMarkdown: selected?.bodyMarkdown ?? '',
   });
-  const saveInFlightRef = useRef(false);
+  const saveInFlightRef = useRef<Promise<boolean> | null>(null);
   const queuedDraftRef = useRef<{ title: string; bodyMarkdown: string } | null>(null);
   // The autosave pipeline is bound to the Note it belongs to. Switching Notes
   // used to clear the pending timer and drop whatever had been typed in the
@@ -542,40 +542,41 @@ export function NotesWorkspace({
   // save that matters most is the one for the Note a person has just left, and
   // by then activeNoteId already names a different Note.
   const queueAutosave = useCallback(
-    async (noteId: string, draft: { title: string; bodyMarkdown: string }) => {
+    (noteId: string, draft: { title: string; bodyMarkdown: string }) => {
       queuedDraftRef.current = draft;
-      if (saveInFlightRef.current) return;
+      if (saveInFlightRef.current) return saveInFlightRef.current;
 
-      saveInFlightRef.current = true;
-      setSaveState('saving');
-      try {
-        while (queuedDraftRef.current) {
-          const nextDraft = queuedDraftRef.current;
-          queuedDraftRef.current = null;
-          try {
-            const saved = await updateNote({
-              id: noteId,
-              title: nextDraft.title.trim() || 'Untitled',
-              bodyMarkdown: nextDraft.bodyMarkdown,
-              expectedVersion: versionRef.current,
-            });
-            versionRef.current = saved.version;
-            persistedDraftRef.current = nextDraft;
-            pendingSaveRef.current = null;
-            forgetNoteDraft(noteId);
-          } catch (caught) {
-            queuedDraftRef.current ??= nextDraft;
-            // A refused save is the moment the words are least safe: they
-            // exist only in this tab. Keep a local copy so a reload, a crash
-            // or a closed laptop does not take them with it.
-            rememberNoteDraft({
-              noteId,
-              title: nextDraft.title,
-              bodyMarkdown: nextDraft.bodyMarkdown,
-              savedAt: Date.now(),
-              expectedVersion: versionRef.current,
-            });
-            /* A version conflict is not an error to report and move on
+      const work = (async () => {
+        setSaveState('saving');
+        try {
+          while (queuedDraftRef.current) {
+            const nextDraft = queuedDraftRef.current;
+            queuedDraftRef.current = null;
+            try {
+              const saved = await updateNote({
+                id: noteId,
+                title: nextDraft.title.trim() || 'Untitled',
+                bodyMarkdown: nextDraft.bodyMarkdown,
+                expectedVersion: versionRef.current,
+              });
+              versionRef.current = saved.version;
+              persistedDraftRef.current = nextDraft;
+              // An older save must not clear a newer edit still waiting for its timer.
+              if (pendingSaveRef.current?.draft === nextDraft) pendingSaveRef.current = null;
+              forgetNoteDraft(noteId);
+            } catch (caught) {
+              queuedDraftRef.current ??= nextDraft;
+              // A refused save is the moment the words are least safe: they
+              // exist only in this tab. Keep a local copy so a reload, a crash
+              // or a closed laptop does not take them with it.
+              rememberNoteDraft({
+                noteId,
+                title: nextDraft.title,
+                bodyMarkdown: nextDraft.bodyMarkdown,
+                savedAt: Date.now(),
+                expectedVersion: versionRef.current,
+              });
+              /* A version conflict is not an error to report and move on
                from: the person is now holding two versions of their own
                writing, and the only advice the copy can give -- refresh -- is
                the action that discards theirs. Keep the refused draft and show
@@ -584,26 +585,30 @@ export function NotesWorkspace({
                rather than from whatever render the page happens to hold;
                `router.refresh()` then brings the rest of the page up to date
                without touching the editor. */
-            if (operationFailureCode(caught) === 'version_conflict') {
-              const captured = await captureConflict(noteId, nextDraft);
-              setSaveState('error');
-              if (!captured) {
-                setError(errorMessage(caught));
-                return;
+              if (operationFailureCode(caught) === 'version_conflict') {
+                const captured = await captureConflict(noteId, nextDraft);
+                setSaveState('error');
+                if (!captured) {
+                  setError(errorMessage(caught));
+                  return false;
+                }
+                router.refresh();
+                return false;
               }
-              router.refresh();
-              return;
+              setError(errorMessage(caught));
+              setSaveState('error');
+              return false;
             }
-            setError(errorMessage(caught));
-            setSaveState('error');
-            return;
           }
+          setSaveState('saved');
+          router.refresh();
+          return true;
+        } finally {
+          saveInFlightRef.current = null;
         }
-        setSaveState('saved');
-        router.refresh();
-      } finally {
-        saveInFlightRef.current = false;
-      }
+      })();
+      saveInFlightRef.current = work;
+      return work;
     },
     [captureConflict, router]
   );
@@ -859,21 +864,31 @@ export function NotesWorkspace({
             </button>
           </div>
         </div>
-        {/* Searching submits this form, which is a document load, and a document
-            load aborts every request still in flight. A move started a moment
-            earlier -- 'Make child of the note above', say -- then never reached
-            the server: the Note stayed where it was and nothing said so. Under
-            load that swallowed the move about half the time, and a person
-            filing a Note and immediately searching would see the same silent
-            no-op. Durable work finishes before the page is torn down. */}
+        {/* A document search must not tear down a pending move or edit. Flush
+            the debounce queue as well as waiting for a save already in flight;
+            a refused save keeps the draft and its recovery controls on screen. */}
         <form
           className="notes-search"
           onSubmit={(event) => {
-            const pending = pendingWorkRef.current;
-            if (!pending) return;
+            const pendingMove = pendingWorkRef.current;
+            if (!pendingMove && !pendingSaveRef.current && !saveInFlightRef.current) return;
             event.preventDefault();
             const form = event.currentTarget;
-            void pending.finally(() => form.requestSubmit());
+            void (async () => {
+              try {
+                await pendingMove;
+                while (pendingSaveRef.current || saveInFlightRef.current) {
+                  const pending = pendingSaveRef.current;
+                  const saved = pending
+                    ? await queueAutosave(pending.noteId, pending.draft)
+                    : await saveInFlightRef.current;
+                  if (!saved) return;
+                }
+                if (form.isConnected) form.requestSubmit();
+              } catch (caught) {
+                setError(errorMessage(caught));
+              }
+            })();
           }}
         >
           <Search size={15} aria-hidden="true" />
