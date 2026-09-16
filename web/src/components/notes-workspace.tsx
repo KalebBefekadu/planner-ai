@@ -60,7 +60,6 @@ import {
   linkNoteGoal,
   linkNote,
   fileNoteUnder,
-  getStoredNote,
   moveNoteToNewParent,
   moveNoteWithinParent,
   restoreNoteRevision,
@@ -70,7 +69,6 @@ import {
   unlinkNote,
   unlinkNoteAction,
   unlinkNoteGoal,
-  updateNote,
   type NoteKnowledgeContext,
   type NoteView,
 } from '@/app/notes/actions';
@@ -89,15 +87,10 @@ import {
   subscribeToCollapsedNotes,
   writeCollapsedNotes,
 } from '@/lib/notes/collapsed-branches';
-import { operationFailureCode } from '@/lib/operations';
-import {
-  conflictSummary,
-  describeNoteConflict,
-  resolveWith,
-  type ConflictSide,
-} from '@/lib/notes/conflict-resolution';
+import { conflictSummary, describeNoteConflict } from '@/lib/notes/conflict-resolution';
 import { NoteAppearanceHeader } from '@/components/note-appearance-header';
 import { noteLocationLabel, notePath, orderFavorites } from '@/lib/notes/note-paths';
+import { useNoteDraft } from '@/lib/notes/use-note-draft';
 import { useVoiceTranscription } from '@/lib/use-voice-transcription';
 import { extractPlannerMarkdownHeadings } from '@/lib/markdown/contract';
 import {
@@ -107,12 +100,6 @@ import {
 } from '@/lib/markdown/editing';
 import { plannerMarkdownSupportsRichEditing } from '@/lib/markdown/rich-editor';
 import { actionFailureMessage } from '@/lib/operations/failure-message';
-import {
-  forgetNoteDraft,
-  noteDraftSnapshot,
-  rememberNoteDraft,
-  subscribeToNoteDrafts,
-} from '@/lib/note-draft-recovery';
 
 // TipTap and ProseMirror are the largest client dependency in the product, and
 // the editor that needs them is never what a Note opens in: the mode starts at
@@ -224,7 +211,36 @@ export function NotesWorkspace({
   function toggleExpanded(noteId: string) {
     writeCollapsedNotes(toggleBranch(collapsedIds, ancestorsOfActive, noteId));
   }
-  const [title, setTitle] = useState(selected?.title ?? '');
+  const [error, setError] = useState<string | null>(null);
+  /* Everything the editor owes the server, and everything it holds while that
+     is unsettled: the draft itself, the debounce, the save in flight, the
+     copy kept when one is refused, and the comparison shown when somebody
+     else saved first. One concern, so it lives in one place -- see
+     lib/notes/use-note-draft.ts for why it is not inline here. */
+  const draft = useNoteDraft({
+    noteId: activeNoteId,
+    initial: {
+      title: selected?.title ?? '',
+      bodyMarkdown: selected?.bodyMarkdown ?? '',
+    },
+    initialVersion: selected?.version ?? 1,
+    serverVersion: selected?.version,
+    onError: setError,
+  });
+  const {
+    title,
+    setTitle,
+    body,
+    setBody,
+    saveState,
+    versionRef,
+    conflict,
+    resolveConflict,
+    recoverableDraft,
+    restoreDraft,
+    dismissRecoverableDraft,
+    flushPendingSave,
+  } = draft;
   const titleRef = useRef<HTMLTextAreaElement>(null);
 
   /* A wrapping title has no fixed height, so it is measured rather than
@@ -237,31 +253,9 @@ export function NotesWorkspace({
     node.style.height = 'auto';
     node.style.height = `${node.scrollHeight}px`;
   }, [title]);
-  const [body, setBody] = useState(selected?.bodyMarkdown ?? '');
-  const versionRef = useRef(selected?.version ?? 1);
   // The durable mutation currently in flight, if any. Only whether one is
   // running matters, not what it returns.
   const pendingWorkRef = useRef<Promise<unknown> | null>(null);
-  const [saveState, setSaveState] = useState<'saved' | 'unsaved' | 'saving' | 'error'>('saved');
-  const [dismissedDraftFor, setDismissedDraftFor] = useState<string | null>(null);
-  const [error, setError] = useState<string | null>(null);
-  /* Both sides of a refused save, held so the two versions can be compared.
-     Separate from `body`/`title`, which stay exactly as typed -- the editor is
-     never quietly rewritten out from under someone.
-
-     The stored side is captured here rather than read from `notes` when the
-     panel renders. `router.refresh()` is a request for a new render, not a
-     fact: the props can still describe the version the draft was written
-     against when someone reads the comparison and chooses. That showed a
-     person their own pre-conflict text as "the saved version", and then wrote
-     back with its version number, which the server refused a second time --
-     so the panel stayed up and taking the stored version could not complete
-     at all. Capturing the stored side once, at the conflict, makes what is
-     compared and what is written the same version that caused the refusal. */
-  const [conflict, setConflict] = useState<{
-    mine: { title: string; bodyMarkdown: string };
-    theirs: { title: string; bodyMarkdown: string; version: number };
-  } | null>(null);
   const [tagText, setTagText] = useState(knowledge?.tags.join(', ') ?? '');
   const [targetNoteId, setTargetNoteId] = useState('');
   const [filingParentId, setFilingParentId] = useState('');
@@ -274,34 +268,6 @@ export function NotesWorkspace({
   const [isUploadingAttachment, setIsUploadingAttachment] = useState(false);
   const editorRef = useRef<HTMLTextAreaElement>(null);
   const attachmentInputRef = useRef<HTMLInputElement>(null);
-  const persistedDraftRef = useRef({
-    title: selected?.title ?? '',
-    bodyMarkdown: selected?.bodyMarkdown ?? '',
-  });
-  const saveInFlightRef = useRef(false);
-  const queuedDraftRef = useRef<{ title: string; bodyMarkdown: string } | null>(null);
-  // The autosave pipeline is bound to the Note it belongs to. Switching Notes
-  // used to clear the pending timer and drop whatever had been typed in the
-  // last 800ms, and the draft had no way of naming which Note it came from.
-  const pendingSaveRef = useRef<{
-    noteId: string;
-    draft: { title: string; bodyMarkdown: string };
-  } | null>(null);
-  // A draft left behind by a refused save. Read through the store rather than
-  // mirrored into state, so the server and the first client render agree that
-  // there is nothing to offer until storage has actually been read.
-  const storedDraft = useSyncExternalStore(
-    subscribeToNoteDrafts,
-    () => (activeNoteId ? noteDraftSnapshot(activeNoteId) : null),
-    () => null
-  );
-  const recoverableDraft =
-    storedDraft &&
-    storedDraft.noteId === activeNoteId &&
-    storedDraft.bodyMarkdown !== body &&
-    dismissedDraftFor !== activeNoteId
-      ? storedDraft
-      : null;
   // Favourites arrive already ordered by the server, but the ordering rule is
   // shared with the tests and applied here too so a stale or reordered payload
   // cannot quietly change what a person sees.
@@ -430,51 +396,6 @@ export function NotesWorkspace({
   // pages apart, so whatever ancestor chain is in hand is shown underneath the
   // title: "Notes" under Acme and "Notes" under Globex are distinguishable
   // before the click rather than after it.
-  /* Taking one side of a conflict.
-   *
-   * Whichever side is chosen, the write goes through the ordinary versioned
-   * Operation against the version now stored, so choosing is itself an
-   * ordinary save -- recorded, undoable, and refused again if someone else
-   * saves in the meantime. Keeping the stored version still writes, rather
-   * than silently dropping the draft, so Activity records that a decision was
-   * made rather than leaving a gap where someone's writing used to be. */
-  async function resolveConflict(side: ConflictSide) {
-    if (!conflict || !selected) return;
-    const chosen = resolveWith(side, conflict.mine, conflict.theirs);
-    setError(null);
-    try {
-      const saved = await updateNote({
-        id: selected.id,
-        title: chosen.title.trim() || 'Untitled',
-        bodyMarkdown: chosen.bodyMarkdown,
-        expectedVersion: conflict.theirs.version,
-      });
-      versionRef.current = saved.version;
-      setTitle(saved.title);
-      setBody(saved.bodyMarkdown);
-      queuedDraftRef.current = null;
-      pendingSaveRef.current = null;
-      persistedDraftRef.current = { title: saved.title, bodyMarkdown: saved.bodyMarkdown };
-      forgetNoteDraft(selected.id);
-      setConflict(null);
-      setSaveState('saved');
-      router.refresh();
-    } catch (caught) {
-      /* Someone saved again while this comparison was on screen. The decision
-         cannot be applied to a version that no longer exists, and reporting a
-         dead end would strand the draft in a panel with no working way out --
-         so the comparison is rebuilt against what is stored now and the choice
-         is offered again. */
-      if (operationFailureCode(caught) === 'version_conflict') {
-        const restated = await captureConflict(selected.id, conflict.mine);
-        if (restated) {
-          setError('This Note changed again while you were choosing. Here is what it holds now.');
-          return;
-        }
-      }
-      setError(errorMessage(caught));
-    }
-  }
 
   function renderNoteButton(note: NoteView, locationLabel?: string) {
     return (
@@ -571,164 +492,9 @@ export function NotesWorkspace({
         editor?.setSelectionRange(cursor, cursor);
       });
     },
-    [activeEditorMode, body, richEditor]
+    [activeEditorMode, body, richEditor, setBody]
   );
   const voice = useVoiceTranscription({ onTranscript: insertTranscript });
-
-  /* Read the version the server actually holds and put both sides on screen.
-     Returns whether the comparison could be built: a Note that has since been
-     archived or deleted has no stored side to offer, and saying so honestly is
-     better than showing a comparison against nothing. */
-  const captureConflict = useCallback(
-    async (noteId: string, mine: { title: string; bodyMarkdown: string }) => {
-      try {
-        const stored = await getStoredNote(noteId);
-        if (!stored) return false;
-        setConflict({
-          mine,
-          theirs: {
-            title: stored.title,
-            bodyMarkdown: stored.bodyMarkdown,
-            version: stored.version,
-          },
-        });
-        return true;
-      } catch {
-        return false;
-      }
-    },
-    []
-  );
-
-  // The Note being saved is passed in rather than read from the closure. The
-  // save that matters most is the one for the Note a person has just left, and
-  // by then activeNoteId already names a different Note.
-  const queueAutosave = useCallback(
-    async (noteId: string, draft: { title: string; bodyMarkdown: string }) => {
-      queuedDraftRef.current = draft;
-      if (saveInFlightRef.current) return;
-
-      saveInFlightRef.current = true;
-      setSaveState('saving');
-      try {
-        /* The inner loop stops when the queue is empty; the flag clears a
-           moment later. A draft handed over in between is queued by a caller
-           that sees a save still in flight, and then waited for by a loop that
-           has already finished -- so it is never written.
-
-           That window is exactly when leaving a Note flushes its pending edit,
-           while the debounced save of the keystroke before it may still be
-           settling. The last thing typed is therefore the most likely thing to
-           fall into it, which is the one edit a person would notice losing.
-
-           Clearing the flag and re-reading the queue with no `await` between
-           them closes it: nothing else can run in that gap, so a draft is
-           either seen here or arrives to find the flag already down and starts
-           its own save. */
-        for (;;) {
-          while (queuedDraftRef.current) {
-            const nextDraft = queuedDraftRef.current;
-            queuedDraftRef.current = null;
-            try {
-              const saved = await updateNote({
-                id: noteId,
-                title: nextDraft.title.trim() || 'Untitled',
-                bodyMarkdown: nextDraft.bodyMarkdown,
-                expectedVersion: versionRef.current,
-              });
-              versionRef.current = saved.version;
-              persistedDraftRef.current = nextDraft;
-              pendingSaveRef.current = null;
-              forgetNoteDraft(noteId);
-            } catch (caught) {
-              queuedDraftRef.current ??= nextDraft;
-              // A refused save is the moment the words are least safe: they
-              // exist only in this tab. Keep a local copy so a reload, a crash
-              // or a closed laptop does not take them with it.
-              rememberNoteDraft({
-                noteId,
-                title: nextDraft.title,
-                bodyMarkdown: nextDraft.bodyMarkdown,
-                savedAt: Date.now(),
-                expectedVersion: versionRef.current,
-              });
-              /* A version conflict is not an error to report and move on
-               from: the person is now holding two versions of their own
-               writing, and the only advice the copy can give -- refresh -- is
-               the action that discards theirs. Keep the refused draft and show
-               the comparison instead. The stored side is read directly, so
-               the panel is built from the version that caused the refusal
-               rather than from whatever render the page happens to hold;
-               `router.refresh()` then brings the rest of the page up to date
-               without touching the editor. */
-              if (operationFailureCode(caught) === 'version_conflict') {
-                const captured = await captureConflict(noteId, nextDraft);
-                setSaveState('error');
-                if (!captured) {
-                  setError(errorMessage(caught));
-                  return;
-                }
-                router.refresh();
-                return;
-              }
-              setError(errorMessage(caught));
-              setSaveState('error');
-              return;
-            }
-          }
-          saveInFlightRef.current = false;
-          if (!queuedDraftRef.current) break;
-          saveInFlightRef.current = true;
-        }
-        setSaveState('saved');
-        router.refresh();
-      } finally {
-        saveInFlightRef.current = false;
-      }
-    },
-    [captureConflict, router]
-  );
-
-  useEffect(() => {
-    if (!activeNoteId) return;
-    if (
-      persistedDraftRef.current.title === title &&
-      persistedDraftRef.current.bodyMarkdown === body
-    ) {
-      return;
-    }
-    const noteId = activeNoteId;
-    const draft = { title, bodyMarkdown: body };
-    pendingSaveRef.current = { noteId, draft };
-    setSaveState((current) => (current === 'error' ? current : 'unsaved'));
-    const timer = window.setTimeout(() => {
-      void queueAutosave(noteId, draft);
-    }, 800);
-    // Only the timer is cancelled here. This effect re-runs on every
-    // keystroke, so flushing from this cleanup would save on every keystroke
-    // and the debounce would stop debouncing.
-    return () => window.clearTimeout(timer);
-  }, [activeNoteId, body, queueAutosave, title]);
-
-  // Leaving the Note is the case that matters. The editor is remounted per
-  // Note, so this cleanup runs exactly when a person navigates away or opens
-  // another one -- the moment the pending edit would otherwise be dropped
-  // along with its timer.
-  useEffect(() => {
-    return () => {
-      const pending = pendingSaveRef.current;
-      if (pending) void queueAutosave(pending.noteId, pending.draft);
-    };
-  }, [queueAutosave]);
-
-  useEffect(() => {
-    if (selected?.version && selected.version > versionRef.current) {
-      versionRef.current = selected.version;
-    }
-  }, [selected?.version]);
-
-  // Offer back anything a refused save left behind, rather than letting a
-  // reload quietly decide the writing never happened.
 
   function newNote(parentNoteId: string | null) {
     startTransition(async () => {
@@ -939,15 +705,34 @@ export function NotesWorkspace({
             the server: the Note stayed where it was and nothing said so. Under
             load that swallowed the move about half the time, and a person
             filing a Note and immediately searching would see the same silent
-            no-op. Durable work finishes before the page is torn down. */}
+            no-op. Durable work finishes before the page is torn down.
+
+            Writing is durable work too, and it was not waited for. Only moves
+            were, so a sentence typed and then searched for was torn down with
+            the page -- and searching for a word you have just written is one
+            of the most ordinary things to do in a Notes app. Worse, a save
+            that was *refused* navigated away regardless, leaving the words in
+            local storage with nothing on screen to say so. A refused save
+            stops the navigation and keeps the draft and its error where a
+            person can act on them. */}
         <form
           className="notes-search"
           onSubmit={(event) => {
-            const pending = pendingWorkRef.current;
-            if (!pending) return;
+            const pendingMove = pendingWorkRef.current;
+            if (!pendingMove && !draft.hasUnsavedWork()) return;
             event.preventDefault();
             const form = event.currentTarget;
-            void pending.finally(() => form.requestSubmit());
+            void (async () => {
+              try {
+                await pendingMove;
+                if (!(await flushPendingSave())) return;
+                // The re-submit passes the guard above -- nothing is owed by
+                // then -- and goes through as an ordinary document load.
+                if (form.isConnected) form.requestSubmit();
+              } catch (caught) {
+                setError(errorMessage(caught));
+              }
+            })();
           }}
         >
           <Search size={15} aria-hidden="true" />
@@ -1263,22 +1048,11 @@ export function NotesWorkspace({
                   <button
                     className="btn-primary"
                     type="button"
-                    onClick={() => {
-                      setTitle(recoverableDraft.title);
-                      setBody(recoverableDraft.bodyMarkdown);
-                      setDismissedDraftFor(activeNoteId);
-                    }}
+                    onClick={() => restoreDraft(recoverableDraft)}
                   >
                     Restore them
                   </button>
-                  <button
-                    className="btn-secondary"
-                    type="button"
-                    onClick={() => {
-                      if (activeNoteId) forgetNoteDraft(activeNoteId);
-                      setDismissedDraftFor(activeNoteId);
-                    }}
-                  >
+                  <button className="btn-secondary" type="button" onClick={dismissRecoverableDraft}>
                     Discard
                   </button>
                 </div>

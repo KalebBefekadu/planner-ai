@@ -61,8 +61,9 @@ export async function completeOnboarding(page: Page) {
   await expect(page).toHaveURL(/\/$/, { timeout: 60_000 });
 }
 
-export async function signIn(page: Page, email: string, baseURL?: string) {
-  await page.goto(baseURL ? `${baseURL}/login` : '/login');
+export async function signIn(page: Page, email: string, baseURL?: string, returnTo?: string) {
+  const loginPath = returnTo ? `/login?${new URLSearchParams({ returnTo })}` : '/login';
+  await page.goto(baseURL ? `${baseURL}${loginPath}` : loginPath);
   await page.getByLabel('Email').fill(email);
   await page.getByLabel('Password').fill(TEST_PASSWORD);
   await page.getByRole('button', { name: 'Sign in' }).click();
@@ -70,6 +71,9 @@ export async function signIn(page: Page, email: string, baseURL?: string) {
   // heading. A failure here points at authentication; a failure after it points
   // at the wizard.
   await expect(page).not.toHaveURL(/\/login(?:\?|$)/, { timeout: 60_000 });
+  if (returnTo) {
+    await expect(page).toHaveURL(new URL(returnTo, page.url()).href, { timeout: 60_000 });
+  }
 }
 
 async function createLocalUser(admin: SupabaseClient, email: string) {
@@ -165,7 +169,14 @@ export const test = base.extend<{ workspace: Workspace }>({
     const userId = await createLocalUser(admin, email);
 
     try {
-      await signIn(page, email);
+      // These fixtures need the wizard, not the default post-login redirect.
+      // That redirect deliberately falls back to Today if its workspace lookup
+      // fails or returns no row, and a fixture that lands on Today fails inside
+      // setup -- which reads as a broken journey rather than a redirect that
+      // took its fallback. Request the setup route explicitly so an unrelated
+      // journey cannot fail before it starts. Default redirect behavior stays
+      // covered by the onboarding journey, which does not pass returnTo.
+      await signIn(page, email, undefined, '/onboarding');
       await completeOnboarding(page);
       await provide({ page, email, userId, admin });
     } finally {
@@ -213,7 +224,7 @@ export const scanTest = base.extend<
         `scan-state-${workerInfo.workerIndex}.json`
       );
       try {
-        await signIn(page, email, workerInfo.project.use.baseURL);
+        await signIn(page, email, workerInfo.project.use.baseURL, '/onboarding');
         await completeOnboarding(page);
         await context.storageState({ path: statePath });
         await context.close();
