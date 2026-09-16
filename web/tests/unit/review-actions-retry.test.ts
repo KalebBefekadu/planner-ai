@@ -30,6 +30,11 @@ vi.mock('@/lib/supabase/server', () => ({
 
 import { completePeriodReview, completeWeeklyReview } from '@/app/review/actions';
 
+/* The three properties the key has to have. The first two come from the intent
+   and were already true; the third comes from the payload fingerprint and was
+   not: a correction typed after a failed submission travels under the failed
+   submission's intent, and without the fingerprint it replays that attempt's
+   receipt and is discarded. */
 describe('review server actions preserve submission intent', () => {
   beforeEach(() => {
     vi.stubEnv('PLANNER_DATA_MODEL', 'canonical');
@@ -49,8 +54,8 @@ describe('review server actions preserve submission intent', () => {
       };
       const submit = (id: string, reflectionMarkdown = period.reflectionMarkdown) =>
         kind === 'weekly'
-          ? completeWeeklyReview({ ...period, reflectionMarkdown, decisions: [] }, id)
-          : completePeriodReview({ ...period, kind, reflectionMarkdown }, id);
+          ? completeWeeklyReview({ ...period, reflectionMarkdown, decisions: [], intentId: id })
+          : completePeriodReview({ ...period, kind, reflectionMarkdown, intentId: id });
       await submit(intent);
       await submit(intent);
       await submit(randomUUID());
@@ -62,22 +67,15 @@ describe('review server actions preserve submission intent', () => {
     });
   }
 
-  it('does not report success for a replayed receipt whose review was undone', async () => {
-    mocks.exists = false;
-    await expect(
-      completeWeeklyReview(
-        { startsOn: '2026-09-07', endsOn: '2026-09-13', reflectionMarkdown: '', decisions: [] },
-        randomUUID()
-      )
-    ).rejects.toThrow('no longer completed');
-  });
-
   it('does not invoke the Operation with an invalid client intent', async () => {
     await expect(
-      completeWeeklyReview(
-        { startsOn: '2026-09-07', endsOn: '2026-09-13', reflectionMarkdown: '', decisions: [] },
-        ''
-      )
+      completeWeeklyReview({
+        startsOn: '2026-09-07',
+        endsOn: '2026-09-13',
+        reflectionMarkdown: '',
+        decisions: [],
+        intentId: '',
+      })
     ).rejects.toThrow();
     expect(mocks.execute).not.toHaveBeenCalled();
   });

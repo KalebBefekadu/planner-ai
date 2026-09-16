@@ -1,41 +1,44 @@
-import { randomUUID } from 'node:crypto';
 import { describe, expect, it } from 'vitest';
-import { reviewSubmissionKey } from '@/lib/reviews/submission';
+import { payloadFingerprint } from '@/lib/reviews/submission';
 
-describe('review submission identity', () => {
-  const input = {
-    startsOn: '2026-09-07',
-    endsOn: '2026-09-13',
-    reflectionMarkdown: 'First draft',
-    decisions: [],
-  };
+/* The intent says "this is one submission". The fingerprint says "and this is
+   what it said". Both are needed, because the intent outlives a failed attempt:
+   it is minted once per mount and cleared only on success, so a correction
+   typed after a failure travels under the first attempt's intent. */
 
-  it('reuses the receipt key for unchanged retries', () => {
-    const intent = randomUUID();
-    expect(reviewSubmissionKey(intent, input)).toBe(reviewSubmissionKey(intent, { ...input }));
+describe('what counts as the same submission', () => {
+  it('is the same for a payload sent twice', () => {
+    const payload = { startsOn: '2026-09-07', reflectionMarkdown: 'Original' };
+    expect(payloadFingerprint(payload)).toBe(payloadFingerprint({ ...payload }));
   });
 
-  it('does not replay an old receipt for a changed reflection or decisions', () => {
-    const intent = randomUUID();
-    const key = reviewSubmissionKey(intent, input);
-    expect(reviewSubmissionKey(intent, { ...input, reflectionMarkdown: 'Corrected' })).not.toBe(
-      key
-    );
-    expect(reviewSubmissionKey(intent, { ...input, decisions: [{ resolution: 'done' }] })).not.toBe(
-      key
+  it('is different once the reflection is corrected', () => {
+    const base = { startsOn: '2026-09-07', reflectionMarkdown: 'Original' };
+    expect(payloadFingerprint(base)).not.toBe(
+      payloadFingerprint({ ...base, reflectionMarkdown: 'Corrected' })
     );
   });
 
-  it('gives a new completion after undo a new identity, even for identical text', () => {
-    expect(reviewSubmissionKey(randomUUID(), input)).not.toBe(
-      reviewSubmissionKey(randomUUID(), input)
+  /* A payload is rebuilt from component state on every send, and object key
+     order is whatever the code happened to write. Reading that as an edit would
+     turn every retry into a second review, which is the failure this whole
+     mechanism exists to prevent. */
+  it('does not depend on the order the payload was built in', () => {
+    expect(payloadFingerprint({ a: 1, b: { c: 2, d: 3 } })).toBe(
+      payloadFingerprint({ b: { d: 3, c: 2 }, a: 1 })
     );
   });
 
-  it('validates client intent and keeps note content out of the key', () => {
-    expect(() => reviewSubmissionKey('', input)).toThrow();
-    const key = reviewSubmissionKey(randomUUID(), input);
-    expect(key.length).toBeLessThanOrEqual(200);
-    expect(key).not.toContain(input.reflectionMarkdown);
+  it('distinguishes a changed decision, not only changed prose', () => {
+    const base = { decisions: [{ id: 'a', decision: 'left_overdue' }] };
+    expect(payloadFingerprint(base)).not.toBe(
+      payloadFingerprint({ decisions: [{ id: 'a', decision: 'rescheduled' }] })
+    );
+  });
+
+  it('distinguishes an added decision from a shorter list', () => {
+    expect(payloadFingerprint({ decisions: [{ id: 'a' }] })).not.toBe(
+      payloadFingerprint({ decisions: [{ id: 'a' }, { id: 'b' }] })
+    );
   });
 });

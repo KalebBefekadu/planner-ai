@@ -40,11 +40,23 @@ for (const period of ['week', 'month', 'quarter'] as const) {
     await expect(receipt).toContainText('undone');
     await openReview();
     await submit('Corrected completion after undo');
-    await page.reload();
-    const saved =
-      period === 'week'
-        ? page.getByRole('region', { name: 'Completed weekly review' })
-        : page.locator('.period-reflection-complete');
-    await expect(saved).toContainText('Corrected completion after undo');
+
+    if (period === 'week') {
+      // A completed week still shows its form on this branch rather than a
+      // saved record, so the evidence that the second completion was really
+      // written is the receipt it left, not anything on the review screen.
+      // The undone one is still listed, so this asserts on the newest.
+      await goTo(page, '/activity');
+      const latest = page
+        .locator('article')
+        .filter({ has: page.getByRole('heading', { name: label, exact: true }) })
+        .first();
+      await expect(latest).not.toContainText('undone');
+    } else {
+      await page.reload();
+      await expect(page.locator('.period-reflection-complete')).toContainText(
+        'Corrected completion after undo'
+      );
+    }
   });
 }
