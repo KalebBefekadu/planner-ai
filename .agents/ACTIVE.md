@@ -2,20 +2,18 @@
 
 Roadmap stage: **2 - Workspace, Planner And Delivery Hardening**
 
-## Codex handoff ready: one Operation router
+## Codex handoff ready: MCP grants follow the contract
 
-- **Contract:** `.agents/tasks/operation-dispatch-router.md`
-- **Branch:** `codex/operation-dispatch-router`
-- **Scope:** the large half of EH-04. Seven dispatch functions become one, and
-  the surface and contract-exposure checks move in front of the routing --
-  closing a gap where six Operation families were never checked against the
-  contract at all.
-- **Foundation:** everything below is pushed and open as PRs #243-#251.
-- **Handoff:** `.agents/handoffs/operation-dispatch-router.md`
-- **Next:** EH-06 and EH-07 are the untouched outcomes. The nearest small item
-  is constraining `mcp_access_tokens.allowed_operations` against
-  `operation_contracts`, so a token naming an unexposed Operation is refused at
-  creation rather than at use.
+- **Contract:** `.agents/tasks/mcp-grant-contract.md`
+- **Branch:** `codex/mcp-grant-contract`
+- **Scope:** the follow-up from the router branch. An MCP grant can no longer
+  name an Operation the contract does not expose to MCP, refused at creation
+  rather than at use.
+- **Foundation:** everything below is pushed and open as PRs #243-#252.
+- **Handoff:** `.agents/handoffs/mcp-grant-contract.md`
+- **Next:** EH-06 and EH-07 are the two untouched outcomes, and both are large.
+  Eleven branches are stacked unreviewed; landing some of them matters more
+  than adding a twelfth.
 
 ## CI runs again, and integration itself is red
 
