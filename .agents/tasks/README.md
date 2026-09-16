@@ -12,3 +12,5 @@ Every task file must include:
 - handoff location.
 
 The Codex lead creates and closes contracts. Workers do not broaden their own scope.
+
+Completed contracts are removed after their durable decisions are reflected in code, status, roadmap, or an ADR. Git history remains the archive.

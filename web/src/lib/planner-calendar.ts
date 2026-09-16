@@ -15,14 +15,22 @@ export function addCalendarDays(value: string, days: number) {
   return date.toISOString().slice(0, 10);
 }
 
-export function plannerWeekStart(value: string) {
+/**
+ * The first day of the week containing `value`.
+ *
+ * `weekStartsOn` is a stored workspace preference (0 = Sunday) rather than a
+ * constant: a person whose week starts on Sunday and a person whose week
+ * starts on Monday disagree about which week a Sunday belongs to, and both
+ * are right about their own plan.
+ */
+export function plannerWeekStart(value: string, weekStartsOn = 1) {
   const date = dateOnlyToUtc(value);
-  const daysSinceMonday = (date.getUTCDay() + 6) % 7;
-  return addCalendarDays(value, -daysSinceMonday);
+  const offset = (date.getUTCDay() - weekStartsOn + 7) % 7;
+  return addCalendarDays(value, -offset);
 }
 
-export function plannerWeek(value: string) {
-  const start = plannerWeekStart(value);
+export function plannerWeek(value: string, weekStartsOn = 1) {
+  const start = plannerWeekStart(value, weekStartsOn);
   return Array.from({ length: 7 }, (_, index) => addCalendarDays(start, index));
 }
 

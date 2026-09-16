@@ -11,16 +11,13 @@ import {
   ChevronRight,
   ChevronUp,
   GripVertical,
-  Circle,
   Clock3,
   Cloud,
-  FileText,
   Files,
   Folder,
   History,
   Home,
   Image as ImageIcon,
-  LayoutDashboard,
   Link2,
   ListTodo,
   Layers,
@@ -36,17 +33,15 @@ import {
   Plus,
   Search,
   Settings2,
-  Share2,
   SlidersHorizontal,
   Sparkles,
   Star,
   Sun,
-  Table2,
   Target,
-  Undo2,
   WandSparkles,
 } from 'lucide-react';
-import { useState, useSyncExternalStore } from 'react';
+import { applyTheme, nextTheme, useThemePreference, type ThemePreference } from '@/lib/shell/theme';
+import { useEffect, useRef, useState, useSyncExternalStore } from 'react';
 import { PanelResizer } from '@/components/panel-resizer';
 import { GoalsHorizonsView, VisionView } from './align-surfaces';
 import { PerimeterView, type PerimeterScreen } from './perimeter';
@@ -60,7 +55,6 @@ import {
   ErrorState,
   OfflineState,
   PermissionDeniedState,
-  ShareState,
   TrashState,
   VersionHistoryState,
 } from './states';
@@ -94,27 +88,7 @@ type Stage =
   | { kind: 'perimeter'; screen: PerimeterScreen }
   | { kind: 'state'; which: SystemState };
 
-type ThemePreference = 'system' | 'light' | 'dark';
-
-const THEME_KEY = 'planner-preview-theme';
-const THEME_EVENT = 'planner-preview-theme-change';
-
-function subscribeToTheme(onChange: () => void) {
-  window.addEventListener(THEME_EVENT, onChange);
-  window.addEventListener('storage', onChange);
-  return () => {
-    window.removeEventListener(THEME_EVENT, onChange);
-    window.removeEventListener('storage', onChange);
-  };
-}
-
-function themeSnapshot(): ThemePreference {
-  const stored = window.localStorage.getItem(THEME_KEY);
-  return stored === 'light' || stored === 'dark' ? stored : 'system';
-}
-
 type PrimaryView = 'home' | 'planner' | 'workspace' | 'search' | 'settings' | 'notifications';
-type WorkspaceMode = 'document' | 'table' | 'graph' | 'canvas';
 type ContextMode = 'ai' | 'properties' | 'links';
 type PlannerSurface = 'plan' | 'calendar' | 'inbox' | 'review' | 'goals' | 'vision';
 type SettingsSection =
@@ -127,7 +101,6 @@ type SettingsSection =
   | 'security';
 export default function ProductPreviewPage() {
   const [primaryView, setPrimaryView] = useState<PrimaryView>('workspace');
-  const [workspaceMode, setWorkspaceMode] = useState<WorkspaceMode>('document');
   const [selectedPageId, setSelectedPageId] = useState<PageId>('personal');
   const [contextMode, setContextMode] = useState<ContextMode>('ai');
   const [contextPreference, setContextPreference] = useState<'auto' | 'open' | 'closed'>('auto');
@@ -142,18 +115,10 @@ export default function ProductPreviewPage() {
   const [stage, setStage] = useState<Stage>({ kind: 'app' });
   const [paletteOpen, setPaletteOpen] = useState(false);
   const [captureOpen, setCaptureOpen] = useState(false);
-  const [shareOpen, setShareOpen] = useState(false);
   const [sidebarWidth, setSidebarWidth] = useState(248);
   const [contextWidth, setContextWidth] = useState(336);
 
-  // Read through to storage rather than mirroring it into state in an effect,
-  // which keeps the server and first client render agreeing on 'system'.
-  const theme = useSyncExternalStore(subscribeToTheme, themeSnapshot, () => 'system' as const);
-  const chooseTheme = (next: ThemePreference) => {
-    if (next === 'system') window.localStorage.removeItem(THEME_KEY);
-    else window.localStorage.setItem(THEME_KEY, next);
-    window.dispatchEvent(new Event(THEME_EVENT));
-  };
+  const theme = useThemePreference();
 
   const isCompact = useSyncExternalStore(
     subscribeToCompactLayout,
@@ -196,13 +161,6 @@ export default function ProductPreviewPage() {
   const openPage = (pageId: PageId) => {
     setSelectedPageId(pageId);
     setPrimaryView('workspace');
-    setWorkspaceMode('document');
-    if (isNarrow) setTreePreference('closed');
-  };
-
-  const openWorkspaceMode = (mode: WorkspaceMode) => {
-    setPrimaryView('workspace');
-    setWorkspaceMode(mode);
     if (isNarrow) setTreePreference('closed');
   };
 
@@ -225,22 +183,30 @@ export default function ProductPreviewPage() {
       <PreviewIndex stage={stage} onGo={setStage} />
       {paletteOpen ? <CommandPalette onClose={() => setPaletteOpen(false)} /> : null}
       {captureOpen ? <CaptureComposer onClose={() => setCaptureOpen(false)} /> : null}
-      {shareOpen ? <ShareState onClose={() => setShareOpen(false)} /> : null}
     </>
   );
 
   const frameClass = styles.previewRoot;
-  const frameStyle = {
-    '--v2-sidebar-w': `${sidebarWidth}px`,
-    '--v2-context-w': `${contextWidth}px`,
-  } as React.CSSProperties;
+
+  // Both panels are dragged to any width, so these cannot be classes. The rest
+  // of the application writes measurements like this through the CSSOM rather
+  // than a style attribute -- see components/measured-fill.tsx and the sidebar
+  // width in experience-shell.tsx -- because a nonce does not extend to style
+  // attributes and a stricter policy would drop them. Preview was the last
+  // place still setting frame geometry the other way.
+  const frameRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    const frame = frameRef.current;
+    if (!frame) return;
+    frame.style.setProperty('--v2-sidebar-w', `${sidebarWidth}px`);
+    frame.style.setProperty('--v2-context-w', `${contextWidth}px`);
+  }, [sidebarWidth, contextWidth]);
 
   if (stage.kind === 'perimeter') {
     return (
       <div
+        ref={frameRef}
         className={`${frameClass} ${styles.previewRootPlain}`}
-        data-theme={theme === 'system' ? undefined : theme}
-        style={frameStyle}
         onKeyDown={paletteShortcut(setPaletteOpen)}
       >
         <PerimeterView
@@ -258,12 +224,7 @@ export default function ProductPreviewPage() {
   }
 
   return (
-    <div
-      className={frameClass}
-      data-theme={theme === 'system' ? undefined : theme}
-      style={frameStyle}
-      onKeyDown={paletteShortcut(setPaletteOpen)}
-    >
+    <div ref={frameRef} className={frameClass} onKeyDown={paletteShortcut(setPaletteOpen)}>
       <a className={styles.skipLink} href="#preview-main">
         Skip to content
       </a>
@@ -286,7 +247,7 @@ export default function ProductPreviewPage() {
           <span className={styles.notificationDot} />
           <span className={styles.visuallyHidden}>4 unread</span>
         </button>
-        <ThemeControl theme={theme} onChoose={chooseTheme} />
+        <ThemeControl theme={theme} />
         <button
           className={styles.iconButton}
           type="button"
@@ -347,7 +308,7 @@ export default function ProductPreviewPage() {
         ) : null}
         {isMobileBar ? null : (
           <div className={styles.railBottom}>
-            <ThemeControl theme={theme} onChoose={chooseTheme} />
+            <ThemeControl theme={theme} />
             <RailButton
               label="Notifications"
               active={primaryView === 'notifications'}
@@ -374,12 +335,10 @@ export default function ProductPreviewPage() {
         <PreviewSidebar
           primaryView={primaryView}
           selectedPageId={selectedPageId}
-          workspaceMode={workspaceMode}
           plannerSurface={plannerSurface}
           horizon={horizon}
           settingsSection={settingsSection}
           onOpenPage={openPage}
-          onOpenWorkspaceMode={openWorkspaceMode}
           onOpenPlanner={openPlanner}
           onOpenSettings={openSettings}
           onOpenNotifications={() => openPrimary('notifications')}
@@ -416,22 +375,13 @@ export default function ProductPreviewPage() {
             <span className={styles.breadcrumb}>{primarySectionLabel(primaryView)}</span>
             <ChevronRight size={14} />
             <strong>
-              {pageTitle(
-                primaryView,
-                workspaceMode,
-                selectedPage.title,
-                plannerSurface,
-                settingsSection
-              )}
+              {pageTitle(primaryView, selectedPage.title, plannerSurface, settingsSection)}
             </strong>
           </div>
           <div className={styles.topBarRight}>
             <span className={styles.syncState} role="status">
               <Cloud size={14} aria-hidden="true" /> Saved
             </span>
-            <button className={styles.quietButton} type="button" onClick={() => setShareOpen(true)}>
-              <Share2 size={15} aria-hidden="true" /> Share
-            </button>
             <button className={styles.iconButton} type="button" aria-label="More options">
               <MoreHorizontal size={18} />
             </button>
@@ -446,25 +396,12 @@ export default function ProductPreviewPage() {
           </div>
         </header>
 
-        {primaryView === 'workspace' ? (
-          <WorkspaceTabs mode={workspaceMode} onChange={setWorkspaceMode} />
-        ) : null}
-
         <div className={styles.surfaceScroll}>
           {stage.kind === 'state' ? (
             <SystemStateSurface which={stage.which} onBack={() => setStage({ kind: 'app' })} />
           ) : null}
-          {stage.kind === 'app' && primaryView === 'workspace' && workspaceMode === 'document' ? (
+          {stage.kind === 'app' && primaryView === 'workspace' ? (
             <DocumentView page={selectedPage} />
-          ) : null}
-          {stage.kind === 'app' && primaryView === 'workspace' && workspaceMode === 'table' ? (
-            <TableView />
-          ) : null}
-          {stage.kind === 'app' && primaryView === 'workspace' && workspaceMode === 'graph' ? (
-            <GraphView />
-          ) : null}
-          {stage.kind === 'app' && primaryView === 'workspace' && workspaceMode === 'canvas' ? (
-            <CanvasView />
           ) : null}
           {stage.kind === 'app' && primaryView === 'planner' ? (
             plannerSurface === 'plan' ? (
@@ -525,14 +462,8 @@ export default function ProductPreviewPage() {
           mode={contextMode}
           setMode={setContextMode}
           onClose={() => setContextPreference('closed')}
-          contextLabel={pageTitle(
-            primaryView,
-            workspaceMode,
-            selectedPage.title,
-            plannerSurface,
-            settingsSection
-          )}
-          page={primaryView === 'workspace' && workspaceMode === 'document' ? selectedPage : null}
+          contextLabel={pageTitle(primaryView, selectedPage.title, plannerSurface, settingsSection)}
+          page={primaryView === 'workspace' ? selectedPage : null}
         >
           <PanelResizer
             label="Resize context panel"
@@ -709,28 +640,24 @@ function RailButton({
   );
 }
 
-const THEME_ORDER: ThemePreference[] = ['system', 'light', 'dark'];
 const THEME_META: Record<ThemePreference, { label: string; icon: React.ReactNode }> = {
   system: { label: 'Match system', icon: <Monitor size={18} /> },
   light: { label: 'Light', icon: <Sun size={18} /> },
   dark: { label: 'Dark', icon: <Moon size={18} /> },
 };
 
-function ThemeControl({
-  theme,
-  onChoose,
-}: {
-  theme: ThemePreference;
-  onChoose: (next: ThemePreference) => void;
-}) {
-  const next = THEME_ORDER[(THEME_ORDER.indexOf(theme) + 1) % THEME_ORDER.length];
+/* The rail icon is Preview's own presentation of the one shared theme
+   control; the state, the storage key and the <html> stamp come from
+   lib/shell/theme.ts, the same module the authenticated ThemeToggle uses. */
+function ThemeControl({ theme }: { theme: ThemePreference }) {
+  const next = nextTheme(theme);
   return (
     <button
       className={styles.railButton}
       type="button"
       title={`Theme: ${THEME_META[theme].label}`}
       aria-label={`Theme: ${THEME_META[theme].label}. Switch to ${THEME_META[next].label}`}
-      onClick={() => onChoose(next)}
+      onClick={() => applyTheme(next)}
     >
       {THEME_META[theme].icon}
     </button>
@@ -830,12 +757,10 @@ function TreeItem({
 function PreviewSidebar({
   primaryView,
   selectedPageId,
-  workspaceMode,
   plannerSurface,
   horizon,
   settingsSection,
   onOpenPage,
-  onOpenWorkspaceMode,
   onOpenPlanner,
   onOpenSettings,
   onOpenNotifications,
@@ -848,12 +773,10 @@ function PreviewSidebar({
   onOpenCapture: () => void;
   primaryView: PrimaryView;
   selectedPageId: PageId;
-  workspaceMode: WorkspaceMode;
   plannerSurface: PlannerSurface;
   horizon: string;
   settingsSection: SettingsSection;
   onOpenPage: (pageId: PageId) => void;
-  onOpenWorkspaceMode: (mode: WorkspaceMode) => void;
   onOpenPlanner: (surface: PlannerSurface, horizon?: string) => void;
   onOpenSettings: (section: SettingsSection) => void;
   onOpenNotifications: () => void;
@@ -905,7 +828,7 @@ function PreviewSidebar({
               <TreeItem
                 icon={<span>🌄</span>}
                 label="Personal operating system"
-                active={selectedPageId === 'personal' && workspaceMode === 'document'}
+                active={selectedPageId === 'personal'}
                 onClick={() => onOpenPage('personal')}
               />
             </TreeSection>
@@ -915,7 +838,7 @@ function PreviewSidebar({
                   key={file.id}
                   icon={<span>{file.icon}</span>}
                   label={file.title}
-                  active={selectedPageId === file.id && workspaceMode === 'document'}
+                  active={selectedPageId === file.id}
                   onClick={() => onOpenPage(file.id)}
                 />
               ))}
@@ -923,7 +846,7 @@ function PreviewSidebar({
               <TreeItem
                 icon={<span>{previewPages.journal.icon}</span>}
                 label={previewPages.journal.title}
-                active={selectedPageId === 'journal' && workspaceMode === 'document'}
+                active={selectedPageId === 'journal'}
                 nested
                 onClick={() => onOpenPage('journal')}
               />
@@ -931,32 +854,15 @@ function PreviewSidebar({
               <TreeItem
                 icon={<span>{previewPages.research.icon}</span>}
                 label={previewPages.research.title}
-                active={selectedPageId === 'research' && workspaceMode === 'document'}
+                active={selectedPageId === 'research'}
                 nested
                 onClick={() => onOpenPage('research')}
               />
               <TreeItem
                 icon={<span>{previewPages['weekly-reset'].icon}</span>}
                 label={previewPages['weekly-reset'].title}
-                active={selectedPageId === 'weekly-reset' && workspaceMode === 'document'}
+                active={selectedPageId === 'weekly-reset'}
                 onClick={() => onOpenPage('weekly-reset')}
-              />
-            </TreeSection>
-            <TreeSection title="Views">
-              <TreeItem
-                icon={<Table2 size={15} />}
-                label="Projects"
-                onClick={() => onOpenWorkspaceMode('table')}
-              />
-              <TreeItem
-                icon={<Network size={15} />}
-                label="Knowledge graph"
-                onClick={() => onOpenWorkspaceMode('graph')}
-              />
-              <TreeItem
-                icon={<LayoutDashboard size={15} />}
-                label="Vision canvas"
-                onClick={() => onOpenWorkspaceMode('canvas')}
               />
             </TreeSection>
           </>
@@ -1097,40 +1003,6 @@ function PreviewSidebar({
         ) : null}
       </div>
     </aside>
-  );
-}
-
-function WorkspaceTabs({
-  mode,
-  onChange,
-}: {
-  mode: WorkspaceMode;
-  onChange: (mode: WorkspaceMode) => void;
-}) {
-  const items: { id: WorkspaceMode; label: string; icon: React.ReactNode }[] = [
-    { id: 'document', label: 'Document', icon: <FileText size={14} /> },
-    { id: 'table', label: 'Projects', icon: <Table2 size={14} /> },
-    { id: 'graph', label: 'Graph', icon: <Network size={14} /> },
-    { id: 'canvas', label: 'Canvas', icon: <LayoutDashboard size={14} /> },
-  ];
-  return (
-    <nav className={styles.workspaceTabs} aria-label="Workspace views">
-      {items.map((item) => (
-        <button
-          key={item.id}
-          type="button"
-          aria-current={mode === item.id ? 'page' : undefined}
-          className={mode === item.id ? styles.workspaceTabActive : ''}
-          onClick={() => onChange(item.id)}
-        >
-          {item.icon}
-          {item.label}
-        </button>
-      ))}
-      <button type="button" aria-label="Add view" title="Add view">
-        <Plus size={15} />
-      </button>
-    </nav>
   );
 }
 
@@ -1790,235 +1662,6 @@ function PlannerReviewView({
   );
 }
 
-function TableView() {
-  const rows = [
-    ['Planner AI private beta', 'In progress', 'High', 'Aug 30', '68%'],
-    ['Personal health reset', 'On track', 'Medium', 'Sep 14', '42%'],
-    ['Financial operating plan', 'Planning', 'Medium', 'Sep 01', '20%'],
-    ['Home systems', 'Paused', 'Low', 'Oct 10', '15%'],
-  ];
-  return (
-    <div className={styles.databaseView}>
-      <header className={styles.databaseHeader}>
-        <div>
-          <span className={styles.databaseIcon}>✦</span>
-          <div>
-            <h1>Projects</h1>
-            <p>12 projects · 4 active</p>
-          </div>
-        </div>
-        <button className={styles.primaryButton} type="button">
-          <Plus size={15} /> New project
-        </button>
-      </header>
-      <div className={styles.databaseToolbar}>
-        <div>
-          <button className={styles.activeView} type="button">
-            <Table2 size={15} /> Table
-          </button>
-          <button type="button">
-            <LayoutDashboard size={15} /> Board
-          </button>
-          <button type="button">
-            <CalendarDays size={15} /> Calendar
-          </button>
-        </div>
-        <div>
-          <button type="button">
-            <SlidersHorizontal size={15} /> Filter
-          </button>
-          <button type="button">
-            <ArrowUpRight size={15} /> Sort
-          </button>
-          <button type="button">
-            <Search size={15} />
-          </button>
-        </div>
-      </div>
-      <div className={styles.tableWrap}>
-        <table>
-          <thead>
-            <tr>
-              <th>Project</th>
-              <th>Status</th>
-              <th>Priority</th>
-              <th>Target</th>
-              <th>Progress</th>
-              <th />
-            </tr>
-          </thead>
-          <tbody>
-            {rows.map((row, index) => (
-              <tr key={row[0]}>
-                <td>
-                  <span className={styles.rowIcon}>{['✦', '🌱', '◫', '⌂'][index]}</span>
-                  <strong>{row[0]}</strong>
-                </td>
-                <td>
-                  <span className={`${styles.tableStatus} ${styles[`tableStatus${index}`]}`}>
-                    {row[1]}
-                  </span>
-                </td>
-                <td>{row[2]}</td>
-                <td>{row[3]}</td>
-                <td>
-                  <span className={styles.progressBar}>
-                    <i style={{ width: row[4] }} />
-                  </span>
-                  {row[4]}
-                </td>
-                <td>
-                  <button type="button" aria-label={`Open ${row[0]}`}>
-                    <MoreHorizontal size={16} />
-                  </button>
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-        <button className={styles.newTableRow} type="button">
-          <Plus size={15} /> New project
-        </button>
-      </div>
-    </div>
-  );
-}
-
-function GraphView() {
-  return (
-    <div className={styles.graphView}>
-      <div className={styles.spatialToolbar}>
-        <div>
-          <strong>Knowledge graph</strong>
-          <span>28 pages · 46 connections</span>
-        </div>
-        <div>
-          <button type="button">
-            <Search size={15} /> Find
-          </button>
-          <button type="button">
-            <SlidersHorizontal size={15} /> Filter
-          </button>
-          <button type="button">
-            <Target size={15} /> Center
-          </button>
-        </div>
-      </div>
-      <div className={styles.graphCanvas} aria-label="Knowledge graph preview">
-        <span className={`${styles.graphLine} ${styles.lineOne}`} />
-        <span className={`${styles.graphLine} ${styles.lineTwo}`} />
-        <span className={`${styles.graphLine} ${styles.lineThree}`} />
-        <span className={`${styles.graphLine} ${styles.lineFour}`} />
-        <span className={`${styles.graphLine} ${styles.lineFive}`} />
-        <GraphNode className={styles.nodeCenter} icon="🌄" label="Personal OS" main />
-        <GraphNode className={styles.nodeOne} icon="🧭" label="North star" />
-        <GraphNode className={styles.nodeTwo} icon="✦" label="Planner AI" />
-        <GraphNode className={styles.nodeThree} icon="🌱" label="Health" />
-        <GraphNode className={styles.nodeFour} icon="☀" label="Morning routine" />
-        <GraphNode className={styles.nodeFive} icon="◫" label="Q3 goals" />
-        <div className={styles.graphLegend}>
-          <span>
-            <i className={styles.legendPage} /> Page
-          </span>
-          <span>
-            <i className={styles.legendGoal} /> Goal
-          </span>
-          <span>
-            <i className={styles.legendAction} /> Action
-          </span>
-        </div>
-      </div>
-    </div>
-  );
-}
-
-function GraphNode({
-  className,
-  icon,
-  label,
-  main = false,
-}: {
-  className: string;
-  icon: string;
-  label: string;
-  main?: boolean;
-}) {
-  return (
-    <button
-      className={`${styles.graphNode} ${className} ${main ? styles.graphNodeMain : ''}`}
-      type="button"
-    >
-      <span>{icon}</span>
-      <strong>{label}</strong>
-    </button>
-  );
-}
-
-function CanvasView() {
-  return (
-    <div className={styles.canvasView}>
-      <div className={styles.spatialToolbar}>
-        <div>
-          <strong>Vision canvas</strong>
-          <span>Saved just now</span>
-        </div>
-        <div>
-          <button type="button">
-            <Undo2 size={15} />
-          </button>
-          <button type="button">
-            <Plus size={15} /> Add
-          </button>
-          <button type="button">
-            <Share2 size={15} aria-hidden="true" /> Share
-          </button>
-        </div>
-      </div>
-      <div className={styles.canvasSurface}>
-        <div className={`${styles.canvasGroup} ${styles.canvasGroupOne}`}>
-          <span>Direction</span>
-        </div>
-        <div className={`${styles.canvasGroup} ${styles.canvasGroupTwo}`}>
-          <span>Now</span>
-        </div>
-        <article className={`${styles.canvasCard} ${styles.canvasVision}`}>
-          <span>🧭</span>
-          <small>VISION</small>
-          <h2>Build a life of useful work, strong relationships, and steady growth.</h2>
-        </article>
-        <article className={`${styles.canvasCard} ${styles.canvasGoal}`}>
-          <small>Q3 GOAL</small>
-          <h3>Planner AI private beta</h3>
-          <p>Build the workspace I want to use every day.</p>
-          <span className={styles.canvasProgress}>
-            <i />
-          </span>
-        </article>
-        <article className={`${styles.canvasCard} ${styles.canvasNote}`}>
-          <small>PRINCIPLE</small>
-          <h3>Calm urgency</h3>
-          <p>Move deliberately. Keep momentum. Protect quality.</p>
-        </article>
-        <article className={`${styles.canvasCard} ${styles.canvasActions}`}>
-          <small>THIS WEEK</small>
-          <label>
-            <CheckCircle2 size={15} /> Frontend direction
-          </label>
-          <label>
-            <Circle size={15} /> Editor prototype
-          </label>
-          <label>
-            <Circle size={15} /> User test
-          </label>
-        </article>
-        <button className={styles.canvasAdd} type="button" aria-label="Add canvas item">
-          <Plus size={19} />
-        </button>
-      </div>
-    </div>
-  );
-}
-
 function HomeView({
   onOpenPlanner,
   onOpenPage,
@@ -2586,7 +2229,6 @@ function primarySectionLabel(primary: PrimaryView) {
 
 function pageTitle(
   primary: PrimaryView,
-  mode: WorkspaceMode,
   selectedPageTitle: string,
   plannerSurface: PlannerSurface,
   settingsSection: SettingsSection
@@ -2603,9 +2245,6 @@ function pageTitle(
   if (primary === 'search') return 'Search';
   if (primary === 'settings') return settingsContent[settingsSection].title;
   if (primary === 'notifications') return 'All notifications';
-  if (mode === 'table') return 'Projects';
-  if (mode === 'graph') return 'Knowledge graph';
-  if (mode === 'canvas') return 'Vision canvas';
   return selectedPageTitle;
 }
 

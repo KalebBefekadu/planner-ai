@@ -2,10 +2,13 @@
 
 import { useState, useTransition } from 'react';
 import Link from 'next/link';
+import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import {
   Archive,
   CalendarDays,
   CalendarPlus,
+  ChevronLeft,
+  ChevronRight,
   CircleCheckBig,
   Compass,
   Layers3,
@@ -40,23 +43,19 @@ import {
 } from '@/app/actions';
 import { actionFailureMessage } from '@/lib/operations/failure-message';
 import { MeasuredFill } from '@/components/measured-fill';
+import { overlapsPeriod } from '@/lib/planning-period';
+import {
+  childHorizonTypes as childTypes,
+  horizonKinds,
+  horizonLabels as labels,
+  periodRangeLabel,
+  type HorizonFilter,
+} from '@/lib/planner/horizon-labels';
 
 type ComposerTarget = { type: GoalType; parentId: string; label: string } | null;
 type GoalItem = GoalView;
 type EditTarget = { type: GoalType; item: GoalItem } | null;
-type HorizonFilter = 'all' | GoalType;
-
-const labels: Record<GoalType, string> = {
-  yearly: 'Yearly goal',
-  quarterly: 'Quarterly goal',
-  monthly: 'Monthly action',
-  weekly: 'Weekly action',
-};
-const childTypes: Partial<Record<GoalType, GoalType>> = {
-  yearly: 'quarterly',
-  quarterly: 'monthly',
-  monthly: 'weekly',
-};
+type PeriodFilter = 'current' | 'all';
 
 function messageFor(error: unknown) {
   return actionFailureMessage(error, 'Something went wrong. Please try again.');
@@ -71,17 +70,135 @@ export function PlannerWorkspace({
 }) {
   const [composer, setComposer] = useState<ComposerTarget>(null);
   const [content, setContent] = useState('');
+  // A yearly item is one of two different things. An outcome is reached and
+  // then it is over; an initiative -- a business, a project -- is never
+  // reached, and filing one as an outcome means being asked every quarter
+  // whether the business is done.
+  const [isInitiative, setIsInitiative] = useState(false);
   const [editTarget, setEditTarget] = useState<EditTarget>(null);
   const [templateEditor, setTemplateEditor] = useState<ActionTemplateView | 'new' | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [horizonFilter, setHorizonFilter] = useState<HorizonFilter>('all');
   const [isPending, startTransition] = useTransition();
+
+  // The two filters live in the URL rather than in component state so a
+  // filtered plan can be bookmarked, shared and reached with browser back and
+  // forward. A filter that only exists in memory silently resets on every
+  // reload, which reads as the plan having changed.
+  const router = useRouter();
+  const pathname = usePathname();
+  const searchParams = useSearchParams();
+  const horizonParam = searchParams.get('horizon');
+  const horizonFilter: HorizonFilter =
+    horizonParam === 'yearly' ||
+    horizonParam === 'quarterly' ||
+    horizonParam === 'monthly' ||
+    horizonParam === 'weekly'
+      ? horizonParam
+      : 'all';
+  // Current period is the default: "This week" that shows every week ever
+  // planned is not a week view, it is a list with a misleading name.
+  const periodFilter: PeriodFilter = searchParams.get('period') === 'all' ? 'all' : 'current';
+
+  function setFilters(next: { horizon?: HorizonFilter; period?: PeriodFilter }) {
+    const params = new URLSearchParams(searchParams.toString());
+    const horizon = next.horizon ?? horizonFilter;
+    const period = next.period ?? periodFilter;
+    if (horizon === 'all') params.delete('horizon');
+    else params.set('horizon', horizon);
+    if (period === 'current') params.delete('period');
+    else params.set('period', period);
+    const query = params.toString();
+    // push, not replace: the ticket asks for browser back and forward to move
+    // between chosen periods, and replace leaves no entry to go back to.
+    router.push(query ? `${pathname}?${query}` : pathname, { scroll: false });
+  }
 
   function openComposer(type: GoalType, parentId: string) {
     setComposer({ type, parentId, label: labels[type] });
     setContent('');
+    setIsInitiative(false);
     setError(null);
+  }
+
+  /**
+   * Reparent one weekly Action. `targetParentId` of null is not expressible
+   * through action.move.v1 -- it takes a non-null parent for weekly work -- so
+   * outdenting to the top hands the Action back to its monthly ancestor, which
+   * is where a weekly Action sat before nesting existed.
+   */
+  function nestAction(item: GoalItem, targetParentId: string | null) {
+    setError(null);
+    startTransition(async () => {
+      try {
+        await movePlanAction({
+          type: 'weekly',
+          id: item.id,
+          expectedVersion: item.version,
+          targetParentId,
+        });
+        setNotice(`${item.content} moved.`);
+      } catch (caught) {
+        setError(messageFor(caught));
+      }
+    });
+  }
+
+  /**
+   * Weekly work, as the tree it has always been stored as. Siblings are the
+   * Actions sharing a parent, which is what indent needs: the one directly
+   * above becomes the new parent.
+   */
+  function renderWeeklyTree(
+    items: GoalItem[],
+    parentId: string | null,
+    depth: number,
+    grandParentId: string | null
+  ): React.ReactNode[] {
+    const siblings = items.filter((item) => (item.parent_action_id ?? null) === parentId);
+    return siblings.map((item, index) => (
+      <div key={item.id}>
+        {renderItem(item, 'weekly', depth, {
+          indentTo: index > 0 ? siblings[index - 1].id : null,
+          outdentTo: grandParentId,
+          canOutdent: true,
+        })}
+        {renderWeeklyTree(items, item.id, depth + 1, parentId)}
+      </div>
+    ));
+  }
+
+  /**
+   * Ask for a first list. It arrives in the Action Inbox as a proposal batch --
+   * nothing is written until the owner accepts it, line by line.
+   */
+  function suggestBreakdown(item: GoalItem) {
+    setError(null);
+    setNotice(null);
+    startTransition(async () => {
+      try {
+        const response = await fetch('/api/initiative-breakdown', {
+          method: 'POST',
+          headers: { 'content-type': 'application/json' },
+          body: JSON.stringify({ goalId: item.id }),
+        });
+        const body = (await response.json().catch(() => null)) as {
+          data?: { proposed?: number };
+          detail?: string;
+        } | null;
+        if (!response.ok) {
+          throw new Error(body?.detail ?? 'The breakdown could not be produced.');
+        }
+        const proposed = body?.data?.proposed ?? 0;
+        setNotice(
+          proposed > 0
+            ? `${proposed} suggested ${proposed === 1 ? 'task' : 'tasks'} for ${item.content} are waiting in your Action inbox. Nothing is saved until you accept them.`
+            : `No tasks were suggested for ${item.content}. It is ready to use as it is.`
+        );
+      } catch (caught) {
+        setError(caught instanceof Error ? caught.message : messageFor(caught));
+      }
+    });
   }
 
   function createItem() {
@@ -89,10 +206,21 @@ export function PlannerWorkspace({
     setError(null);
     startTransition(async () => {
       try {
-        await createGoal({ type: composer.type, parentId: composer.parentId, content });
-        setNotice(`${composer.label} added to your plan.`);
+        const asInitiative = composer.type === 'yearly' && isInitiative;
+        await createGoal({
+          type: composer.type,
+          parentId: composer.parentId,
+          content,
+          ...(asInitiative ? { kind: 'initiative' as const } : {}),
+        });
+        setNotice(
+          asInitiative
+            ? `${content.trim()} is now an initiative. Work filed under it carries week to week.`
+            : `${composer.label} added to your plan.`
+        );
         setComposer(null);
         setContent('');
+        setIsInitiative(false);
       } catch (caught) {
         setError(messageFor(caught));
       }
@@ -149,11 +277,20 @@ export function PlannerWorkspace({
             expectedVersion: item.version,
             title,
             descriptionMarkdown,
-            parentGoalId: type === 'quarterly' ? destination : null,
+            // An initiative is year-anchored but may serve a yearly Goal, and
+            // the form does not offer that link -- so preserve it rather than
+            // clearing it on every unrelated edit.
+            parentGoalId:
+              type === 'quarterly'
+                ? destination
+                : item.kind === 'initiative'
+                  ? (item.yearly_id ?? null)
+                  : null,
             targetValue: targetText ? Number(targetText) : null,
             currentValue: targetText ? (currentText ? Number(currentText) : 0) : null,
             unit,
-            dueOn: date,
+            dueOn: item.kind === 'initiative' ? null : date,
+            definitionOfDone: String(formData.get('definitionOfDone') ?? ''),
           });
         } else {
           const updated = await updatePlanAction({
@@ -276,7 +413,33 @@ export function PlannerWorkspace({
     );
   }
 
-  const { vision, yearly, quarterly, monthly, weekly } = initialData;
+  const { vision, currentPeriods } = initialData;
+
+  // Filtering by period keeps the items whose horizon overlaps the period the
+  // person is actually in. Anything without a horizon -- legacy rows, and work
+  // that was never given a period -- stays visible in every view rather than
+  // disappearing into a filter it can never satisfy.
+  const inCurrentPeriod = (item: GoalItem, type: GoalType) => {
+    if (periodFilter === 'all') return true;
+    if (!item.horizon_starts_on || !item.horizon_ends_on) return true;
+    return overlapsPeriod(
+      { startsOn: item.horizon_starts_on, endsOn: item.horizon_ends_on },
+      currentPeriods[horizonKinds[type]]
+    );
+  };
+  const scope = (items: GoalItem[], type: GoalType) =>
+    items.filter((item) => inCurrentPeriod(item, type));
+
+  const yearly = scope(initialData.yearly, 'yearly');
+  const quarterly = scope(initialData.quarterly, 'quarterly');
+  const monthly = scope(initialData.monthly, 'monthly');
+  const weekly = scope(initialData.weekly, 'weekly');
+  const hiddenByPeriod =
+    initialData.yearly.length +
+    initialData.quarterly.length +
+    initialData.monthly.length +
+    initialData.weekly.length -
+    (yearly.length + quarterly.length + monthly.length + weekly.length);
   const goalItems = [...yearly, ...quarterly];
   const actionItems = [...monthly, ...weekly];
   const completedItems = [...goalItems, ...actionItems].filter(
@@ -296,7 +459,19 @@ export function PlannerWorkspace({
   /* Reports drift and stops there. AGENTS.md's coaching stance is to surface
      it and let the person decide what it is worth — never to quietly fix it. */
   const drift = summariseDrift([...yearly, ...quarterly]);
-  const renderItem = (item: GoalItem, type: GoalType, depth: number) => {
+  /**
+   * Where indent and outdent would put this Action, or null where the move is
+   * not available. Indent makes it a child of the sibling directly above it,
+   * which is the gesture every outliner uses; outdent hands it to its parent's
+   * parent. Both go through action.move.v1, which enforces the depth bound and
+   * refuses a move into the Action's own subtree.
+   */
+  const renderItem = (
+    item: GoalItem,
+    type: GoalType,
+    depth: number,
+    nesting?: { indentTo: string | null; outdentTo: string | null; canOutdent: boolean }
+  ) => {
     const childType = childTypes[type];
     return (
       <div className={`plan-item plan-depth-${depth}`} key={item.id}>
@@ -350,6 +525,40 @@ export function PlannerWorkspace({
           ) : null}
         </div>
         <div className="plan-actions">
+          {nesting ? (
+            <span className="plan-nesting">
+              <button
+                className="icon-button"
+                type="button"
+                onClick={() => nestAction(item, nesting.outdentTo)}
+                disabled={isPending || !nesting.canOutdent}
+                aria-label={`Outdent ${item.content}`}
+                title="Outdent"
+              >
+                <ChevronLeft size={15} />
+              </button>
+              <button
+                className="icon-button"
+                type="button"
+                onClick={() => nesting.indentTo && nestAction(item, nesting.indentTo)}
+                disabled={isPending || !nesting.indentTo}
+                aria-label={`Indent ${item.content} under the Action above it`}
+                title="Indent"
+              >
+                <ChevronRight size={15} />
+              </button>
+            </span>
+          ) : null}
+          {initialData?.aiEnabled && item.kind === 'initiative' ? (
+            <button
+              className="text-button"
+              type="button"
+              onClick={() => suggestBreakdown(item)}
+              disabled={isPending}
+            >
+              Suggest tasks
+            </button>
+          ) : null}
           {childType ? (
             <button
               className="text-button"
@@ -417,20 +626,64 @@ export function PlannerWorkspace({
         </div>
       </header>
 
-      <nav className="planner-horizon-tabs" aria-label="Filter plan by horizon">
+      <div className="planner-period-bar">
+        <div className="planner-period-choice" role="group" aria-label="Filter plan by period">
+          <button
+            type="button"
+            aria-pressed={periodFilter === 'current'}
+            className={periodFilter === 'current' ? 'planner-horizon-active' : undefined}
+            onClick={() => setFilters({ period: 'current' })}
+          >
+            This period
+          </button>
+          <button
+            type="button"
+            aria-pressed={periodFilter === 'all'}
+            className={periodFilter === 'all' ? 'planner-horizon-active' : undefined}
+            onClick={() => setFilters({ period: 'all' })}
+          >
+            All time
+          </button>
+        </div>
+        <p className="planner-period-range">
+          {periodFilter === 'current'
+            ? periodRangeLabel(horizonFilter, currentPeriods)
+            : 'Every period on record'}
+        </p>
+      </div>
+
+      {periodFilter === 'current' && hiddenByPeriod > 0 ? (
+        // Work outside the period is filtered, never hidden: the count says
+        // how much, and one control brings all of it back.
+        <p className="planner-period-hidden">
+          {hiddenByPeriod} {hiddenByPeriod === 1 ? 'item is' : 'items are'} outside this period.{' '}
+          <button
+            type="button"
+            className="link-button"
+            onClick={() => setFilters({ period: 'all' })}
+          >
+            Show all time
+          </button>
+        </p>
+      ) : null}
+
+      {/* A group of toggles, not navigation: these buttons filter the plan in
+          place and route nowhere, so a nav landmark announced a list of links
+          that does not exist. The period filter above already says group. */}
+      <div className="planner-horizon-tabs" role="group" aria-label="Filter plan by horizon">
         {horizonOptions.map((option) => (
           <button
             key={option.id}
             type="button"
             aria-pressed={horizonFilter === option.id}
             className={horizonFilter === option.id ? 'planner-horizon-active' : undefined}
-            onClick={() => setHorizonFilter(option.id)}
+            onClick={() => setFilters({ horizon: option.id })}
           >
             <span>{option.label}</span>
             <small>{option.count}</small>
           </button>
         ))}
-      </nav>
+      </div>
 
       <nav className="planner-flow" aria-label="Planning flow">
         <Link href="/vision">
@@ -524,6 +777,20 @@ export function PlannerWorkspace({
             placeholder={`Describe this ${composer.label.toLowerCase()}...`}
             autoFocus
           />
+          {composer.type === 'yearly' ? (
+            <label className="composer-kind">
+              <input
+                type="checkbox"
+                checked={isInitiative}
+                onChange={(event) => setIsInitiative(event.target.checked)}
+              />
+              <span>
+                <strong>This is an ongoing project, not something that finishes.</strong>A business,
+                a client, a product. It gets no deadline, is never asked whether it was achieved,
+                and work filed under it carries from week to week.
+              </span>
+            </label>
+          ) : null}
           <div className="composer-actions">
             <button
               className="btn-secondary"
@@ -544,7 +811,11 @@ export function PlannerWorkspace({
                   so they are the same name to a screen reader and ambiguous to
                   voice control. Saving is also the more accurate verb for the
                   second step. */}
-              {isPending ? 'Saving...' : `Save ${composer.label.toLowerCase()}`}
+              {isPending
+                ? 'Saving...'
+                : composer.type === 'yearly' && isInitiative
+                  ? 'Save initiative'
+                  : `Save ${composer.label.toLowerCase()}`}
             </button>
           </div>
         </section>
@@ -681,7 +952,26 @@ export function PlannerWorkspace({
         ) : horizonFilter === 'monthly' ? (
           monthly.map((item) => renderItem(item, 'monthly', 0))
         ) : horizonFilter === 'weekly' ? (
-          weekly.map((item) => renderItem(item, 'weekly', 0))
+          // A root here is any weekly Action whose parent is not also on this
+          // tab -- its monthly rollup, or nothing at all.
+          (() => {
+            const weeklyIds = new Set(weekly.map((item) => item.id));
+            const roots = weekly.filter(
+              (item) => !item.parent_action_id || !weeklyIds.has(item.parent_action_id)
+            );
+            return roots.map((root, index) => (
+              <div key={root.id}>
+                {renderItem(root, 'weekly', 0, {
+                  indentTo: index > 0 ? roots[index - 1].id : null,
+                  outdentTo: null,
+                  // Already at the top of this tab. Its monthly rollup, if it
+                  // has one, is a horizon away rather than a level up.
+                  canOutdent: false,
+                })}
+                {renderWeeklyTree(weekly, root.id, 1, root.parent_action_id ?? null)}
+              </div>
+            ));
+          })()
         ) : (
           yearly.map((yearlyGoal) => (
             <div className="plan-branch" key={yearlyGoal.id}>
@@ -696,9 +986,15 @@ export function PlannerWorkspace({
                       .map((monthlyTask) => (
                         <div key={monthlyTask.id}>
                           {renderItem(monthlyTask, 'monthly', 2)}
-                          {weekly
-                            .filter((item) => item.monthly_id === monthlyTask.id)
-                            .map((weeklyAction) => renderItem(weeklyAction, 'weekly', 3))}
+                          {/* monthly_id is now the nearest monthly ancestor at
+                              any depth, so filtering on it alone would flatten
+                              a whole subtree under the month. */}
+                          {renderWeeklyTree(
+                            weekly.filter((item) => item.monthly_id === monthlyTask.id),
+                            monthlyTask.id,
+                            3,
+                            null
+                          )}
                         </div>
                       ))}
                   </div>
@@ -748,17 +1044,44 @@ export function PlannerWorkspace({
                   required
                 />
               </label>
-              <label>
-                {editTarget.type === 'yearly' || editTarget.type === 'quarterly'
-                  ? 'Due date'
-                  : 'Scheduled date'}
-                <input
-                  className="input-field"
-                  type="date"
-                  name="date"
-                  defaultValue={editTarget.item.due_on ?? editTarget.item.scheduled_on ?? ''}
-                />
-              </label>
+              {/* An initiative is never finished, so it has no due date and the
+                  field is not offered rather than offered and refused. */}
+              {editTarget.item.kind === 'initiative' ? null : (
+                <label>
+                  {editTarget.type === 'yearly' || editTarget.type === 'quarterly'
+                    ? 'Due date'
+                    : 'Scheduled date'}
+                  <input
+                    className="input-field"
+                    type="date"
+                    name="date"
+                    defaultValue={editTarget.item.due_on ?? editTarget.item.scheduled_on ?? ''}
+                  />
+                </label>
+              )}
+
+              {editTarget.type === 'yearly' || editTarget.type === 'quarterly' ? (
+                <label>
+                  {editTarget.item.kind === 'initiative'
+                    ? 'What would make this quarter good here?'
+                    : 'What does done look like?'}
+                  <textarea
+                    className="input-field"
+                    name="definitionOfDone"
+                    rows={2}
+                    maxLength={2000}
+                    defaultValue={editTarget.item.definition_of_done ?? ''}
+                    placeholder={
+                      editTarget.item.kind === 'initiative'
+                        ? 'A signed contract, or a clear no so the time goes elsewhere.'
+                        : 'The standard this is measured against.'
+                    }
+                  />
+                  <span className="field-note">
+                    Quoted in Weekly Review at the moment you decide to drop work filed here.
+                  </span>
+                </label>
+              ) : null}
 
               {editTarget.type === 'quarterly' ? (
                 <label>

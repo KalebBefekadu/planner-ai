@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation';
 import { NoteImportDialog } from '@/components/note-import-dialog';
 import { NotesWorkspace } from '@/components/notes-workspace';
 import type { NoteKnowledgeContext, NoteView } from '@/app/notes/actions';
+import type { InspectorView } from '@/components/notes-workspace';
 
 /**
  * Holds the import dialog above the workspace.
@@ -22,6 +23,7 @@ import type { NoteKnowledgeContext, NoteView } from '@/app/notes/actions';
  */
 export function NotesShell({
   notes,
+  favorites,
   selectedId,
   activeKey,
   query,
@@ -29,6 +31,7 @@ export function NotesShell({
   initialImportOpen = false,
 }: {
   notes: NoteView[];
+  favorites: NoteView[];
   selectedId: string | null;
   activeKey: string;
   query: string;
@@ -37,15 +40,26 @@ export function NotesShell({
 }) {
   const router = useRouter();
   const [importOpen, setImportOpen] = useState(initialImportOpen);
+  /**
+   * Which inspector pane is open is a decision about what someone is currently
+   * doing, not about the Note they are doing it to. It lives here rather than
+   * inside the workspace because the workspace is remounted per Note: held
+   * there, following a link snapped the pane back to Properties and hid the
+   * backlink the person had just navigated to.
+   */
+  const [inspectorView, setInspectorView] = useState<InspectorView>('properties');
 
   return (
     <>
       <NotesWorkspace
         key={activeKey}
         notes={notes}
+        favorites={favorites}
         selectedId={selectedId}
         query={query}
         knowledge={knowledge}
+        inspectorView={inspectorView}
+        onInspectorViewChange={setInspectorView}
         onRequestImport={() => setImportOpen(true)}
       />
       <NoteImportDialog

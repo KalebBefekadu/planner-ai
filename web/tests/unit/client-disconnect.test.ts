@@ -67,10 +67,10 @@ describe('uncaught exception handling', () => {
 
     expect(result.absorbed).toBe(true);
     expect(result.faults).toEqual([]);
-    expect(JSON.parse(result.warnings[0])).toEqual({
-      event: 'client_disconnected',
-      message: 'aborted',
-    });
+    // The matched signature, not the error's own message. `code` is checked
+    // before the message, so a socket reset reports as ECONNRESET even when it
+    // also carries one of the recognised messages.
+    expect(result.warnings).toEqual(['ECONNRESET']);
   });
 
   it('ends the process for a fault that is not a disconnect', () => {

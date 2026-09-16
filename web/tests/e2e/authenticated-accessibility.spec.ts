@@ -20,6 +20,7 @@ const surfaces = [
   ['/conversations', 'Conversations'],
   ['/notifications', 'Notifications'],
   ['/trash', 'Trash'],
+  ['/settings/account', 'Account settings'],
   ['/settings/preferences', 'Preferences'],
   ['/settings/ai', 'AI settings'],
   ['/settings/safety', 'Safety settings'],

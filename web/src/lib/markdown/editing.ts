@@ -18,6 +18,34 @@ export function wrapMarkdownSelection(
   };
 }
 
+/**
+ * Insert a starter table, and select the first heading cell so the next
+ * keystroke names the column instead of landing somewhere in the scaffolding.
+ *
+ * Blank lines are added only where the surrounding text needs them: a table
+ * that touches the paragraph above it is not a table to a Markdown parser, and
+ * adding separators unconditionally leaves a trail of blank lines behind every
+ * insertion at the start or end of a document.
+ */
+export function insertMarkdownTable(
+  markdown: string,
+  selectionStart: number,
+  selectionEnd: number
+): MarkdownTextEdit {
+  const before = markdown.slice(0, selectionStart);
+  const after = markdown.slice(selectionEnd);
+  const table = '| Column | Column |\n| --- | --- |\n| Value | Value |';
+  const prefix = before && !before.endsWith('\n') ? '\n\n' : '';
+  const suffix = after && !after.startsWith('\n') ? '\n\n' : '';
+  // Two characters past the opening pipe and its space is the first cell.
+  const headingStart = before.length + prefix.length + 2;
+  return {
+    markdown: `${before}${prefix}${table}${suffix}${after}`,
+    selectionStart: headingStart,
+    selectionEnd: headingStart + 'Column'.length,
+  };
+}
+
 /** Continue an ordinary, ordered, or task-list item, or leave an empty item. */
 export function continueMarkdownList(
   markdown: string,

@@ -41,9 +41,20 @@ export function PlannerCalendar({ data }: { data: TodayData }) {
   const [weekAnchor, setWeekAnchor] = useState(data.localDate);
   const [selectedDate, setSelectedDate] = useState(data.localDate);
   const [editing, setEditing] = useState<TodayAction | null>(null);
+  // Controlled, so a rejected save keeps the chosen date. A form action resets
+  // an uncontrolled form once it settles, which throws the date away at the
+  // one moment it is worth keeping.
+  const [draftDate, setDraftDate] = useState('');
+  const [dialogError, setDialogError] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
-  const days = useMemo(() => plannerWeek(weekAnchor), [weekAnchor]);
+  // The calendar week is the person's week. week_starts_on is a stored,
+  // editable preference, and a calendar that starts on the wrong day puts the
+  // work under the wrong heading.
+  const days = useMemo(
+    () => plannerWeek(weekAnchor, data.weekStartsOn),
+    [weekAnchor, data.weekStartsOn]
+  );
   const weekStart = days[0];
   const weekEnd = days[6];
   const scheduledThisWeek = actions.filter((action) =>
@@ -78,11 +89,25 @@ export function PlannerCalendar({ data }: { data: TodayData }) {
     });
   }
 
-  function saveSchedule(formData: FormData) {
+  function openScheduler(action: TodayAction) {
+    setEditing(action);
+    setDialogError(null);
+    setDraftDate(action.scheduledOn ?? selectedDate);
+  }
+
+  function closeScheduler() {
+    setEditing(null);
+    setDialogError(null);
+  }
+
+  // One path for scheduling, rescheduling and unscheduling: an empty date is
+  // "no date", which is what the Action inbox is. Clearing a date input is
+  // awkward on a phone, so unscheduling also has its own control.
+  function saveSchedule(scheduledOn: string) {
     if (!editing) return;
     setError(null);
     setNotice(null);
-    const scheduledOn = String(formData.get('scheduledOn') ?? '');
+    setDialogError(null);
     startTransition(async () => {
       try {
         const result = await editTodayAction({
@@ -118,7 +143,9 @@ export function PlannerCalendar({ data }: { data: TodayData }) {
         setEditing(null);
         router.refresh();
       } catch (caught) {
-        setError(messageFor(caught));
+        // Inside the dialog, where the person is: a message behind the
+        // backdrop reads as a save that did nothing.
+        setDialogError(messageFor(caught));
       }
     });
   }
@@ -139,7 +166,7 @@ export function PlannerCalendar({ data }: { data: TodayData }) {
         <button
           className="planner-calendar-action-copy"
           type="button"
-          onClick={() => setEditing(action)}
+          onClick={() => openScheduler(action)}
         >
           <strong>{action.title}</strong>
           <span>{action.goalTitle ?? 'Independent Action'}</span>
@@ -294,7 +321,7 @@ export function PlannerCalendar({ data }: { data: TodayData }) {
       </footer>
 
       {editing ? (
-        <div className="dialog-backdrop" role="presentation" onMouseDown={() => setEditing(null)}>
+        <div className="dialog-backdrop" role="presentation" onMouseDown={closeScheduler}>
           <section
             className="action-edit-dialog planner-schedule-dialog"
             role="dialog"
@@ -317,21 +344,41 @@ export function PlannerCalendar({ data }: { data: TodayData }) {
                 <X size={17} />
               </button>
             </header>
-            <form action={saveSchedule}>
+            <form
+              onSubmit={(event) => {
+                event.preventDefault();
+                saveSchedule(draftDate);
+              }}
+            >
+              {dialogError ? (
+                <p className="status-message status-message-error" role="alert">
+                  {dialogError}
+                </p>
+              ) : null}
               <label>
                 Scheduled date
                 <input
                   className="input-field"
                   type="date"
                   name="scheduledOn"
-                  defaultValue={editing.scheduledOn ?? selectedDate}
+                  value={draftDate}
+                  onChange={(event) => setDraftDate(event.target.value)}
                 />
               </label>
-              <p>Clear the date to move this Action back to Unscheduled.</p>
               <div className="dialog-actions">
-                <button className="btn-secondary" type="button" onClick={() => setEditing(null)}>
+                <button className="btn-secondary" type="button" onClick={closeScheduler}>
                   Cancel
                 </button>
+                {editing.scheduledOn ? (
+                  <button
+                    className="btn-secondary"
+                    type="button"
+                    disabled={isPending}
+                    onClick={() => saveSchedule('')}
+                  >
+                    Unschedule
+                  </button>
+                ) : null}
                 <button className="btn-primary button-with-icon" type="submit" disabled={isPending}>
                   <Save size={15} /> {isPending ? 'Saving...' : 'Save date'}
                 </button>

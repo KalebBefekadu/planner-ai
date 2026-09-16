@@ -23,7 +23,7 @@ import {
   managedChatUsage,
   managedProviderIdentityForError,
 } from '@/lib/ai/provider';
-import { createAdminClient } from '@/lib/supabase/admin';
+import { completeAiJob, failAiJob, startAiJob } from '@/lib/ai/job-status';
 import { createClient } from '@/lib/supabase/server';
 
 const MAX_JSON_BYTES = 2_000;
@@ -36,6 +36,7 @@ const inputSchema = z
 
 export async function POST(request: Request) {
   let context: RequestContext | undefined;
+  let supabase: Awaited<ReturnType<typeof createClient>> | undefined;
   let jobId: string | null = null;
   let quotaConsumed = false;
   let providerIdentity = {
@@ -55,7 +56,7 @@ export async function POST(request: Request) {
       );
     }
     const { captureId, confirmExpensive } = await readJson(request, inputSchema, MAX_JSON_BYTES);
-    const supabase = await createClient();
+    supabase = await createClient();
     const {
       data: { user },
     } = await supabase.auth.getUser();
@@ -104,23 +105,11 @@ export async function POST(request: Request) {
     }
     await consumeAiQuota(context, true);
     quotaConsumed = true;
-    const admin = createAdminClient();
-    const { data: job, error: jobError } = await admin
-      .from('ai_jobs')
-      .insert({
-        workspace_id: workspace.id,
-        actor_user_id: user.id,
-        operation: 'capture_analysis',
-        source_capture_id: captureId,
-        request_id: context.requestId,
-        status: 'running',
-      })
-      .select('id')
-      .single();
-    if (jobError || !job) {
-      throw new ApiProblem(503, 'job_status_unavailable', 'Analysis could not be started safely.');
-    }
-    jobId = String(job.id);
+    jobId = await startAiJob(
+      supabase,
+      { operation: 'capture_analysis', requestId: context.requestId, sourceCaptureId: captureId },
+      'Analysis could not be started safely.'
+    );
     const result = await completeManagedText('structured_analysis', {
       response_format: { type: 'json_object' },
       temperature: 0.1,
@@ -148,10 +137,9 @@ export async function POST(request: Request) {
         'Planner AI could not produce a safe proposal. Try again.'
       );
     }
-    const { data: batchId, error: persistenceError } = await admin.rpc(
+    const { data: batchId, error: persistenceError } = await supabase.rpc(
       'persist_capture_proposal_analysis_job',
       {
-        p_owner_user_id: user.id,
         p_capture_id: captureId,
         p_job_id: jobId,
         p_analysis: analysis,
@@ -169,19 +157,7 @@ export async function POST(request: Request) {
     if (persistenceError || !batchId) {
       throw new ApiProblem(503, 'proposal_persistence_failed', 'Proposal could not be saved.');
     }
-    const { error: completionError } = await admin
-      .from('ai_jobs')
-      .update({
-        status: 'succeeded',
-        result_target_id: batchId,
-        completed_at: new Date().toISOString(),
-        updated_at: new Date().toISOString(),
-      })
-      .eq('id', jobId)
-      .eq('status', 'running');
-    if (completionError) {
-      throw new ApiProblem(503, 'job_status_unavailable', 'Analysis status could not be saved.');
-    }
+    await completeAiJob(supabase, jobId, String(batchId), 'Analysis status could not be saved.');
     await recordAiUsage(context, {
       providerRole: 'structured_analysis',
       ...providerIdentity,
@@ -190,21 +166,8 @@ export async function POST(request: Request) {
     });
     return aiSuccess({ batchId, jobId }, context);
   } catch (error) {
-    if (jobId) {
-      try {
-        await createAdminClient()
-          .from('ai_jobs')
-          .update({
-            status: 'failed',
-            error_code: stableAiErrorCode(error),
-            completed_at: new Date().toISOString(),
-            updated_at: new Date().toISOString(),
-          })
-          .eq('id', jobId)
-          .eq('status', 'running');
-      } catch {
-        // The primary error response remains stable if status persistence is unavailable.
-      }
+    if (jobId && supabase) {
+      await failAiJob(supabase, jobId, stableAiErrorCode(error));
     }
     if (context && quotaConsumed) {
       providerIdentity = managedProviderIdentityForError(error, providerIdentity);

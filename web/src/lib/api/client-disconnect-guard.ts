@@ -1,4 +1,5 @@
 import { handleUncaughtException } from '@/lib/api/client-disconnect';
+import { recordServerEvent } from '@/lib/api/telemetry';
 
 // Node-only. Kept out of the instrumentation module itself so the Edge bundle
 // never carries process.on or process.exit.
@@ -12,7 +13,8 @@ export function installClientDisconnectGuard() {
 
   process.on('uncaughtException', (error) => {
     handleUncaughtException(error, {
-      warn: (line) => console.warn(line),
+      warn: (signature) =>
+        recordServerEvent({ event: 'client_disconnected', errorCode: signature }),
       fatal: (fault) => {
         console.error(fault);
         process.exit(1);

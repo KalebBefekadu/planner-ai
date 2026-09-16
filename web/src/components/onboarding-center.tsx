@@ -101,11 +101,7 @@ export function OnboardingCenter({ hasVision }: { hasVision: boolean }) {
           </Link>
         </div>
       </section>
-      <NoteImportDialog
-        open={importOpen}
-        onClose={() => setImportOpen(false)}
-        onCompleted={() => setImportOpen(false)}
-      />
+      <NoteImportDialog open={importOpen} onClose={() => setImportOpen(false)} />
     </>
   );
 }

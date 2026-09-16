@@ -10,9 +10,7 @@ import {
   CornerDownLeft,
   FileText,
   GitMerge,
-  Globe,
   History,
-  Link2,
   ListTodo,
   Lock,
   Mic,
@@ -26,7 +24,6 @@ import {
   Trash2,
   TriangleAlert,
   Undo2,
-  Users,
 } from 'lucide-react';
 import { useState } from 'react';
 import styles from './preview.module.css';
@@ -403,89 +400,6 @@ export function VersionHistoryState() {
             <p className={styles.stateFoot}>This is the version you are looking at now.</p>
           )}
         </article>
-      </div>
-    </div>
-  );
-}
-
-/* ------------------------------------------------------------------ share */
-
-export function ShareState({ onClose }: { onClose: () => void }) {
-  const [access, setAccess] = useState<'private' | 'link' | 'people'>('private');
-  const dialog = useDialog<HTMLDivElement>(onClose);
-
-  return (
-    <div className={styles.modalScrim} role="presentation" onClick={onClose}>
-      <div
-        ref={dialog}
-        className={styles.modalCard}
-        role="dialog"
-        aria-modal="true"
-        aria-labelledby="share-title"
-        onClick={(event) => event.stopPropagation()}
-      >
-        <header className={styles.modalHead}>
-          <h2 id="share-title">Share “Personal operating system”</h2>
-          <button className={styles.iconButton} type="button" aria-label="Close" onClick={onClose}>
-            <Plus size={18} style={{ transform: 'rotate(45deg)' }} aria-hidden="true" />
-          </button>
-        </header>
-
-        <fieldset className={styles.shareOptions}>
-          <legend className={styles.visuallyHidden}>Who can open this page</legend>
-          {(
-            [
-              [
-                'private',
-                <Lock key="l" size={15} aria-hidden="true" />,
-                'Only me',
-                'The default. Nothing leaves your workspace.',
-              ],
-              [
-                'link',
-                <Link2 key="k" size={15} aria-hidden="true" />,
-                'Anyone with the link',
-                'Read only. The link can be revoked at any time.',
-              ],
-              [
-                'people',
-                <Users key="u" size={15} aria-hidden="true" />,
-                'Specific people',
-                'Invite by email. Each person signs in to read.',
-              ],
-            ] as const
-          ).map(([id, icon, label, detail]) => (
-            <label key={id} data-selected={access === id || undefined}>
-              <input
-                type="radio"
-                name="share-access"
-                checked={access === id}
-                onChange={() => setAccess(id)}
-              />
-              {icon}
-              <span>
-                <strong>{label}</strong>
-                <small>{detail}</small>
-              </span>
-            </label>
-          ))}
-        </fieldset>
-
-        {access === 'link' ? (
-          <div className={styles.shareLinkRow}>
-            <Globe size={15} aria-hidden="true" />
-            <code>planner.ai/s/9f2b-personal-os</code>
-            <button className={styles.quietButton} type="button">
-              <Copy size={14} aria-hidden="true" /> Copy
-            </button>
-          </div>
-        ) : null}
-
-        <p className={styles.shareNote}>
-          <CircleAlert size={13} aria-hidden="true" />
-          Shared readers see the page and its properties. They never see your other pages, your
-          plan, or anything the assistant proposed.
-        </p>
       </div>
     </div>
   );

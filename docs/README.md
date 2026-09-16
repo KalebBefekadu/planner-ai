@@ -4,14 +4,17 @@ This directory is the product and engineering source of truth. Read only the doc
 
 ## Start Here
 
+For implementation, open the [build manual](build-manual.md) and its GitHub delivery checklist. It links the detailed tickets; the roadmap remains the stage-order authority.
+
 1. [Vision](product/vision.md) - the product promise, release boundary, and long-term direction.
 2. [Glossary](../CONTEXT.md) - canonical domain language.
 3. [Requirements](product/requirements.md) - first-release behavior and quality requirements.
 4. [Experience](product/experience.md) - information architecture, interaction rules, and visual direction.
-5. [Architecture](engineering/architecture.md) - current system boundaries and staged evolution.
-6. [Data model](engineering/data-model.md) - canonical entities and invariants.
-7. [Roadmap](roadmap.md) - ordered milestones and exit gates.
-8. [Status](status.md) - current evidence, gaps, and immediate work.
+5. [Preview inventory](product/preview-inventory.md) - every `/preview` pattern, its production destination, and what has actually been demonstrated.
+6. [Architecture](engineering/architecture.md) - current system boundaries and staged evolution.
+7. [Data model](engineering/data-model.md) - canonical entities and invariants.
+8. [Roadmap](roadmap.md) - the four product states, current goal, ordered stages, and exit gates.
+9. [Status](status.md) - current evidence, gaps, and immediate work.
 
 ## Specialized References
 
@@ -25,12 +28,14 @@ This directory is the product and engineering source of truth. Read only the doc
 
 ## Authority
 
-When documents disagree, use this order:
+Use each authority for its purpose:
 
-1. accepted ADRs and the glossary;
-2. requirements and architecture;
-3. roadmap and status;
-4. evidence and research.
+- Roadmap: delivery scope and stage order.
+- Status: verified current facts and open release gaps.
+- GitHub delivery issues: detailed scope, dependencies, acceptance evidence and ticket status.
+- Active agent contract: owner and writable paths for the current task.
+- Accepted ADRs, glossary, requirements and architecture: domain meaning and engineering constraints.
+- Evidence and research: supporting material, not implementation instructions.
 
 Code describes current behavior, not necessarily intended behavior. A conflict between code and an authority document is migration work and must be made explicit in [status](status.md).
 

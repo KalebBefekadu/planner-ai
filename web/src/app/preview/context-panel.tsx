@@ -21,7 +21,7 @@ import {
 } from 'lucide-react';
 import { useState } from 'react';
 import { OperationProposal } from './operation-proposal';
-import { TabList } from './tab-list';
+import { TabList } from '@/components/shell/tab-list';
 import type { PreviewPage } from './preview-data';
 import styles from './preview.module.css';
 

@@ -50,4 +50,10 @@ Leave the branch with focused commits and a clean worktree. The handoff must sta
 - known risks or blockers;
 - commit SHA.
 
-The integration agent reviews and merges. Worker agents never merge their own work.
+Merging is not reserved to a separate integration agent. An agent that has
+verified its own work against the checks above may merge it, and is accountable
+for the state of the branch it merges into.
+
+That is a deliberate loosening of an earlier rule, and it holds only while the
+handoff above stays honest: the checks must have been run rather than intended,
+and a known defect must be written down rather than left for the merge to bury.
