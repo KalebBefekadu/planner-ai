@@ -54,6 +54,44 @@ export function RichMarkdownEditor({
         'aria-multiline': 'true',
         role: 'textbox',
       },
+      handleDOMEvents: {
+        /* Ticking a task box on a phone used to change the box and nothing
+           else: the tick appeared, the Markdown still said `- [ ]`, and the
+           next save wrote the unticked line back. Completion was silently
+           discarded on the one device where a checkbox is the natural way to
+           use a list.
+
+           The task item commits its tick with `chain().focus().command(...)`.
+           `focus()` defers the actual focus to an animation frame on a
+           desktop, but on a touch device it focuses the editor *synchronously*
+           -- and that dispatches a selection transaction in the middle of the
+           chain, leaving the chain's own transaction built on a state that no
+           longer exists. ProseMirror rejects it ("Applying a mismatched
+           transaction"), so the tick never reaches the document.
+
+           A tap is what exposes this. A desktop click arrives as `mousedown`,
+           which the task item cancels to keep focus in the editor, so `focus()`
+           finds the editor already focused and returns without touching the
+           selection. A tap never sends `mousedown`, so focus lands on the
+           checkbox and the synchronous path runs.
+
+           Cancelling `pointerdown` restores the desktop's own behaviour on
+           touch: focus stays in the editor, the tap still activates the box,
+           and by the time the tick is committed `focus()` has nothing to do.
+           `false` lets ProseMirror carry on handling the event. */
+        pointerdown: (view, event) => {
+          const target = event.target;
+          if (!(target instanceof Element)) return false;
+          // The tick is a checkbox inside a label, and the label also holds the
+          // visually hidden text that names it. A tap on either one activates
+          // the checkbox, so both have to keep focus where it is.
+          if (!target.closest('li[data-checked] > label')) return false;
+          if (view.hasFocus()) return false;
+          event.preventDefault();
+          view.focus();
+          return false;
+        },
+      },
     },
     onUpdate: ({ editor: updatedEditor }) => {
       const nextMarkdown = richDocumentToPlannerMarkdown(updatedEditor.getJSON());
