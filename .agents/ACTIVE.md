@@ -2,21 +2,22 @@
 
 Roadmap stage: **2 - Workspace, Planner And Delivery Hardening**
 
-## Codex handoff ready: content-free telemetry
+## Codex handoff ready: Operations name their domain
 
-- **Contract:** `.agents/tasks/content-free-telemetry.md`
-- **Branch:** `codex/content-free-telemetry`
-- **Scope:** first slice of EH-06 -- the half that does not need production
-  traffic. The content-free guarantee becomes enforceable: one emitter with a
-  closed field set, and a frozen list of files allowed to write a log line.
-- **Audit result:** no leak. Seven `console.*` calls in `src`, all
-  content-free; the telemetry tables are ids, enums, codes and numbers. It held
-  by care, at seven call sites, with nothing stopping the eighth.
-- **Foundation:** everything below is pushed and open as PRs #243-#254.
-- **Handoff:** `.agents/handoffs/content-free-telemetry.md`
-- **Next:** the rest of EH-06 -- spans, exporter, SLO dashboards and alerting --
-  wants a running system with real traffic. Thirteen branches are stacked
-  unreviewed.
+- **Contract:** `.agents/tasks/operation-owning-domain.md`
+- **Branch:** `codex/operation-owning-domain`
+- **Scope:** EH-04's last bullet. The owning domain becomes a manifest field, a
+  contract column and a pure function the router reads, instead of control flow
+  nobody could ask a question of. **EH-04 is now complete.**
+- **Correction:** two earlier claims about EH-04 were wrong. Deriving the
+  assistant and MCP catalogs from the manifest was already done before this
+  program began, and "undo strategy" is not one of the fields the roadmap asks
+  the manifest to carry -- I added it. Owning domain was the only bullet left.
+- **Foundation:** everything below is pushed and open as PRs #243-#255.
+- **Handoff:** `.agents/handoffs/operation-owning-domain.md`
+- **Next:** nothing unblocked remains. What is left needs a decision (capped
+  deletion retries, `/preview` increment 3), production traffic (the rest of
+  EH-06), or the personal MVP gate (EH-05).
 
 ## CI runs again, and integration itself is red
 

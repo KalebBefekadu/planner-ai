@@ -2047,6 +2047,7 @@ export type Database = {
           created_at: string;
           exposures: string[];
           operation_id: string;
+          owning_domain: string;
           reversible: boolean;
           risk_class: string;
           updated_at: string;
@@ -2055,6 +2056,7 @@ export type Database = {
           created_at?: string;
           exposures: string[];
           operation_id: string;
+          owning_domain: string;
           reversible: boolean;
           risk_class: string;
           updated_at?: string;
@@ -2063,6 +2065,7 @@ export type Database = {
           created_at?: string;
           exposures?: string[];
           operation_id?: string;
+          owning_domain?: string;
           reversible?: boolean;
           risk_class?: string;
           updated_at?: string;
@@ -3355,6 +3358,10 @@ export type Database = {
       note_attachment_reservation_exists: {
         Args: { p_object_key: string };
         Returns: boolean;
+      };
+      operation_handler_for: {
+        Args: { p_operation_id: string };
+        Returns: string;
       };
       persist_capture_proposal_analysis: {
         Args: {

@@ -64,6 +64,34 @@ describe('the Operation contract TypeScript and Postgres agree on', () => {
     expect(drift).toEqual([]);
   });
 
+  /* The owning domain is what decides which handler an Operation reaches. It
+     used to exist only as control flow inside the router's ladder, so nothing
+     could ask the question without dispatching. Now both sides name it, and
+     disagreeing means the manifest thinks an Operation is handled somewhere it
+     is not. */
+  it('agrees on which domain owns every Operation', () => {
+    const drift = Object.entries(operationDefinitions)
+      .filter(
+        ([id, definition]) => databaseOperationContracts[id]?.owningDomain !== definition.domain
+      )
+      .map(([id, definition]) => ({
+        id,
+        typescript: definition.domain,
+        database: databaseOperationContracts[id]?.owningDomain,
+      }));
+    expect(drift).toEqual([]);
+  });
+
+  /* Every Operation resolves to a domain, and `planner` is the router's final
+     fallback rather than a label anybody applies by hand. An Operation landing
+     there unexpectedly is how a typo used to reach the planner handler. */
+  it('names a domain for every Operation', () => {
+    const missing = Object.entries(operationDefinitions)
+      .filter(([, definition]) => !definition.domain)
+      .map(([id]) => id);
+    expect(missing).toEqual([]);
+  });
+
   it('agrees on whether every Operation is reversible', () => {
     const drift = Object.entries(operationDefinitions)
       .filter(

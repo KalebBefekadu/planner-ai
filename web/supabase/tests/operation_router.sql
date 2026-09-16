@@ -1,5 +1,5 @@
 begin;
-select plan(19);
+select plan(28);
 
 -- The Operation router was seven functions, each migration wrapping the last
 -- and putting its own condition in front. The surface validation and the
@@ -137,6 +137,36 @@ select throws_ok(
     'workspace.ai-budget.v1', '{}'::jsonb, 'router-probe-0015', 'ui')$$,
   '28000', 'authentication_required',
   'workspace.ai-budget.v1 still routes ahead of the workspace family'
+);
+
+/* The owning domain, asked directly. Each of these shares a prefix with a
+   later branch, so the ordering that used to be provable only by dispatching
+   is now a select. */
+select is(public.operation_handler_for('note.appearance.v1'), 'note_appearance',
+  'note.appearance.v1 is answered before the note family');
+select is(public.operation_handler_for('note.link.v1'), 'knowledge',
+  'a knowledge link is answered before the note family');
+select is(public.operation_handler_for('note.create.v1'), 'note',
+  'an ordinary note Operation falls through to the note family');
+select is(public.operation_handler_for('review.complete-period.v1'), 'period_review',
+  'review.complete-period.v1 is answered before the review family');
+select is(public.operation_handler_for('review.complete-weekly.v1'), 'review',
+  'the rest of the review family follows it');
+select is(public.operation_handler_for('workspace.ai-budget.v1'), 'ai_budget',
+  'workspace.ai-budget.v1 is answered before the workspace family');
+select is(public.operation_handler_for('goal.create.v1'), 'planner',
+  'anything unclaimed belongs to the planner, which is the router fallback');
+
+/* The column and the function cannot disagree, because a trigger writes it
+   with that function. This is what the TypeScript comparison reads. */
+select is(
+  (select count(*)::integer from public.operation_contracts
+   where owning_domain is distinct from public.operation_handler_for(operation_id)),
+  0, 'every contract row carries the domain its own router would choose'
+);
+select is(
+  (select count(*)::integer from public.operation_contracts where owning_domain is null),
+  0, 'no contract row is missing a domain'
 );
 
 select * from finish();

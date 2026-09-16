@@ -318,6 +318,7 @@ export const operationDefinitions = {
     risk: 'low',
     exposure: ['ui', 'chat', 'mcp'],
     reversible: true,
+    domain: 'planner',
     input: z.object({ bodyMarkdown: z.string().min(3).max(50_000) }).strict(),
     output: visionOutput,
   },
@@ -326,6 +327,7 @@ export const operationDefinitions = {
     risk: 'low',
     exposure: ['ui', 'chat', 'mcp'],
     reversible: true,
+    domain: 'planner',
     input: z
       .object({
         title: z.string().trim().min(3).max(1_000),
@@ -350,6 +352,7 @@ export const operationDefinitions = {
     risk: 'low',
     exposure: ['ui', 'chat', 'mcp'],
     reversible: true,
+    domain: 'planner',
     input: z
       .object({
         id,
@@ -364,6 +367,7 @@ export const operationDefinitions = {
     risk: 'low',
     exposure: ['ui', 'chat', 'mcp'],
     reversible: true,
+    domain: 'plan_edit',
     input: z
       .object({
         id,
@@ -391,6 +395,7 @@ export const operationDefinitions = {
     risk: 'medium',
     exposure: ['ui', 'chat', 'mcp'],
     reversible: true,
+    domain: 'planner',
     input: z.object({ id, expectedVersion: version }).strict(),
     output: goalOutput,
   },
@@ -399,6 +404,7 @@ export const operationDefinitions = {
     risk: 'low',
     exposure: ['ui', 'chat', 'mcp'],
     reversible: true,
+    domain: 'planner',
     input: z
       .object({
         title: z.string().trim().min(3).max(1_000),
@@ -417,6 +423,7 @@ export const operationDefinitions = {
     risk: 'low',
     exposure: ['ui', 'chat', 'mcp'],
     reversible: true,
+    domain: 'daily_execution',
     input: z
       .object({
         id,
@@ -433,6 +440,7 @@ export const operationDefinitions = {
     risk: 'low',
     exposure: ['ui', 'chat', 'mcp'],
     reversible: true,
+    domain: 'plan_edit',
     input: z
       .object({
         id,
@@ -454,6 +462,7 @@ export const operationDefinitions = {
     risk: 'low',
     exposure: ['ui', 'chat', 'mcp'],
     reversible: true,
+    domain: 'daily_execution',
     input: z
       .object({
         id,
@@ -468,6 +477,7 @@ export const operationDefinitions = {
     risk: 'medium',
     exposure: ['ui', 'chat', 'mcp'],
     reversible: true,
+    domain: 'planner',
     input: z.object({ id, expectedVersion: version }).strict(),
     output: actionOutput,
   },
@@ -476,6 +486,7 @@ export const operationDefinitions = {
     risk: 'low',
     exposure: ['ui', 'chat', 'mcp'],
     reversible: true,
+    domain: 'action_template',
     input: z
       .object({
         title: z.string().trim().min(3).max(1_000),
@@ -492,6 +503,7 @@ export const operationDefinitions = {
     risk: 'low',
     exposure: ['ui', 'chat', 'mcp'],
     reversible: true,
+    domain: 'action_template',
     input: z
       .object({
         id,
@@ -510,6 +522,7 @@ export const operationDefinitions = {
     risk: 'low',
     exposure: ['ui', 'chat', 'mcp'],
     reversible: true,
+    domain: 'action_template',
     input: z
       .object({
         id,
@@ -524,6 +537,7 @@ export const operationDefinitions = {
     risk: 'low',
     exposure: ['ui', 'chat', 'mcp', 'automation'],
     reversible: true,
+    domain: 'action_template',
     input: z
       .object({
         id,
@@ -538,6 +552,7 @@ export const operationDefinitions = {
     risk: 'medium',
     exposure: ['ui', 'chat', 'mcp'],
     reversible: true,
+    domain: 'action_template',
     input: z.object({ id, expectedVersion: version }).strict(),
     output: actionTemplateOutput,
   },
@@ -546,6 +561,7 @@ export const operationDefinitions = {
     risk: 'low',
     exposure: ['ui', 'chat', 'mcp', 'automation'],
     reversible: true,
+    domain: 'notification',
     input: z.object({}).strict(),
     output: notificationRefreshOutput,
   },
@@ -554,6 +570,7 @@ export const operationDefinitions = {
     risk: 'low',
     exposure: ['ui', 'chat', 'mcp'],
     reversible: true,
+    domain: 'notification',
     input: z.object({ id, expectedVersion: version }).strict(),
     output: notificationOutput,
   },
@@ -562,6 +579,7 @@ export const operationDefinitions = {
     risk: 'low',
     exposure: ['ui', 'chat', 'mcp'],
     reversible: true,
+    domain: 'notification',
     input: z.object({ id, expectedVersion: version }).strict(),
     output: notificationOutput,
   },
@@ -570,6 +588,7 @@ export const operationDefinitions = {
     risk: 'low',
     exposure: ['ui', 'chat', 'mcp'],
     reversible: true,
+    domain: 'notification',
     input: z
       .object({
         inAppEnabled: z.boolean(),
@@ -586,6 +605,7 @@ export const operationDefinitions = {
     risk: 'low',
     exposure: ['ui', 'chat', 'mcp'],
     reversible: true,
+    domain: 'conversation',
     input: z
       .object({
         id,
@@ -600,6 +620,7 @@ export const operationDefinitions = {
     risk: 'low',
     exposure: ['ui', 'chat', 'mcp'],
     reversible: true,
+    domain: 'conversation',
     input: z
       .object({
         id,
@@ -614,6 +635,7 @@ export const operationDefinitions = {
     risk: 'high',
     exposure: ['ui', 'chat'],
     reversible: false,
+    domain: 'conversation',
     input: z
       .object({
         id,
@@ -628,6 +650,7 @@ export const operationDefinitions = {
     risk: 'low',
     exposure: ['ui'],
     reversible: true,
+    domain: 'capture_proposal',
     input: z
       .object({
         id,
@@ -644,6 +667,7 @@ export const operationDefinitions = {
     risk: 'low',
     exposure: ['ui', 'chat'],
     reversible: true,
+    domain: 'capture_proposal',
     input: z.object({ id, expectedVersion: version }).strict(),
     output: captureProposalBatchOutput,
   },
@@ -652,6 +676,7 @@ export const operationDefinitions = {
     risk: 'medium',
     exposure: ['ui', 'chat'],
     reversible: false,
+    domain: 'capture_proposal',
     input: z.object({ id, expectedVersion: version }).strict(),
     output: captureProposalBatchOutput,
   },
@@ -660,6 +685,7 @@ export const operationDefinitions = {
     risk: 'low',
     exposure: ['ui', 'chat', 'mcp'],
     reversible: true,
+    domain: 'planner',
     input: z
       .object({
         rawText: z
@@ -676,6 +702,7 @@ export const operationDefinitions = {
     risk: 'low',
     exposure: ['ui', 'chat', 'mcp'],
     reversible: true,
+    domain: 'note',
     input: z
       .object({
         title: z.string().trim().min(1).max(300),
@@ -690,6 +717,7 @@ export const operationDefinitions = {
     risk: 'low',
     exposure: ['ui', 'chat', 'mcp'],
     reversible: true,
+    domain: 'note',
     input: z
       .object({
         id,
@@ -705,6 +733,7 @@ export const operationDefinitions = {
     risk: 'low',
     exposure: ['ui', 'chat', 'mcp'],
     reversible: true,
+    domain: 'note',
     input: z
       .object({ id, parentNoteId: id.nullable(), sortKey: z.number(), expectedVersion: version })
       .strict(),
@@ -715,6 +744,7 @@ export const operationDefinitions = {
     risk: 'medium',
     exposure: ['ui', 'chat', 'mcp'],
     reversible: true,
+    domain: 'note',
     input: z.object({ id, expectedVersion: version }).strict(),
     output: noteOutput,
   },
@@ -723,6 +753,7 @@ export const operationDefinitions = {
     risk: 'low',
     exposure: ['ui', 'chat', 'mcp'],
     reversible: true,
+    domain: 'note',
     input: z.object({ id, aiExcluded: z.boolean(), expectedVersion: version }).strict(),
     output: noteOutput,
   },
@@ -739,6 +770,7 @@ export const operationDefinitions = {
        have nothing to replay. Reset is offered directly in the document
        header instead. */
     reversible: false,
+    domain: 'note_appearance',
     input: z
       .object({
         id,
@@ -755,6 +787,7 @@ export const operationDefinitions = {
     risk: 'low',
     exposure: ['ui', 'chat', 'mcp'],
     reversible: true,
+    domain: 'note',
     input: z.object({ id, favorite: z.boolean(), expectedVersion: version }).strict(),
     output: noteOutput,
   },
@@ -764,6 +797,7 @@ export const operationDefinitions = {
     risk: 'low',
     exposure: ['ui'],
     reversible: true,
+    domain: 'note_import',
     input: z
       .object({
         sourceName: z.string().trim().min(1).max(255),
@@ -814,6 +848,7 @@ export const operationDefinitions = {
     risk: 'low',
     exposure: ['ui', 'chat'],
     reversible: true,
+    domain: 'note_import',
     input: z.object({ jobId: id, batchSize: z.number().int().min(1).max(50) }).strict(),
     output: noteImportOutput,
   },
@@ -825,6 +860,7 @@ export const operationDefinitions = {
     risk: 'low',
     exposure: ['ui'],
     reversible: false,
+    domain: 'note_import',
     input: z.object({ jobId: id }).strict(),
     output: noteImportOutput,
   },
@@ -833,6 +869,7 @@ export const operationDefinitions = {
     risk: 'low',
     exposure: ['ui', 'chat', 'mcp'],
     reversible: true,
+    domain: 'memory',
     input: z
       .object({
         statement: z.string().trim().min(1).max(2_000),
@@ -855,6 +892,7 @@ export const operationDefinitions = {
     risk: 'low',
     exposure: ['ui', 'chat', 'mcp'],
     reversible: true,
+    domain: 'memory',
     input: z
       .object({ id, statement: z.string().trim().min(1).max(2_000), expectedVersion: version })
       .strict(),
@@ -865,6 +903,7 @@ export const operationDefinitions = {
     risk: 'medium',
     exposure: ['ui', 'chat', 'mcp'],
     reversible: true,
+    domain: 'trash',
     input: trashMoveInput,
     output: trashOutput,
   },
@@ -873,6 +912,7 @@ export const operationDefinitions = {
     risk: 'low',
     exposure: ['ui', 'chat', 'mcp'],
     reversible: true,
+    domain: 'trash',
     input: z.object({ batchId: id }).strict(),
     output: trashOutput,
   },
@@ -881,6 +921,7 @@ export const operationDefinitions = {
     risk: 'high',
     exposure: ['ui', 'chat'],
     reversible: false,
+    domain: 'trash',
     input: z
       .object({ retentionDays: z.literal(30), confirmation: z.literal('EMPTY TRASH') })
       .strict(),
@@ -891,6 +932,7 @@ export const operationDefinitions = {
     risk: 'medium',
     exposure: ['ui'],
     reversible: false,
+    domain: 'operation_undo',
     input: z.object({ receiptId: id }).strict(),
     output: operationUndoOutput,
   },
@@ -899,6 +941,7 @@ export const operationDefinitions = {
     risk: 'low',
     exposure: ['ui', 'chat', 'mcp'],
     reversible: true,
+    domain: 'knowledge',
     input: z
       .object({
         noteId: id,
@@ -912,6 +955,7 @@ export const operationDefinitions = {
     risk: 'low',
     exposure: ['ui', 'chat', 'mcp'],
     reversible: true,
+    domain: 'knowledge',
     input: z
       .object({
         sourceNoteId: id,
@@ -926,6 +970,7 @@ export const operationDefinitions = {
     risk: 'low',
     exposure: ['ui', 'chat', 'mcp'],
     reversible: true,
+    domain: 'knowledge',
     input: z.object({ linkId: id }).strict(),
     output: noteLinkOutput,
   },
@@ -934,6 +979,7 @@ export const operationDefinitions = {
     risk: 'low',
     exposure: ['ui', 'chat', 'mcp'],
     reversible: true,
+    domain: 'knowledge',
     input: z.object({ captureId: id, noteId: id }).strict(),
     output: captureFileOutput,
   },
@@ -943,6 +989,7 @@ export const operationDefinitions = {
     risk: 'low',
     exposure: ['ui', 'chat', 'mcp'],
     reversible: true,
+    domain: 'capture_action_filing',
     input: z
       .object({
         captureId: id,
@@ -963,6 +1010,7 @@ export const operationDefinitions = {
     risk: 'medium',
     exposure: ['ui', 'chat'],
     reversible: true,
+    domain: 'review',
     input: z
       .object({
         startsOn: date,
@@ -997,6 +1045,7 @@ export const operationDefinitions = {
     risk: 'low',
     exposure: ['ui', 'chat'],
     reversible: true,
+    domain: 'period_review',
     input: z
       .object({
         kind: z.enum(['monthly', 'quarterly']),
@@ -1012,6 +1061,7 @@ export const operationDefinitions = {
     risk: 'low',
     exposure: ['ui', 'chat', 'mcp'],
     reversible: true,
+    domain: 'note_relation',
     input: z.object({ noteId: id, goalId: id }).strict(),
     output: notePlanningLinkOutput,
   },
@@ -1020,6 +1070,7 @@ export const operationDefinitions = {
     risk: 'low',
     exposure: ['ui', 'chat', 'mcp'],
     reversible: true,
+    domain: 'note_relation',
     input: z.object({ noteId: id, goalId: id }).strict(),
     output: notePlanningLinkOutput,
   },
@@ -1028,6 +1079,7 @@ export const operationDefinitions = {
     risk: 'low',
     exposure: ['ui', 'chat', 'mcp'],
     reversible: true,
+    domain: 'note_relation',
     input: z.object({ noteId: id, actionId: id }).strict(),
     output: notePlanningLinkOutput,
   },
@@ -1036,6 +1088,7 @@ export const operationDefinitions = {
     risk: 'low',
     exposure: ['ui', 'chat', 'mcp'],
     reversible: true,
+    domain: 'note_relation',
     input: z.object({ noteId: id, actionId: id }).strict(),
     output: notePlanningLinkOutput,
   },
@@ -1044,6 +1097,7 @@ export const operationDefinitions = {
     risk: 'medium',
     exposure: ['ui', 'chat'],
     reversible: true,
+    domain: 'workspace',
     input: z
       .object({
         timezone: z.string().min(1).max(80),
@@ -1060,6 +1114,7 @@ export const operationDefinitions = {
     risk: 'medium',
     exposure: ['ui'],
     reversible: true,
+    domain: 'guided_onboarding',
     input: z
       .object({
         timezone: z.string().min(1).max(80),
@@ -1085,6 +1140,7 @@ export const operationDefinitions = {
     risk: 'medium',
     exposure: ['ui', 'chat'],
     reversible: true,
+    domain: 'ai_budget',
     input: z.object({ softBudgetCents: z.number().int().min(100).max(2000) }).strict(),
     output: aiBudgetOutput,
   },
@@ -1093,6 +1149,7 @@ export const operationDefinitions = {
     risk: 'low',
     exposure: ['ui', 'chat', 'mcp'],
     reversible: true,
+    domain: 'daily_execution',
     input: z.object({ focusOn: date, actionIds: z.array(id).max(5) }).strict(),
     output: dailyFocusOutput,
   },
@@ -1101,6 +1158,7 @@ export const operationDefinitions = {
     risk: 'high',
     exposure: ['ui'],
     reversible: true,
+    domain: 'account',
     input: z.object({ confirmation: z.literal('DELETE MY ACCOUNT') }).strict(),
     output: accountDeletionOutput,
   },
@@ -1109,6 +1167,7 @@ export const operationDefinitions = {
     risk: 'low',
     exposure: ['ui'],
     reversible: false,
+    domain: 'account',
     input: z.object({ requestId: id }).strict(),
     output: accountDeletionOutput,
   },
@@ -1170,6 +1229,14 @@ export const undoableOperationIds = [
 ] as const satisfies readonly OperationId[];
 
 export type OperationId = keyof typeof operationDefinitions;
+/**
+ * Which domain owns an Operation, and therefore which handler the database
+ * router sends it to. Carried here so the manifest is complete on its own
+ * terms, and compared against `operation_handler_for` in the parity test --
+ * a handler moved on one side and not the other is then a failing check rather
+ * than something found in production.
+ */
+export type OperationDomain = (typeof operationDefinitions)[OperationId]['domain'];
 export type OperationSurface = 'ui' | 'chat' | 'mcp' | 'automation' | 'system';
 export type OperationInput<TId extends OperationId> = z.input<
   (typeof operationDefinitions)[TId]['input']

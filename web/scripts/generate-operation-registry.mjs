@@ -16,7 +16,7 @@ import { execFileSync } from 'node:child_process';
 import { writeFileSync } from 'node:fs';
 
 const tables = {
-  operation_contracts: ['operation_id', 'risk_class', 'exposures', 'reversible'],
+  operation_contracts: ['operation_id', 'risk_class', 'exposures', 'reversible', 'owning_domain'],
   operation_undo_support: ['operation_id', 'strategy'],
 };
 
@@ -117,13 +117,14 @@ const contractLines = contracts
     riskClass: row.risk_class,
     exposures: readTextArray(row.exposures, row.operation_id),
     reversible: row.reversible === 'true',
+    owningDomain: row.owning_domain,
   }))
   .sort((first, second) => first.id.localeCompare(second.id))
   .map(
     (row) =>
       `  '${row.id}': { riskClass: '${row.riskClass}', exposures: [${row.exposures
         .map((value) => `'${value}'`)
-        .join(', ')}], reversible: ${row.reversible} },`
+        .join(', ')}], reversible: ${row.reversible}, owningDomain: '${row.owningDomain}' },`
   );
 
 const undoLines = undo
@@ -142,6 +143,7 @@ export type GeneratedOperationContract = {
   riskClass: string;
   exposures: readonly string[];
   reversible: boolean;
+  owningDomain: string;
 };
 
 export const databaseOperationContracts: Readonly<Record<string, GeneratedOperationContract>> = {
