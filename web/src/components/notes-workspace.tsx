@@ -1,9 +1,12 @@
 'use client';
 
+import dynamic from 'next/dynamic';
+
 import {
   Fragment,
   type KeyboardEvent,
   useCallback,
+  useDeferredValue,
   useEffect,
   useMemo,
   useRef,
@@ -71,7 +74,21 @@ import {
   type NoteKnowledgeContext,
   type NoteView,
 } from '@/app/notes/actions';
-import { nextParentMove, nextSiblingMove, parentCandidateIds } from '@/lib/notes/sibling-order';
+import {
+  ancestorIds,
+  availableNoteMoves,
+  childrenByParent as groupChildrenByParent,
+  filingCandidates as filingCandidatesFor,
+  isBranchExpanded,
+  toggleBranch,
+} from '@/lib/notes/note-tree';
+import { attachmentStatus, restorableUntil } from '@/lib/notes/attachment-display';
+import {
+  collapsedNotesSnapshot,
+  serverCollapsedNotesSnapshot,
+  subscribeToCollapsedNotes,
+  writeCollapsedNotes,
+} from '@/lib/notes/collapsed-branches';
 import { operationFailureCode } from '@/lib/operations';
 import {
   conflictSummary,
@@ -81,10 +98,13 @@ import {
 } from '@/lib/notes/conflict-resolution';
 import { NoteAppearanceHeader } from '@/components/note-appearance-header';
 import { noteLocationLabel, notePath, orderFavorites } from '@/lib/notes/note-paths';
-import { RichMarkdownEditor } from '@/components/rich-markdown-editor';
 import { useVoiceTranscription } from '@/lib/use-voice-transcription';
 import { extractPlannerMarkdownHeadings } from '@/lib/markdown/contract';
-import { continueMarkdownList, wrapMarkdownSelection } from '@/lib/markdown/editing';
+import {
+  continueMarkdownList,
+  insertMarkdownTable as buildMarkdownTable,
+  wrapMarkdownSelection,
+} from '@/lib/markdown/editing';
 import { plannerMarkdownSupportsRichEditing } from '@/lib/markdown/rich-editor';
 import { actionFailureMessage } from '@/lib/operations/failure-message';
 import {
@@ -93,6 +113,23 @@ import {
   rememberNoteDraft,
   subscribeToNoteDrafts,
 } from '@/lib/note-draft-recovery';
+
+// TipTap and ProseMirror are the largest client dependency in the product, and
+// the editor that needs them is never what a Note opens in: the mode starts at
+// 'source' and is reset to 'source' every time the active Note changes. Loading
+// them statically made every visitor to Notes download an editor most sessions
+// never switch to. Fetch them when the person actually asks for rich editing.
+const RichMarkdownEditor = dynamic(
+  () => import('@/components/rich-markdown-editor').then((m) => m.RichMarkdownEditor),
+  {
+    ssr: false,
+    loading: () => (
+      <div className="rich-markdown-editor-loading" role="status" aria-live="polite">
+        Loading the rich editor...
+      </div>
+    ),
+  }
+);
 
 function errorMessage(error: unknown) {
   return actionFailureMessage(error, 'Unable to save this Note.');
@@ -122,45 +159,6 @@ export function NoteMarkdownPreview({ markdown }: { markdown: string }) {
 }
 
 export type InspectorView = 'properties' | 'links' | 'history';
-
-type NoteAttachment = NoteKnowledgeContext['attachments'][number];
-
-const attachmentTypeNames: Record<string, string> = {
-  'application/pdf': 'PDF',
-  'image/jpeg': 'JPEG image',
-  'image/png': 'PNG image',
-  'text/markdown': 'Markdown file',
-  'text/plain': 'text file',
-};
-
-function attachmentSize(byteSize: number) {
-  if (byteSize < 1024) return `${byteSize} bytes`;
-  if (byteSize < 1024 * 1024) return `${Math.round(byteSize / 1024)} KB`;
-  return `${(byteSize / (1024 * 1024)).toFixed(1)} MB`;
-}
-
-// What the person is told about a file. "Security review pending" used to be
-// shown for every attachment forever, which described a review that was never
-// going to run and a file that could never be opened. Each state here is
-// something that is actually true of the stored file.
-function attachmentStatus(attachment: NoteAttachment) {
-  if (attachment.scanState === 'rejected') {
-    return `Not available: contents do not match a ${
-      attachmentTypeNames[attachment.mediaType] ?? 'file'
-    }`;
-  }
-  if (attachment.scanState === 'quarantined') return 'Checking this file';
-  return attachmentSize(attachment.byteSize);
-}
-
-function restorableUntil(purgeAfter: string | null) {
-  if (!purgeAfter) return 'Restore is no longer available.';
-  return `Restore by ${new Date(purgeAfter).toLocaleDateString(undefined, {
-    day: 'numeric',
-    month: 'short',
-    year: 'numeric',
-  })}.`;
-}
 
 export function NotesWorkspace({
   notes,
@@ -195,6 +193,37 @@ export function NotesWorkspace({
     favorites.find((note) => note.id === selectedId) ??
     null;
   const activeNoteId = selected?.id ?? null;
+
+  /* The tree rendered every page at every depth, always open. That is fine for
+     the handful of Notes a fresh workspace holds and unusable after a real
+     Notion import, where the whole hierarchy arrives at once and the sidebar
+     becomes a flat wall of titles you have to scroll past to reach anything.
+     Pages that hold pages now open and close.
+
+     Closed is the default, because the alternative is that importing a
+     workspace buries its own top level. The exception is the page being read:
+     its ancestors are forced open at render, so the active page is always
+     reachable in the tree however it was opened -- from search, a backlink, or
+     a link in another page. */
+  const collapsedIds = useSyncExternalStore(
+    subscribeToCollapsedNotes,
+    collapsedNotesSnapshot,
+    serverCollapsedNotesSnapshot
+  );
+
+  const childrenByParent = useMemo(() => groupChildrenByParent(notes), [notes]);
+
+  // The chain above the open page, so reading a deep page reveals where it
+  // lives rather than leaving the tree closed around it.
+  const ancestorsOfActive = useMemo(() => ancestorIds(notes, activeNoteId), [notes, activeNoteId]);
+
+  function isExpanded(noteId: string) {
+    return isBranchExpanded(collapsedIds, ancestorsOfActive, noteId);
+  }
+
+  function toggleExpanded(noteId: string) {
+    writeCollapsedNotes(toggleBranch(collapsedIds, ancestorsOfActive, noteId));
+  }
   const [title, setTitle] = useState(selected?.title ?? '');
   const titleRef = useRef<HTMLTextAreaElement>(null);
 
@@ -286,31 +315,32 @@ export function NotesWorkspace({
     () => (selectedId ? notePath(notes, selectedId).slice(0, -1) : []),
     [notes, selectedId]
   );
-  const outline = useMemo(() => extractPlannerMarkdownHeadings(body), [body]);
-  const richEditable = useMemo(() => plannerMarkdownSupportsRichEditing(body), [body]);
+  /* Two things parse the whole document: the outline, and the check deciding
+     whether rich mode is safe. Both were bound to `body`, which changes on
+     every keystroke, so together they ran nearly a second and a half of
+     synchronous work between one letter and the next on a Note somebody has
+     actually kept -- 305ms and 1.16s at 6,000 lines. Typing into a long Note
+     was unusable, and neither cost shows up on the short documents the rest
+     of the tests use.
+
+     Neither answer is part of writing: one is a map of the Note, the other
+     gates whether Rich is offered. Both can lag the draft by a moment, so
+     both read a deferred copy and run when typing settles instead. */
+  const settledBody = useDeferredValue(body);
+  const outline = useMemo(() => extractPlannerMarkdownHeadings(settledBody), [settledBody]);
+  const richEditable = useMemo(
+    () => plannerMarkdownSupportsRichEditing(settledBody),
+    [settledBody]
+  );
   const activeEditorMode = editorMode === 'rich' && !richEditable ? 'source' : editorMode;
   const wordCount = body.trim() ? body.trim().split(/\s+/).length : 0;
   // Which moves are open to this Note, decided by the same functions the server
   // uses to perform them. Working it out separately here would let the controls
   // offer a move the server then refuses, or hide one it would have allowed.
-  const availableMoves = useMemo(() => {
-    const none = { up: false, down: false, indent: false, outdent: false };
-    if (!selected) return none;
-    const siblings = notes
-      .filter((note) => note.parentNoteId === selected.parentNoteId)
-      .map((note) => ({ id: note.id, sortKey: note.sortKey }));
-    const tree = notes.map((note) => ({
-      id: note.id,
-      parentNoteId: note.parentNoteId,
-      sortKey: note.sortKey,
-    }));
-    return {
-      up: nextSiblingMove(siblings, selected.id, 'up').outcome !== 'edge',
-      down: nextSiblingMove(siblings, selected.id, 'down').outcome !== 'edge',
-      indent: nextParentMove(tree, selected.id, 'indent').outcome !== 'edge',
-      outdent: nextParentMove(tree, selected.id, 'outdent').outcome !== 'edge',
-    };
-  }, [notes, selected]);
+  const availableMoves = useMemo(
+    () => availableNoteMoves(notes, selected?.id ?? null),
+    [notes, selected]
+  );
 
   function applyMove(move: () => Promise<NoteView | null>) {
     startTransition(async () => {
@@ -474,18 +504,38 @@ export function NotesWorkspace({
   }
 
   function renderNoteLevel(parentNoteId: string | null) {
-    const level = notes
-      .filter((note) => note.parentNoteId === parentNoteId)
-      .sort((first, second) => first.sortKey - second.sortKey);
+    const level = childrenByParent.get(parentNoteId) ?? [];
     if (!level.length) return null;
     return (
       <ul className="note-tree-level">
-        {level.map((note) => (
-          <li key={note.id}>
-            {renderNoteButton(note)}
-            {renderNoteLevel(note.id)}
-          </li>
-        ))}
+        {level.map((note) => {
+          const holdsPages = (childrenByParent.get(note.id) ?? []).length > 0;
+          const expanded = holdsPages && isExpanded(note.id);
+          return (
+            <li key={note.id}>
+              <div className="note-tree-row">
+                {holdsPages ? (
+                  <button
+                    className="note-tree-disclosure"
+                    type="button"
+                    aria-expanded={expanded}
+                    aria-label={`${expanded ? 'Collapse' : 'Expand'} ${note.title}`}
+                    onClick={() => toggleExpanded(note.id)}
+                  >
+                    <ChevronRight size={13} aria-hidden="true" />
+                  </button>
+                ) : (
+                  /* Pages without children keep the same title alignment as
+                     pages with them, so a level reads as one column rather
+                     than a ragged edge. */
+                  <span className="note-tree-disclosure-placeholder" aria-hidden="true" />
+                )}
+                {renderNoteButton(note)}
+              </div>
+              {expanded ? renderNoteLevel(note.id) : null}
+            </li>
+          );
+        })}
       </ul>
     );
   }
@@ -688,19 +738,11 @@ export function NotesWorkspace({
   function insertMarkdownTable() {
     const editor = editorRef.current;
     if (!editor) return;
-    const start = editor.selectionStart;
-    const end = editor.selectionEnd;
-    const before = body.slice(0, start);
-    const after = body.slice(end);
-    const table = '| Column | Column |\n| --- | --- |\n| Value | Value |';
-    const prefix = before && !before.endsWith('\n') ? '\n\n' : '';
-    const suffix = after && !after.startsWith('\n') ? '\n\n' : '';
-    const nextBody = `${before}${prefix}${table}${suffix}${after}`;
-    const selectionStart = before.length + prefix.length + 2;
-    setBody(nextBody);
+    const edit = buildMarkdownTable(body, editor.selectionStart, editor.selectionEnd);
+    setBody(edit.markdown);
     window.requestAnimationFrame(() => {
       editor.focus();
-      editor.setSelectionRange(selectionStart, selectionStart + 'Column'.length);
+      editor.setSelectionRange(edit.selectionStart, edit.selectionEnd);
     });
   }
 
@@ -726,6 +768,13 @@ export function NotesWorkspace({
       editor.setSelectionRange(edit.selectionStart, edit.selectionEnd);
     });
   }
+
+  // The rich editor arrives asynchronously, so between choosing Rich and the
+  // chunk loading there is a window with no editor to format. Report the
+  // formatting controls as unavailable for that window rather than leaving
+  // buttons that look ready and quietly do nothing.
+  const formattingUnavailable =
+    activeEditorMode === 'preview' || (activeEditorMode === 'rich' && !richEditor);
 
   function formatRichOrSource(sourceEdit: () => void, richEdit: (editor: Editor) => void) {
     if (activeEditorMode === 'rich') {
@@ -822,16 +871,10 @@ export function NotesWorkspace({
   // A Note cannot be filed under itself or under anything hanging beneath it,
   // because that would take the whole branch out of the tree. Those places are
   // never offered, and the server checks again against the live hierarchy.
-  const filingCandidates = useMemo(() => {
-    if (!selected) return [];
-    const tree = notes.map((note) => ({
-      id: note.id,
-      parentNoteId: note.parentNoteId,
-      sortKey: note.sortKey,
-    }));
-    const allowed = new Set(parentCandidateIds(tree, selected.id));
-    return notes.filter((note) => allowed.has(note.id) && note.id !== selected.parentNoteId);
-  }, [notes, selected]);
+  const filingCandidates = useMemo(
+    () => filingCandidatesFor(notes, selected?.id ?? null),
+    [notes, selected]
+  );
   const connectionCount =
     (knowledge?.links.length ?? 0) +
     (knowledge?.goalLinks.length ?? 0) +
@@ -1238,7 +1281,7 @@ export function NotesWorkspace({
                       (editor) => editor.chain().focus().toggleHeading({ level: 2 }).run()
                     )
                   }
-                  disabled={activeEditorMode === 'preview'}
+                  disabled={formattingUnavailable}
                 >
                   <Heading2 size={16} />
                 </button>
@@ -1255,7 +1298,7 @@ export function NotesWorkspace({
                       (editor) => editor.chain().focus().toggleBold().run()
                     )
                   }
-                  disabled={activeEditorMode === 'preview'}
+                  disabled={formattingUnavailable}
                 >
                   <Bold size={16} />
                 </button>
@@ -1272,7 +1315,7 @@ export function NotesWorkspace({
                       (editor) => editor.chain().focus().toggleItalic().run()
                     )
                   }
-                  disabled={activeEditorMode === 'preview'}
+                  disabled={formattingUnavailable}
                 >
                   <Italic size={16} />
                 </button>
@@ -1289,7 +1332,7 @@ export function NotesWorkspace({
                       (editor) => editor.chain().focus().toggleBulletList().run()
                     )
                   }
-                  disabled={activeEditorMode === 'preview'}
+                  disabled={formattingUnavailable}
                 >
                   <List size={16} />
                 </button>
@@ -1306,7 +1349,7 @@ export function NotesWorkspace({
                       (editor) => editor.chain().focus().toggleTaskList().run()
                     )
                   }
-                  disabled={activeEditorMode === 'preview'}
+                  disabled={formattingUnavailable}
                 >
                   <ListTodo size={16} />
                 </button>
@@ -1326,7 +1369,7 @@ export function NotesWorkspace({
                         .run()
                     )
                   }
-                  disabled={activeEditorMode === 'preview'}
+                  disabled={formattingUnavailable}
                 >
                   <Table2 size={16} />
                 </button>
@@ -1336,7 +1379,7 @@ export function NotesWorkspace({
                   aria-label={voice.isRecording ? 'Stop dictation' : 'Start dictation'}
                   aria-pressed={voice.isRecording}
                   onClick={() => (voice.isRecording ? voice.stop() : void voice.start())}
-                  disabled={activeEditorMode === 'preview' || voice.isTranscribing}
+                  disabled={formattingUnavailable || voice.isTranscribing}
                 >
                   <Mic size={16} />
                 </button>

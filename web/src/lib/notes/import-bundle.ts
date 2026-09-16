@@ -10,6 +10,7 @@ export {
 } from './import-limits';
 import { IMPORT_LIMITS, IMPORT_UPLOAD_LIMIT_LABEL, formatImportBytes } from './import-limits';
 import { describeLinkOutcome, resolveInternalLinks } from './import-links';
+import { convertNotionHtmlBlocks, describeNotionHtmlOutcome } from './import-notion-html';
 import { isSupportedVaultManifest, VAULT_MANIFEST_PATH } from '@/lib/notes/vault-format';
 
 export type ImportSourceFile = {
@@ -227,7 +228,45 @@ function csvCandidates(sourcePath: string, body: string, parentSourcePath: strin
   });
 }
 
-function addFolders(files: ImportSourceFile[], candidates: NoteImportCandidate[]) {
+/**
+ * Notion writes a page that has children as two entries with the same name:
+ * the page itself, `Weekly review <id>.md`, and a folder, `Weekly review
+ * <id>/`, holding its children. They are one page, and importing them as two
+ * produced a duplicate of every page in the workspace that has anything filed
+ * under it -- one copy holding the text with no children, and an empty copy
+ * beside it holding all of them. On a real workspace that is most of the tree.
+ *
+ * The folder is therefore not a page. It maps to the file it belongs to, and
+ * anything inside it is filed under that page instead.
+ *
+ * A folder with no such sibling is a real container -- that is what a plain
+ * folder of Markdown looks like -- and still becomes a Note of its own.
+ */
+function pageFolderTargets(files: ImportSourceFile[]) {
+  const filePaths = new Set(files.map((file) => file.path));
+  const targets = new Map<string, string>();
+  for (const file of files) {
+    const parts = file.path.split('/').slice(0, -1);
+    for (let index = 0; index < parts.length; index += 1) {
+      const folder = `${parts.slice(0, index + 1).join('/')}/`;
+      if (targets.has(folder)) continue;
+      const withoutSlash = folder.slice(0, -1);
+      // Markdown first: where a database has both a CSV and a folder of row
+      // pages, the folder is the database page and the CSV only indexes it.
+      const paired = [`${withoutSlash}.md`, `${withoutSlash}.markdown`].find((candidate) =>
+        filePaths.has(candidate)
+      );
+      if (paired) targets.set(folder, paired);
+    }
+  }
+  return targets;
+}
+
+function addFolders(
+  files: ImportSourceFile[],
+  candidates: NoteImportCandidate[],
+  pageFolders: Map<string, string>
+) {
   const folders = new Set<string>();
   for (const file of files) {
     const parts = file.path.split('/').slice(0, -1);
@@ -236,6 +275,7 @@ function addFolders(files: ImportSourceFile[], candidates: NoteImportCandidate[]
     }
   }
   for (const folder of [...folders].sort((a, b) => a.split('/').length - b.split('/').length)) {
+    if (pageFolders.has(folder)) continue;
     const withoutSlash = folder.slice(0, -1);
     const parent = withoutSlash.includes('/')
       ? `${withoutSlash.slice(0, withoutSlash.lastIndexOf('/'))}/`
@@ -244,9 +284,52 @@ function addFolders(files: ImportSourceFile[], candidates: NoteImportCandidate[]
       sourcePath: folder,
       title: stripNotionIdSuffix(path.posix.basename(withoutSlash)).slice(0, 300),
       bodyMarkdown: '',
-      parentSourcePath: parent,
+      parentSourcePath: parent === null ? null : (pageFolders.get(parent) ?? parent),
       unsupportedReason: null,
     });
+  }
+}
+
+/**
+ * Notion exports a database twice: as `Projects <id>.csv`, one row per page,
+ * and as `Projects <id>/`, the row pages themselves with their real bodies.
+ * Importing both gave every row two Notes -- the page, and a stub rebuilt from
+ * the row's columns holding the same title and none of the writing.
+ *
+ * The page wins. A row keeps its CSV stub only when the export has no page for
+ * it, which is what a database row with an empty page looks like, and that
+ * stub is filed inside the database rather than beside it.
+ */
+function dropCsvRowsThatHaveTheirOwnPage(
+  candidates: NoteImportCandidate[],
+  files: ImportSourceFile[]
+) {
+  const filePaths = new Set(files.map((file) => file.path));
+  const pagesByFolder = new Map<string, Set<string>>();
+  for (const candidate of candidates) {
+    if (candidate.unsupportedReason !== null) continue;
+    const separator = candidate.sourcePath.lastIndexOf('/');
+    if (separator < 0 || candidate.sourcePath.endsWith('/')) continue;
+    if (candidate.sourcePath.includes('#row-')) continue;
+    const folder = candidate.sourcePath.slice(0, separator + 1);
+    const titles = pagesByFolder.get(folder) ?? new Set<string>();
+    titles.add(candidate.title.trim().toLowerCase());
+    pagesByFolder.set(folder, titles);
+  }
+
+  for (let index = candidates.length - 1; index >= 0; index -= 1) {
+    const candidate = candidates[index];
+    const rowSeparator = candidate.sourcePath.lastIndexOf('#row-');
+    if (rowSeparator < 0) continue;
+    const csvPath = candidate.sourcePath.slice(0, rowSeparator);
+    const rowFolder = `${csvPath.slice(0, csvPath.length - path.posix.extname(csvPath).length)}/`;
+    // No paired folder means the CSV is the only record of these rows.
+    if (![...filePaths].some((filePath) => filePath.startsWith(rowFolder))) continue;
+    if (pagesByFolder.get(rowFolder)?.has(candidate.title.trim().toLowerCase())) {
+      candidates.splice(index, 1);
+      continue;
+    }
+    candidate.parentSourcePath = rowFolder;
   }
 }
 
@@ -261,8 +344,16 @@ function addFolders(files: ImportSourceFile[], candidates: NoteImportCandidate[]
  * whose links changed or could not be followed gains a reason saying so before
  * the owner agrees to the commit.
  */
-function resolveCandidateLinks(candidates: NoteImportCandidate[]) {
+function resolveCandidateLinks(
+  candidates: NoteImportCandidate[],
+  pageFolders: Map<string, string>
+) {
   const byPath = new Map<string, { sourcePath: string; importable: boolean }>();
+  // A link written at a page's children folder means the page itself, which is
+  // the entry that folder no longer has.
+  for (const [folder, target] of pageFolders) {
+    byPath.set(folder, { sourcePath: target, importable: true });
+  }
   for (const candidate of candidates) {
     byPath.set(candidate.sourcePath, {
       sourcePath: candidate.sourcePath,
@@ -292,13 +383,16 @@ function resolveCandidateLinks(candidates: NoteImportCandidate[]) {
 export function candidatesFromFiles(files: ImportSourceFile[]) {
   const normalized = files.map((file) => ({ ...file, path: safePath(file.path) }));
   const candidates: NoteImportCandidate[] = [];
-  addFolders(normalized, candidates);
+  const pageFolders = pageFolderTargets(normalized);
+  addFolders(normalized, candidates, pageFolders);
   for (const file of normalized) {
     if (file.path.startsWith('__MACOSX/') || path.posix.basename(file.path).startsWith('.'))
       continue;
     const extension = path.posix.extname(file.path).toLowerCase();
     const directory = path.posix.dirname(file.path);
-    const parentSourcePath = directory === '.' ? null : `${directory}/`;
+    const folder = directory === '.' ? null : `${directory}/`;
+    // A page's own children folder is not a place; the page is.
+    const parentSourcePath = folder === null ? null : (pageFolders.get(folder) ?? folder);
     if (file.unsupportedReason || !textExtensions.has(extension)) {
       candidates.push({
         sourcePath: file.path,
@@ -326,16 +420,25 @@ export function candidatesFromFiles(files: ImportSourceFile[]) {
     if (extension === '.csv') {
       candidates.push(...csvCandidates(file.path, body, parentSourcePath));
     } else {
+      // Notion writes callouts and toggles as raw HTML. Converting them here,
+      // before anything is stored, keeps the body source-authoritative
+      // Markdown and leaves the renderer nothing it has to refuse.
+      const html = convertNotionHtmlBlocks(body);
+      const htmlNotice = describeNotionHtmlOutcome(html);
       candidates.push({
         sourcePath: file.path,
         title: titleFrom(file.path, body),
-        bodyMarkdown: body,
+        bodyMarkdown: html.markdown,
         parentSourcePath,
         unsupportedReason: null,
+        // Carried only when there is something to say, so a page this changed
+        // nothing about keeps the shape it has always had.
+        ...(htmlNotice ? { conversionNotice: htmlNotice } : {}),
       });
     }
   }
-  resolveCandidateLinks(candidates);
+  dropCsvRowsThatHaveTheirOwnPage(candidates, normalized);
+  resolveCandidateLinks(candidates, pageFolders);
   if (candidates.length > IMPORT_LIMITS.candidates) {
     throw new Error(`An import may contain at most ${IMPORT_LIMITS.candidates} Notes.`);
   }

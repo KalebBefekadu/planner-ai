@@ -7,8 +7,23 @@ import type { CoachingIntensity } from '@/lib/coaching';
 import { dateInTimezone } from '@/lib/date';
 import { executeOperation, OperationFailure } from '@/lib/operations';
 import { currentLongReviewPeriod, type LongReviewPeriod } from '@/lib/reviews/periods';
+import {
+  countCheckpointsSince,
+  FINISHED_LIST_LIMIT,
+  WEEKLY_CHECKPOINT_WINDOW,
+} from '@/lib/reviews/checkpoints';
+import {
+  buildParentIndex,
+  buildWeeklyGoals,
+  dedupeActions,
+  finishedSinceWindow,
+  goalIdsInWeek,
+  lastCompletionByGoal,
+  type ActionRow,
+} from '@/lib/reviews/weekly-view-model';
 import { parsePersistedReviewProposal, type ResolvedReviewProposal } from '@/lib/review-proposals';
 import { createClient } from '@/lib/supabase/server';
+import { selectAll, SUPABASE_PAGE_SIZE } from '@/lib/supabase/select-all';
 
 export type WeeklyReviewAction = {
   id: string;
@@ -17,7 +32,74 @@ export type WeeklyReviewAction = {
   version: number;
   scheduledOn: string | null;
   horizonStartsOn: string;
+  goalId: string | null;
   goalTitle: string | null;
+  /**
+   * How many completed Weekly Reviews this Action has outlived. Zero means it
+   * has never been carried, which is a different statement from "one week old"
+   * -- an Action created on Friday has survived nothing by Sunday.
+   */
+  weeksCarried: number;
+  /**
+   * This came round again rather than being new work nobody did. Left in the
+   * open list rather than pulled into a section of its own -- it still needs
+   * acting on, and splitting it out makes the week look emptier than it was.
+   */
+  fromTemplate: boolean;
+};
+
+/**
+ * A Goal the week has work under, with the two things the screen needs that an
+ * Action cannot tell it: whether the container itself is a standing concern,
+ * and whether the container has stopped moving.
+ */
+export type WeeklyReviewGoal = {
+  id: string;
+  title: string;
+  version: number;
+  kind: 'outcome' | 'initiative';
+  status: string;
+  /** What good looks like here, quoted at the moment work is dropped. */
+  definitionOfDone: string | null;
+  /**
+   * The ancestors this work answers to, outermost first. "Why am I doing this"
+   * should be on screen at the moment of deciding, not reconstructable from
+   * three other pages afterwards.
+   */
+  directionChain: string[];
+  /**
+   * Checkpoints since anything under this Goal was last completed. A task can
+   * be stuck; so can a whole project, and that is a different problem with a
+   * different answer -- pause the initiative rather than drop its tasks one by
+   * one.
+   */
+  quietCheckpoints: number;
+};
+
+/**
+ * What closed. The Review has never shown this, and it is the first thing the
+ * week is opened to find out.
+ */
+export type WeeklyReviewFinishedAction = {
+  id: string;
+  title: string;
+  completedAt: string;
+  goalId: string | null;
+  goalTitle: string | null;
+  fromTemplate: boolean;
+};
+
+/**
+ * Work that resets every period rather than being carried. Stated once as a
+ * template instead of retyped every week, which is one of the three different
+ * things "start from last week" was asking for.
+ */
+export type WeeklyReviewRecurrence = {
+  id: string;
+  title: string;
+  cadence: 'weekly' | 'monthly';
+  nextOccurrenceOn: string;
+  goalId: string | null;
 };
 
 export type WeeklyReviewData = {
@@ -26,6 +108,17 @@ export type WeeklyReviewData = {
   timezone: string;
   coachingIntensity: CoachingIntensity;
   actions: WeeklyReviewAction[];
+  finished: WeeklyReviewFinishedAction[];
+  /**
+   * The moment the last week was closed. Completions are counted from here
+   * rather than from Monday, so a fortnight with one review reports fourteen
+   * days of work instead of hiding seven of them.
+   */
+  finishedSince: string;
+  /** True when that boundary is the calendar week because no Review exists yet. */
+  finishedSinceIsFallback: boolean;
+  goals: WeeklyReviewGoal[];
+  recurring: WeeklyReviewRecurrence[];
   recentReviews: Array<{
     id: string;
     completedAt: string;
@@ -55,7 +148,12 @@ export type ReviewAnalysisJobView = {
 export type WeeklyReviewDecision = {
   actionId: string;
   expectedVersion: number;
-  resolution: 'done' | 'next_week' | 'blocked' | 'dropped' | 'left_overdue';
+  /**
+   * 'keep' means "I looked at this and it stays": it records the decision and
+   * may carry a priority, but changes nothing about the Action. It is what
+   * makes a priority attachable to work that needs no other answer.
+   */
+  resolution: 'done' | 'next_week' | 'keep' | 'blocked' | 'dropped' | 'left_overdue';
   reason: string | null;
   priority: boolean;
 };
@@ -156,10 +254,46 @@ async function reviewClient() {
 export async function getWeeklyReviewData(): Promise<WeeklyReviewData> {
   const { supabase, workspaceId, timezone, weekStartsOn, coachingIntensity } = await reviewClient();
   const { startsOn, endsOn } = currentWeek(timezone, weekStartsOn);
+
+  // Every completed Weekly Review, most recent first. Two things are derived
+  // from this one list, and both are the reason it is read before anything
+  // else: where the "finished" window starts, and how many checkpoints each
+  // open Action has outlived.
+  //
+  // The obvious source for that second number is action_schedule_history, and
+  // it is the wrong one. Those rows are written per submitted decision, so the
+  // moment the Review stops demanding a decision on every item the count
+  // silently stops counting. Checkpoints are a property of the week, not of
+  // what the person did in it.
+  const checkpointsResult = await supabase
+    .from('reviews')
+    .select('completed_at')
+    .eq('workspace_id', workspaceId)
+    .eq('kind', 'weekly')
+    .eq('status', 'completed')
+    .order('completed_at', { ascending: false })
+    .limit(WEEKLY_CHECKPOINT_WINDOW);
+  if (checkpointsResult.error) throw new Error('Unable to load Weekly Review.');
+  const checkpoints = (checkpointsResult.data ?? []).map((row) => String(row.completed_at));
+  const { finishedSince, finishedSinceIsFallback } = finishedSinceWindow(checkpoints, startsOn);
+
   const unfinished =
-    'id,title,status,version,scheduled_on,planning_horizons!inner(kind,starts_on),goals(title)';
-  const [weekHorizonResult, scheduledIntoWeekResult, reviewsResult, proposalResult, jobResult] =
-    await Promise.all([
+    'id,title,status,version,scheduled_on,created_at,recurrence_template_id,planning_horizons!inner(kind,starts_on),goals(id,title,version,kind,status,definition_of_done,parent_goal_id)';
+  const [
+    weekHorizonResult,
+    scheduledIntoWeekResult,
+    finishedResult,
+    recurringResult,
+    goalTreeResult,
+    reviewsResult,
+    proposalResult,
+    jobResult,
+  ] = await Promise.all([
+    // Paged, not capped. PostgREST truncates at max_rows without saying so, and
+    // a truncated open list is worse than a slow one: the screen would ask
+    // about a subset while the Operation's own eligibility query sees the rest,
+    // and the week would refuse to close saying the action set changed.
+    selectAll((from, to) =>
       supabase
         .from('actions')
         .select(unfinished)
@@ -169,12 +303,16 @@ export async function getWeeklyReviewData(): Promise<WeeklyReviewData> {
         .in('status', ['open', 'in_progress', 'blocked'])
         .is('archived_at', null)
         .is('trashed_at', null)
-        .order('scheduled_on'),
-      // Work planned at a longer horizon and scheduled into these seven days
-      // is unfinished work of this week. This list and the Operation's own
-      // eligibility rule have to agree exactly -- the Operation rejects a
-      // decision set that is missing an eligible Action or names an
-      // ineligible one -- so the two predicates are deliberately identical.
+        .order('scheduled_on')
+        .order('id')
+        .range(from, to)
+    ),
+    // Work planned at a longer horizon and scheduled into these seven days
+    // is unfinished work of this week. This list and the Operation's own
+    // eligibility rule have to agree exactly -- the Operation rejects a
+    // decision set that is missing an eligible Action or names an
+    // ineligible one -- so the two predicates are deliberately identical.
+    selectAll((from, to) =>
       supabase
         .from('actions')
         .select(unfinished)
@@ -185,58 +323,124 @@ export async function getWeeklyReviewData(): Promise<WeeklyReviewData> {
         .in('status', ['open', 'in_progress', 'blocked'])
         .is('archived_at', null)
         .is('trashed_at', null)
-        .order('scheduled_on'),
-      supabase
-        .from('reviews')
-        .select('id,completed_at,reflection_markdown,review_action_items(priority)')
-        .eq('workspace_id', workspaceId)
-        .eq('kind', 'weekly')
-        .eq('status', 'completed')
-        .order('completed_at', { ascending: false })
-        .limit(8),
-      supabase
-        .from('review_ai_proposals')
-        .select('id,payload,model_id,prompt_version,created_at')
-        .eq('workspace_id', workspaceId)
-        .eq('kind', 'weekly')
-        .eq('starts_on', startsOn)
-        .eq('status', 'active')
-        .order('created_at', { ascending: false })
-        .limit(1)
-        .maybeSingle(),
-      supabase
-        .from('ai_jobs')
-        .select('id,status,error_code,created_at')
-        .eq('operation', 'review_analysis')
-        .eq('source_review_kind', 'weekly')
-        .eq('source_starts_on', startsOn)
-        .order('created_at', { ascending: false })
-        .limit(1)
-        .maybeSingle(),
-    ]);
+        .order('scheduled_on')
+        .order('id')
+        .range(from, to)
+    ),
+    // What closed since the last checkpoint. Ordered by completion rather
+    // than by horizon: an Action planned in June and finished on Tuesday is
+    // part of this week's work, and its horizon still says June.
+    supabase
+      .from('actions')
+      .select('id,title,completed_at,recurrence_template_id,goals(id,title)')
+      .eq('workspace_id', workspaceId)
+      .eq('status', 'done')
+      .gte('completed_at', finishedSince)
+      .is('archived_at', null)
+      .is('trashed_at', null)
+      .order('completed_at', { ascending: true })
+      .limit(FINISHED_LIST_LIMIT),
+    // Every Goal, so an ancestor chain can be walked without a recursive query.
+    // A personal workspace has tens of these, not thousands.
+    supabase
+      .from('action_templates')
+      .select('id,title,cadence,next_occurrence_on,goal_id')
+      .eq('workspace_id', workspaceId)
+      .eq('status', 'active')
+      .is('archived_at', null)
+      .order('next_occurrence_on'),
+    supabase
+      .from('goals')
+      .select('id,title,parent_goal_id')
+      .eq('workspace_id', workspaceId)
+      .is('archived_at', null)
+      .is('trashed_at', null),
+    supabase
+      .from('reviews')
+      .select('id,completed_at,reflection_markdown,review_action_items(priority)')
+      .eq('workspace_id', workspaceId)
+      .eq('kind', 'weekly')
+      .eq('status', 'completed')
+      .order('completed_at', { ascending: false })
+      .limit(8),
+    supabase
+      .from('review_ai_proposals')
+      .select('id,payload,model_id,prompt_version,created_at')
+      .eq('workspace_id', workspaceId)
+      .eq('kind', 'weekly')
+      .eq('starts_on', startsOn)
+      .eq('status', 'active')
+      .order('created_at', { ascending: false })
+      .limit(1)
+      .maybeSingle(),
+    supabase
+      .from('ai_jobs')
+      .select('id,status,error_code,created_at')
+      .eq('operation', 'review_analysis')
+      .eq('source_review_kind', 'weekly')
+      .eq('source_starts_on', startsOn)
+      .order('created_at', { ascending: false })
+      .limit(1)
+      .maybeSingle(),
+  ]);
   if (
     weekHorizonResult.error ||
     scheduledIntoWeekResult.error ||
+    finishedResult.error ||
+    recurringResult.error ||
+    goalTreeResult.error ||
     reviewsResult.error ||
     proposalResult.error ||
     jobResult.error
   ) {
     throw new Error('Unable to load Weekly Review.');
   }
-  // Two reads, one list. An Action can only be asked about once, and a
-  // duplicate decision is rejected by the Operation as duplicate_review_action.
-  const actionRows = [
-    ...(weekHorizonResult.data ?? []),
-    ...(scheduledIntoWeekResult.data ?? []),
-  ].filter((row, index, rows) => rows.findIndex((other) => other.id === row.id) === index);
+  const actionRows = dedupeActions(
+    weekHorizonResult.data ?? [],
+    scheduledIntoWeekResult.data ?? []
+  );
+  const weekGoalIds = goalIdsInWeek(actionRows as unknown as ActionRow[]);
+  let completionsByGoal = new Map<string, string>();
+  if (weekGoalIds.length > 0) {
+    const momentumResult = await supabase
+      .from('actions')
+      .select('goal_id,completed_at')
+      .eq('workspace_id', workspaceId)
+      .eq('status', 'done')
+      .in('goal_id', weekGoalIds)
+      .not('completed_at', 'is', null)
+      .is('archived_at', null)
+      .is('trashed_at', null)
+      .order('completed_at', { ascending: false })
+      .limit(SUPABASE_PAGE_SIZE);
+    if (momentumResult.error) throw new Error('Unable to load Weekly Review.');
+    completionsByGoal = lastCompletionByGoal(momentumResult.data);
+  }
+  const goals = buildWeeklyGoals(
+    actionRows as unknown as ActionRow[],
+    buildParentIndex(goalTreeResult.data),
+    completionsByGoal,
+    checkpoints
+  );
+
   return {
     startsOn,
     endsOn,
     timezone,
     coachingIntensity,
+    finishedSince,
+    finishedSinceIsFallback,
+    goals,
+    recurring: (recurringResult.data ?? []).map((row) => ({
+      id: String(row.id),
+      title: String(row.title),
+      cadence: row.cadence as 'weekly' | 'monthly',
+      nextOccurrenceOn: String(row.next_occurrence_on),
+      goalId: (row.goal_id as string | null) ?? null,
+    })),
     actions: actionRows.map((action) => {
       const horizon = action.planning_horizons as unknown as { starts_on: string };
-      const goal = action.goals as unknown as { title: string } | null;
+      const goal = action.goals as unknown as { id: string; title: string } | null;
       return {
         id: action.id as string,
         title: action.title as string,
@@ -244,7 +448,21 @@ export async function getWeeklyReviewData(): Promise<WeeklyReviewData> {
         version: Number(action.version),
         scheduledOn: action.scheduled_on as string | null,
         horizonStartsOn: horizon.starts_on,
+        goalId: goal?.id ?? null,
         goalTitle: goal?.title ?? null,
+        weeksCarried: countCheckpointsSince(checkpoints, String(action.created_at)),
+        fromTemplate: Boolean(action.recurrence_template_id),
+      };
+    }),
+    finished: (finishedResult.data ?? []).map((action) => {
+      const goal = action.goals as unknown as { id: string; title: string } | null;
+      return {
+        id: action.id as string,
+        title: action.title as string,
+        completedAt: String(action.completed_at),
+        goalId: goal?.id ?? null,
+        goalTitle: goal?.title ?? null,
+        fromTemplate: Boolean(action.recurrence_template_id),
       };
     }),
     recentReviews: (reviewsResult.data ?? []).map((review) => {
@@ -287,6 +505,28 @@ export async function completeWeeklyReview(input: {
     idempotencyKey,
     surface: 'ui',
   });
+  revalidatePlannerAndRecords();
+  return result;
+}
+
+/**
+ * Stop an initiative appearing in the weekly pass without losing anything filed
+ * under it.
+ *
+ * This is the "clean it up" step of the ritual, made explicit and reversible. It
+ * is deliberately not archive: archiving cascades to every Action underneath,
+ * and a project that has gone quiet for a month is not a project whose work was
+ * wrong. 'paused' has been a Goal status since the first migration and nothing
+ * had ever offered it.
+ */
+export async function pauseInitiative(input: { goalId: string; expectedVersion: number }) {
+  const { supabase } = await reviewClient();
+  const result = await executeOperation(
+    supabase,
+    'goal.status.v1',
+    { id: input.goalId, status: 'paused', expectedVersion: input.expectedVersion },
+    { idempotencyKey: `pause-${input.goalId}-${input.expectedVersion}`, surface: 'ui' }
+  );
   revalidatePlannerAndRecords();
   return result;
 }

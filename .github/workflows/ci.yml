@@ -2,7 +2,7 @@ name: Planner AI CI
 
 on:
   push:
-    branches: [main]
+    branches: [main, integration/dogfood]
     paths:
       - 'web/**'
       - '.github/workflows/ci.yml'
@@ -27,10 +27,10 @@ jobs:
   application:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
         with:
-          node-version: 24
+          node-version: 24.21.0
           cache: npm
           cache-dependency-path: web/package-lock.json
       - run: npm ci
@@ -38,6 +38,7 @@ jobs:
       - run: npm run lint
       - run: npm run typecheck
       - run: npm test
+      - run: npm run test:coverage
       - run: npm run audit
       - run: npm run build
         env:
@@ -49,29 +50,22 @@ jobs:
   database:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
         with:
-          node-version: 24
+          node-version: 24.21.0
           cache: npm
           cache-dependency-path: web/package-lock.json
       - run: npm ci
-      - run: npx supabase start
-      - run: npm run test:db
-      - name: Verify generated Supabase types
-        run: |
-          npm run types:generate
-          test -s src/types/supabase.generated.ts
-          npx prettier --write src/types/supabase.generated.ts
-          git diff --exit-code -- src/types/supabase.generated.ts
+      - run: npm run verify:db
 
   browser:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
         with:
-          node-version: 24
+          node-version: 24.21.0
           cache: npm
           cache-dependency-path: web/package-lock.json
       - run: npm ci
@@ -103,7 +97,6 @@ jobs:
         env:
           PLANNER_DATA_MODEL: canonical
           PLANNER_UI_PREVIEW: enabled
-          PLANNER_UI_V2: enabled
           NEXT_PUBLIC_APP_URL: http://127.0.0.1:3000
       - name: Run full browser suite after merge
         if: github.event_name == 'push'
@@ -111,5 +104,4 @@ jobs:
         env:
           PLANNER_DATA_MODEL: canonical
           PLANNER_UI_PREVIEW: enabled
-          PLANNER_UI_V2: enabled
           NEXT_PUBLIC_APP_URL: http://127.0.0.1:3000

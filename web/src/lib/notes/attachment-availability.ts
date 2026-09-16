@@ -3,17 +3,18 @@ import { verifyAttachmentContent } from './attachment-content';
 
 export const attachmentBucket = 'note-attachments';
 
-type AdminClient = {
+/**
+ * The person's own client. Storage authorizes the download through the bucket
+ * policy, and the deferred scan result is written back through an owner-scoped
+ * function, so nothing here needs service-role access.
+ */
+type AttachmentReader = {
   storage: {
     from: (bucket: string) => {
       download: (path: string) => PromiseLike<{ data: Blob | null; error: unknown }>;
     };
   };
-  from: (table: string) => {
-    update: (values: Record<string, unknown>) => {
-      eq: (column: string, value: string) => PromiseLike<{ error: unknown }>;
-    };
-  };
+  rpc: (fn: string, args: Record<string, unknown>) => PromiseLike<{ error: unknown }>;
 };
 
 export type StoredAttachment = {
@@ -44,12 +45,12 @@ export type ResolvedAttachment =
  * only for files that are actually wanted.
  */
 export async function resolveAttachment(
-  admin: AdminClient,
+  reader: AttachmentReader,
   attachment: StoredAttachment
 ): Promise<ResolvedAttachment> {
   if (attachment.scan_state === 'rejected') return { state: 'rejected' };
 
-  const { data, error } = await admin.storage
+  const { data, error } = await reader.storage
     .from(attachmentBucket)
     .download(attachment.object_key);
   if (error || !data) return { state: 'missing' };
@@ -65,6 +66,9 @@ export async function resolveAttachment(
   }
 
   const state = verifyAttachmentContent(attachment.media_type, bytes);
-  await admin.from('note_attachments').update({ scan_state: state }).eq('id', attachment.id);
+  await reader.rpc('record_note_attachment_scan', {
+    p_attachment_id: attachment.id,
+    p_scan_state: state,
+  });
   return state === 'approved' ? { state: 'approved', bytes } : { state: 'rejected' };
 }

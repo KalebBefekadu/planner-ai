@@ -9,6 +9,12 @@ only record of the design. This directory is that record: desktop (1440x900) and
 (390x844) captures of each deferred screen, plus a written specification detailed enough to
 rebuild the screen without the image.
 
+> **Those screens were removed from `/preview` in Increment 2.** This directory is no longer a
+> backup of something you can also go and look at -- it is the only remaining description of
+> these six patterns. The `Source:` line under each section names the file and symbol the
+> capture came from; those symbols no longer exist, so read the line as provenance rather than
+> as somewhere to look.
+
 All content in these images is Preview fixture data (the "Sam" persona from
 `web/src/app/preview/preview-data.ts`). No real workspace content appears in any capture.
 

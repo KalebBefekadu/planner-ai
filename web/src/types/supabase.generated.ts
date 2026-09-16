@@ -5,10 +5,12 @@ export type Database = {
     Tables: {
       account_deletion_requests: {
         Row: {
+          attempt_count: number;
           canceled_at: string | null;
           completed_at: string | null;
           id: string;
           last_error_code: string | null;
+          next_attempt_at: string | null;
           processing_started_at: string | null;
           requested_at: string;
           scheduled_for: string;
@@ -18,10 +20,12 @@ export type Database = {
           workspace_id: string | null;
         };
         Insert: {
+          attempt_count?: number;
           canceled_at?: string | null;
           completed_at?: string | null;
           id?: string;
           last_error_code?: string | null;
+          next_attempt_at?: string | null;
           processing_started_at?: string | null;
           requested_at?: string;
           scheduled_for: string;
@@ -31,10 +35,12 @@ export type Database = {
           workspace_id?: string | null;
         };
         Update: {
+          attempt_count?: number;
           canceled_at?: string | null;
           completed_at?: string | null;
           id?: string;
           last_error_code?: string | null;
+          next_attempt_at?: string | null;
           processing_started_at?: string | null;
           requested_at?: string;
           scheduled_for?: string;
@@ -1024,10 +1030,12 @@ export type Database = {
           archived_at: string | null;
           created_at: string;
           current_value: number | null;
+          definition_of_done: string | null;
           description_markdown: string | null;
           due_on: string | null;
           horizon_id: string;
           id: string;
+          kind: string;
           parent_goal_id: string | null;
           purge_after: string | null;
           status: string;
@@ -1045,10 +1053,12 @@ export type Database = {
           archived_at?: string | null;
           created_at?: string;
           current_value?: number | null;
+          definition_of_done?: string | null;
           description_markdown?: string | null;
           due_on?: string | null;
           horizon_id: string;
           id?: string;
+          kind?: string;
           parent_goal_id?: string | null;
           purge_after?: string | null;
           status?: string;
@@ -1066,10 +1076,12 @@ export type Database = {
           archived_at?: string | null;
           created_at?: string;
           current_value?: number | null;
+          definition_of_done?: string | null;
           description_markdown?: string | null;
           due_on?: string | null;
           horizon_id?: string;
           id?: string;
+          kind?: string;
           parent_goal_id?: string | null;
           purge_after?: string | null;
           status?: string;
@@ -1409,6 +1421,7 @@ export type Database = {
           purge_after: string | null;
           removed_at: string | null;
           scan_state: string;
+          upload_state: string;
           workspace_id: string;
         };
         Insert: {
@@ -1423,6 +1436,7 @@ export type Database = {
           purge_after?: string | null;
           removed_at?: string | null;
           scan_state?: string;
+          upload_state?: string;
           workspace_id: string;
         };
         Update: {
@@ -1437,6 +1451,7 @@ export type Database = {
           purge_after?: string | null;
           removed_at?: string | null;
           scan_state?: string;
+          upload_state?: string;
           workspace_id?: string;
         };
         Relationships: [
@@ -2032,6 +2047,7 @@ export type Database = {
           created_at: string;
           exposures: string[];
           operation_id: string;
+          owning_domain: string;
           reversible: boolean;
           risk_class: string;
           updated_at: string;
@@ -2040,6 +2056,7 @@ export type Database = {
           created_at?: string;
           exposures: string[];
           operation_id: string;
+          owning_domain: string;
           reversible: boolean;
           risk_class: string;
           updated_at?: string;
@@ -2048,6 +2065,7 @@ export type Database = {
           created_at?: string;
           exposures?: string[];
           operation_id?: string;
+          owning_domain?: string;
           reversible?: boolean;
           risk_class?: string;
           updated_at?: string;
@@ -2638,6 +2656,27 @@ export type Database = {
       [_ in never]: never;
     };
     Functions: {
+      abandon_note_attachment: {
+        Args: { p_attachment_id: string };
+        Returns: undefined;
+      };
+      action_ancestor_depth: {
+        Args: { p_action_id: string; p_workspace_id: string };
+        Returns: number;
+      };
+      action_has_descendant: {
+        Args: {
+          p_action_id: string;
+          p_candidate: string;
+          p_workspace_id: string;
+        };
+        Returns: boolean;
+      };
+      action_max_depth: { Args: never; Returns: number };
+      action_subtree_height: {
+        Args: { p_action_id: string; p_workspace_id: string };
+        Returns: number;
+      };
       approve_mcp_oauth_grant: {
         Args: {
           p_allowed_operations: string[];
@@ -2685,6 +2724,14 @@ export type Database = {
         Returns: Json;
       };
       capture_proposal_item_json: { Args: { p_item_id: string }; Returns: Json };
+      claim_account_deletion_batch: {
+        Args: { p_limit: number };
+        Returns: {
+          deletion_attempt_count: number;
+          deletion_request_id: string;
+          deletion_user_id: string;
+        }[];
+      };
       claim_beta_invite: {
         Args: { p_email: string; p_token_hash: string };
         Returns: string;
@@ -2700,6 +2747,14 @@ export type Database = {
           user_id: string;
           workspace_id: string;
         }[];
+      };
+      complete_account_deletion: {
+        Args: { p_request_id: string };
+        Returns: undefined;
+      };
+      complete_ai_job: {
+        Args: { p_job_id: string; p_result_target_id: string };
+        Returns: undefined;
       };
       consume_ai_quota: { Args: { p_operation: string }; Returns: boolean };
       consume_ai_quota_status:
@@ -2730,60 +2785,6 @@ export type Database = {
         Returns: undefined;
       };
       dispatch_trusted_operation: {
-        Args: {
-          p_idempotency_key: string;
-          p_input: Json;
-          p_operation_id: string;
-          p_surface: string;
-        };
-        Returns: Json;
-      };
-      dispatch_trusted_operation_action_template_base: {
-        Args: {
-          p_idempotency_key: string;
-          p_input: Json;
-          p_operation_id: string;
-          p_surface: string;
-        };
-        Returns: Json;
-      };
-      dispatch_trusted_operation_capture_action_base: {
-        Args: {
-          p_idempotency_key: string;
-          p_input: Json;
-          p_operation_id: string;
-          p_surface: string;
-        };
-        Returns: Json;
-      };
-      dispatch_trusted_operation_capture_proposal_base: {
-        Args: {
-          p_idempotency_key: string;
-          p_input: Json;
-          p_operation_id: string;
-          p_surface: string;
-        };
-        Returns: Json;
-      };
-      dispatch_trusted_operation_conversation_base: {
-        Args: {
-          p_idempotency_key: string;
-          p_input: Json;
-          p_operation_id: string;
-          p_surface: string;
-        };
-        Returns: Json;
-      };
-      dispatch_trusted_operation_note_appearance_base: {
-        Args: {
-          p_idempotency_key: string;
-          p_input: Json;
-          p_operation_id: string;
-          p_surface: string;
-        };
-        Returns: Json;
-      };
-      dispatch_trusted_operation_notification_base: {
         Args: {
           p_idempotency_key: string;
           p_input: Json;
@@ -2940,7 +2941,7 @@ export type Database = {
           p_idempotency_key: string;
           p_input: Json;
           p_operation_id: string;
-          p_token_id: string;
+          p_token_hash: string;
         };
         Returns: Json;
       };
@@ -3330,6 +3331,14 @@ export type Database = {
         };
         Returns: Json;
       };
+      fail_ai_job: {
+        Args: { p_error_code: string; p_job_id: string };
+        Returns: undefined;
+      };
+      finalize_note_attachment: {
+        Args: { p_attachment_id: string };
+        Returns: undefined;
+      };
       generate_workspace_notifications: {
         Args: { p_workspace_id: string };
         Returns: number;
@@ -3340,6 +3349,18 @@ export type Database = {
       };
       next_monthly_occurrence: {
         Args: { p_anchor_day: number; p_occurrence_on: string };
+        Returns: string;
+      };
+      note_attachment_object_is_readable: {
+        Args: { p_object_key: string };
+        Returns: boolean;
+      };
+      note_attachment_reservation_exists: {
+        Args: { p_object_key: string };
+        Returns: boolean;
+      };
+      operation_handler_for: {
+        Args: { p_operation_id: string };
         Returns: string;
       };
       persist_capture_proposal_analysis: {
@@ -3358,7 +3379,6 @@ export type Database = {
           p_capture_id: string;
           p_job_id: string;
           p_model_id: string;
-          p_owner_user_id: string;
           p_prompt_version: string;
         };
         Returns: string;
@@ -3381,7 +3401,6 @@ export type Database = {
           p_job_id: string;
           p_kind: string;
           p_model_id: string;
-          p_owner_user_id: string;
           p_payload: Json;
           p_prompt_version: string;
           p_starts_on: string;
@@ -3397,7 +3416,7 @@ export type Database = {
         Returns: Json;
       };
       read_mcp_workspace_snapshot: {
-        Args: { p_token_id: string };
+        Args: { p_token_hash: string };
         Returns: Json;
       };
       record_ai_usage: {
@@ -3477,17 +3496,55 @@ export type Database = {
         };
         Returns: Json;
       };
+      record_note_attachment_scan: {
+        Args: { p_attachment_id: string; p_scan_state: string };
+        Returns: undefined;
+      };
       refresh_all_workspace_notifications: { Args: never; Returns: number };
+      release_account_deletion: {
+        Args: { p_error_code: string; p_request_id: string };
+        Returns: undefined;
+      };
       release_ai_quota_reservation: {
         Args: { p_request_id: string };
         Returns: undefined;
       };
-      release_beta_invite: { Args: { p_invite_id: string }; Returns: undefined };
+      release_beta_invite: {
+        Args: { p_invite_id: string; p_token_hash: string };
+        Returns: undefined;
+      };
+      remove_note_attachment: {
+        Args: { p_attachment_id: string };
+        Returns: string;
+      };
+      reserve_note_attachment: {
+        Args: {
+          p_byte_size: number;
+          p_checksum_sha256: string;
+          p_media_type: string;
+          p_note_id: string;
+          p_original_name: string;
+          p_scan_state: string;
+        };
+        Returns: Json;
+      };
+      restore_note_attachment: {
+        Args: { p_attachment_id: string };
+        Returns: undefined;
+      };
+      review_max_required_actions: { Args: never; Returns: number };
+      review_stalled_after_checkpoints: { Args: never; Returns: number };
       review_week_eligible_actions: {
         Args: { p_ends_on: string; p_starts_on: string; p_workspace_id: string };
         Returns: {
           action_id: string;
           horizon_kind: string;
+        }[];
+      };
+      review_week_required_actions: {
+        Args: { p_ends_on: string; p_starts_on: string; p_workspace_id: string };
+        Returns: {
+          action_id: string;
         }[];
       };
       revoke_mcp_access_token: {
@@ -3515,6 +3572,17 @@ export type Database = {
           updated_at: string;
           version: number;
         }[];
+      };
+      start_ai_job: {
+        Args: {
+          p_operation: string;
+          p_request_id: string;
+          p_source_capture_id?: string;
+          p_source_ends_on?: string;
+          p_source_review_kind?: string;
+          p_source_starts_on?: string;
+        };
+        Returns: string;
       };
       trash_item_snapshot: {
         Args: { p_item_id: string; p_item_type: string; p_workspace_id: string };

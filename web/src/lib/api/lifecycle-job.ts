@@ -2,6 +2,7 @@ import 'server-only';
 
 import type { SupabaseClient } from '@supabase/supabase-js';
 import type { Database } from '@/types/supabase.generated';
+import { recordServerEvent } from '@/lib/api/telemetry';
 
 export type LifecycleJobName =
   | 'notification_delivery'
@@ -27,7 +28,7 @@ export async function startLifecycleJobRun(admin: AdminClient, jobName: Lifecycl
     .maybeSingle();
 
   if (error || !data) {
-    console.error('Could not record lifecycle job start.', { jobName });
+    recordServerEvent({ event: 'lifecycle_job_start_unrecorded', subject: jobName });
     return null;
   }
   return data.id;
@@ -52,5 +53,5 @@ export async function finishLifecycleJobRun(
     .eq('id', runId)
     .eq('status', 'running');
 
-  if (error) console.error('Could not record lifecycle job outcome.');
+  if (error) recordServerEvent({ event: 'lifecycle_job_outcome_unrecorded' });
 }

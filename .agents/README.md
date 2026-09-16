@@ -34,7 +34,12 @@ Workers target `integration/dogfood`. The Codex lead merges integration into `ma
 - Reviewers do not edit source files.
 - A worker that discovers required changes outside its writable paths records them in the handoff.
 - Workers rebase on `integration/dogfood` before handoff; the lead resolves conflicts.
-- Each worktree uses its own development port and local test state.
+- Each worktree uses its own development port and local non-database test state.
+- The fixed local Supabase project is a repository-shared critical section. Use
+  `npm run test:db`, `npm run verify:db`, `npm run types:generate`, or
+  `npm run test:e2e:local`; each command holds the shared fail-fast lock for its
+  complete database session. Do not run raw local Supabase mutation commands
+  concurrently from separate worktrees.
 - Production credentials remain only in the primary protected checkout. Worktrees receive test configuration only when required.
 
 ## Autonomous Boundary

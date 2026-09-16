@@ -1,5 +1,5 @@
 begin;
-select plan(15);
+select plan(18);
 
 -- External access must never exceed the Operation permissions a person has in
 -- the interface. The existing MCP coverage proves the happy path and that a
@@ -11,20 +11,40 @@ select plan(15);
 -- the only thing that could ever call them and an authorization boundary that
 -- only holds when the caller cooperates is not a boundary.
 
+-- The token is the credential, so the manual path is reached by presenting its
+-- hash and nothing else. A signed-in session is not a way in, and neither is a
+-- trusted role: the service-role grant that once made this path reachable
+-- without proof is gone.
 select function_privs_are(
-  'public', 'execute_mcp_operation', array['uuid', 'text', 'jsonb', 'text'],
+  'public', 'execute_mcp_operation', array['text', 'text', 'jsonb', 'text'],
   'authenticated', array[]::text[],
   'a signed-in person cannot execute Operations through the MCP token path'
 );
 select function_privs_are(
-  'public', 'execute_mcp_operation', array['uuid', 'text', 'jsonb', 'text'],
-  'anon', array[]::text[],
-  'an anonymous caller cannot execute Operations through the MCP token path'
+  'public', 'execute_mcp_operation', array['text', 'text', 'jsonb', 'text'],
+  'anon', array['EXECUTE'],
+  'a caller holding the token can execute the Operations it was granted'
 );
 select function_privs_are(
+  'public', 'read_mcp_workspace_snapshot', array['text'],
+  'authenticated', array[]::text[],
+  'a signed-in person cannot read a workspace snapshot through the token path'
+);
+select function_privs_are(
+  'public', 'read_mcp_workspace_snapshot', array['text'],
+  'anon', array['EXECUTE'],
+  'a caller holding the token can read the snapshot it was granted'
+);
+
+-- A token id is a database identifier, not a secret. Naming one is no longer
+-- a way to act as its owner.
+select hasnt_function(
+  'public', 'execute_mcp_operation', array['uuid', 'text', 'jsonb', 'text'],
+  'executing an Operation no longer accepts a token id as the credential'
+);
+select hasnt_function(
   'public', 'read_mcp_workspace_snapshot', array['uuid'],
-  'anon', array[]::text[],
-  'an anonymous caller cannot read a workspace snapshot directly'
+  'reading a snapshot no longer accepts a token id as the credential'
 );
 
 insert into auth.users (
@@ -76,13 +96,13 @@ select is(
 );
 reset role;
 
-set local role service_role;
+set local role anon;
 
 -- Scope is the whole point of a scoped token. A read grant that can still
 -- write is a read grant in name only.
 select throws_ok(
   $$select public.execute_mcp_operation(
-    'ef000000-0000-0000-0000-0000000000aa', 'capture.create.v1',
+    repeat('a', 64), 'capture.create.v1',
     '{"rawText":"scope probe","source":"typed"}'::jsonb, 'mcp-scope-boundary-01'
   )$$,
   '42501', 'operation_not_granted',
@@ -93,7 +113,7 @@ select throws_ok(
 -- everything, so the snapshot re-checks its own capability rather than
 -- trusting that the caller only offered the tool when it was granted.
 select throws_ok(
-  $$select public.read_mcp_workspace_snapshot('ef000000-0000-0000-0000-0000000000dd')$$,
+  $$select public.read_mcp_workspace_snapshot(repeat('d', 64))$$,
   '28000', 'invalid_or_limited_mcp_token',
   'a token never granted the snapshot cannot read the workspace'
 );
@@ -102,20 +122,20 @@ select throws_ok(
 -- earlier in the same request is not evidence that the token is still good.
 select throws_ok(
   $$select public.execute_mcp_operation(
-    'ef000000-0000-0000-0000-0000000000bb', 'capture.create.v1',
+    repeat('b', 64), 'capture.create.v1',
     '{"rawText":"expired probe","source":"typed"}'::jsonb, 'mcp-scope-boundary-02'
   )$$,
   '28000', 'invalid_or_limited_mcp_token',
   'an expired token cannot execute a granted Operation'
 );
 select throws_ok(
-  $$select public.read_mcp_workspace_snapshot('ef000000-0000-0000-0000-0000000000bb')$$,
+  $$select public.read_mcp_workspace_snapshot(repeat('b', 64))$$,
   '28000', 'invalid_or_limited_mcp_token',
   'an expired token cannot read the workspace snapshot'
 );
 select throws_ok(
   $$select public.execute_mcp_operation(
-    'ef000000-0000-0000-0000-0000000000cc', 'capture.create.v1',
+    repeat('c', 64), 'capture.create.v1',
     '{"rawText":"revoked probe","source":"typed"}'::jsonb, 'mcp-scope-boundary-03'
   )$$,
   '28000', 'invalid_or_limited_mcp_token',
@@ -124,13 +144,16 @@ select throws_ok(
 
 select lives_ok(
   $$select public.execute_mcp_operation(
-    'ef000000-0000-0000-0000-0000000000dd', 'capture.create.v1',
+    repeat('d', 64), 'capture.create.v1',
     '{"rawText":"granted probe","source":"typed"}'::jsonb, 'mcp-scope-boundary-04'
   )$$,
   'a token granted the Operation performs the write'
 );
 
--- The write must land in the workspace the token names and nowhere else.
+reset role;
+
+-- The write must land in the workspace the token names and nowhere else. Read
+-- it back as the database owner: the caller holds a token, not table access.
 select is(
   (select w.owner_user_id from public.captures c
    join public.workspaces w on w.id = c.workspace_id
@@ -139,10 +162,8 @@ select is(
   'an MCP write lands in the token owner workspace'
 );
 
-reset role;
-
--- Read the audit trail as the owner of the database rather than as
--- service_role, which deliberately holds no read privilege on activity_events.
+-- Read the audit trail as the owner of the database rather than as the caller,
+-- which deliberately holds no read privilege on activity_events.
 -- External work has to be distinguishable from work the person did by hand,
 -- otherwise revoking a token tells you nothing about what it did while it was
 -- live. The surface column is what currently carries that distinction: note

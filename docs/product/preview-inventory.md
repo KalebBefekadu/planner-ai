@@ -5,6 +5,8 @@ Retirement is [UI-03 / #140](https://github.com/KalebBefekadu/planner-ai/issues/
 
 `/preview` is a fixture-backed visual reference, not a second product. This file records what it contains, where each pattern belongs in the real application, and what has actually been demonstrated. It exists so that deleting the route cannot quietly delete design work.
 
+> **Increment 2 landed.** The six deferred patterns -- table and workspace views, the property strip, the knowledge graph, the vision canvas, the share dialog, and the block controls -- no longer have a screen in `/preview`. Their record is [`preview-reference/`](./preview-reference/README.md): desktop and mobile captures plus a written specification for each. Rows below marked `defer` describe a design that now lives only there. Every other row still has a live Preview screen behind it.
+
 Baseline: `integration/dogfood` at `2f169cb`.
 
 > **Corrected 2026-09-09 against the code**, not against this file's own history. Three rows claimed `open` for patterns that had in fact shipped; one row claimed `behavior` for a control that was never built; four patterns were missing entirely. The full verification is [`preview-extraction-audit.md`](./preview-extraction-audit.md), which supersedes this table where they disagree.

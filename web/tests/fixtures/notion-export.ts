@@ -32,6 +32,7 @@ const PAGE_ID = {
   notesUnderJournal: '5e6f7a8b9c0d1e2f3a4b5c6d7e8f9012',
   notesUnderResearch: '6f7a8b9c0d1e2f3a4b5c6d7e8f901234',
   tasksDatabase: '7a8b9c0d1e2f3a4b5c6d7e8f90123456',
+  shipTheImport: '8b9c0d1e2f3a4b5c6d7e8f9012345678',
 } as const;
 
 function file(path: string, body: string): ImportSourceFile {
@@ -68,7 +69,24 @@ export const notionExportFiles: ImportSourceFile[] = [
 
   file(
     `Personal operating system ${PAGE_ID.root}/Research ${PAGE_ID.research}.md`,
-    ['# Research', '', 'Open questions.'].join('\n')
+    [
+      '# Research',
+      '',
+      'Open questions.',
+      '',
+      /* Notion writes a callout as raw HTML, and a toggle as details/summary.
+         Most workspaces lean on both. */
+      '<aside>',
+      'Protect energy before optimizing output.',
+      '</aside>',
+      '',
+      '<details>',
+      '<summary>What matters now</summary>',
+      '',
+      'Focused work, faith, health and meaning.',
+      '',
+      '</details>',
+    ].join('\n')
   ),
 
   /* Two pages called "Notes" in different branches. A filesystem-shaped import
@@ -84,13 +102,28 @@ export const notionExportFiles: ImportSourceFile[] = [
   ),
 
   /* A database. Notion writes the view as a CSV and the rows as pages, so the
-     same content arrives twice in two different shapes. */
+     same content arrives twice in two different shapes. Both shapes are here,
+     because only having the CSV describes the problem without exercising it:
+     the row pages hold the writing, and the CSV row holds the columns. */
   file(
     `Personal operating system ${PAGE_ID.root}/Tasks ${PAGE_ID.tasksDatabase}.csv`,
     [
       'Name,Status,Notes',
       'Ship the import,In progress,Needs the CSV path',
       'Write it up,Not started,',
+    ].join('\n')
+  ),
+  /* The first row also exists as a real page, with a body the CSV cannot
+     carry. The second row has no page, which is what a row someone never
+     opened looks like. */
+  file(
+    `Personal operating system ${PAGE_ID.root}/Tasks ${PAGE_ID.tasksDatabase}/Ship the import ${PAGE_ID.shipTheImport}.md`,
+    [
+      '# Ship the import',
+      '',
+      'Status: In progress',
+      '',
+      'The CSV path is the one that breaks.',
     ].join('\n')
   ),
 ];
