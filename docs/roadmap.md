@@ -66,6 +66,12 @@ Keep `/preview` temporarily separate from authenticated routes, but do not maint
 - When a real screen reaches functional, visual, responsive, and accessibility parity, remove its superseded Preview implementation.
 - Delete `/preview` only after both Workspace and Planner pass their MVP workflow and parity gates.
 
+**Decided 2026-09-16: `/preview` stays for now, and that is an accepted cost rather than unfinished work.**
+
+Increment 2 of the retirement removed the six deferred screens, whose design is preserved in [`preview-reference/`](product/preview-reference/README.md). What remains behind the route is six MVP patterns that have not been built: shell quick capture with voice (WS-04), the conflict recovery surface (WS-01), inline `@`-mention (WS-02), context-panel auto-open (WS-03), and the search scope filter (WS-02).
+
+Those are product work, and they should be built when they are worth building to the person using the app. Building them in order to justify deleting a reference implementation is the wrong reason, and would put five feature tickets on the critical path of a cleanup. So the route stays until they ship on their own merits, and `/preview` stops being read as a task nobody has got round to.
+
 The real app is always the eventual single source of truth.
 
 ## Delivery Sequence

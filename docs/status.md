@@ -57,7 +57,7 @@ See [Production](runbooks/production.md) and [Migration reconciliation](runbooks
 
 - Complete and verify the real direction-to-action loop, including deferral and weekly-review continuity.
 - Run a representative owner Notion import and reconcile imported, duplicate, and unsupported items.
-- Finish authenticated Workspace and Planner parity, then remove superseded `/preview` fixtures.
+- Finish authenticated Workspace and Planner parity. `/preview` itself stays: its six deferred screens are gone and their design is preserved, and the six patterns still behind it are unbuilt MVP features tracked under WS-01 through WS-04. See the Preview Policy in the roadmap for why that is an accepted cost rather than an open task.
 - Certify embedded-assistant parity for critical Note and Planner Operations, including useful provider-failure behavior.
 - Verify one external AI client through narrow authenticated MCP discovery, grants, execution, and revocation.
 - Apply pending production migrations during an approved maintenance window and run authenticated deployed smoke tests.
@@ -80,7 +80,7 @@ Graph, Canvas, databases, collaboration, plugins, stronger local-first sync, and
 
 ## Current Decision
 
-Follow [Roadmap](roadmap.md) with one active ticket at a time. Preserve canonical data and Operations, keep core workflows usable without AI, and treat `/preview` only as a temporary visual reference. Production changes, credentials, billing, and destructive migrations remain explicit approval gates.
+Follow [Roadmap](roadmap.md) with one active ticket at a time. Preserve canonical data and Operations, keep core workflows usable without AI, and treat `/preview` as a reference for patterns that are not built yet rather than a second product. Production changes, credentials, billing, and destructive migrations remain explicit approval gates.
 
 ## Release Rule
 

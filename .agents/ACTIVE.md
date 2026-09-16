@@ -2,20 +2,37 @@
 
 Roadmap stage: **2 - Workspace, Planner And Delivery Hardening**
 
-## Codex handoff ready: search hydrates its ancestors through a tested walk
+## Merged: the engineering improvement program
 
-- **Contract:** `.agents/tasks/notes-ancestor-hydration.md`
-- **Branch:** `codex/notes-actions-view-model`
-- **Scope:** second slice of EH-03's Server Actions bullet, and deliberately a
-  small one. Most of `notes/actions.ts` is already an adapter: twenty
-  `executeOperation` calls, and `getNoteKnowledgeContext` is translation rather
-  than domain logic. The search ancestor walk was the one real piece, and its
-  termination now has a test.
-- **Foundation:** everything below is pushed and open as PRs #243-#257.
-- **Handoff:** `.agents/handoffs/notes-ancestor-hydration.md`
-- **Next:** `src/app/actions.ts` (992 lines) is the last of the three, and
-  should be audited rather than assumed to need splitting -- length and shape
-  are different questions.
+The stack is merged into `integration/dogfood`. Sixteen slices, 58 commits.
+
+Three decisions the owner delegated, and what was decided:
+
+1. **Merging.** Worker agents may now merge work they have verified.
+   `AGENTS.md` and `CLAUDE.md` are changed to say so, with the condition that
+   it holds only while the handoff stays honest.
+2. **Account deletion retries.** Not capped. A capped deletion stops retrying
+   and leaves the person's data in place, which is a permanent silent failure
+   rather than an ongoing one. What changes after five attempts is the
+   reporting: the lifecycle run finishes `failed` with `deletion_stalled`, so a
+   stalled request is visible in the mechanism that already exists.
+3. **`/preview`.** It stays, recorded as an accepted cost. The six deferred
+   screens are gone and their design is preserved; what remains is six unbuilt
+   MVP patterns under WS-01 to WS-04. Building five feature tickets to justify
+   deleting a reference implementation is the wrong reason to build them.
+
+## Open, and owner-facing
+
+- The rich editor silently discards task completion on a phone. Pre-existing,
+  reproduced at `64c15cf` and at the stack tip, and invisible to CI because the
+  `mobile-chromium` project runs only after merge. Whether it is the app or
+  Playwright's `.check()` under touch emulation is the first question.
+- `mobile-chromium` running only after merge is the gap that hid it.
+- `src/app/actions.ts` is the last of the three large action files. Audit it
+  before assuming it needs splitting; the lesson from `notes/actions.ts` is
+  that length and shape are different questions.
+- EH-05 waits on the personal MVP gate. EH-06's tracing and SLO halves want a
+  running system with real traffic.
 
 ## CI runs again, and integration itself is red
 
