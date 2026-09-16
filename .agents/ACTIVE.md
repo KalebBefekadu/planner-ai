@@ -2,21 +2,21 @@
 
 Roadmap stage: **2 - Workspace, Planner And Delivery Hardening**
 
-## Codex handoff ready: account deletion is never stuck
+## Codex handoff ready: content-free telemetry
 
-- **Contract:** `.agents/tasks/durable-job-model.md`
-- **Branch:** `codex/durable-job-model`
-- **Scope:** first slice of EH-07. A deletion request abandoned by a dead
-  worker was never retried, because the cron only looked at `scheduled` and
-  nothing released a `processing` claim. It now has the same visibility
-  timeout, attempt counting and backoff that notification delivery already had.
-- **Foundation:** everything below is pushed and open as PRs #243-#253.
-- **Handoff:** `.agents/handoffs/durable-job-model.md`
-- **Open decision:** attempts are deliberately uncapped. Whether a deletion
-  request should ever be abandoned is a product question, and answering it
-  needs somewhere for a stalled request to surface.
-- **Next:** EH-06 is the last untouched outcome. Twelve branches are stacked
-  unreviewed; landing them matters more than a thirteenth.
+- **Contract:** `.agents/tasks/content-free-telemetry.md`
+- **Branch:** `codex/content-free-telemetry`
+- **Scope:** first slice of EH-06 -- the half that does not need production
+  traffic. The content-free guarantee becomes enforceable: one emitter with a
+  closed field set, and a frozen list of files allowed to write a log line.
+- **Audit result:** no leak. Seven `console.*` calls in `src`, all
+  content-free; the telemetry tables are ids, enums, codes and numbers. It held
+  by care, at seven call sites, with nothing stopping the eighth.
+- **Foundation:** everything below is pushed and open as PRs #243-#254.
+- **Handoff:** `.agents/handoffs/content-free-telemetry.md`
+- **Next:** the rest of EH-06 -- spans, exporter, SLO dashboards and alerting --
+  wants a running system with real traffic. Thirteen branches are stacked
+  unreviewed.
 
 ## CI runs again, and integration itself is red
 
