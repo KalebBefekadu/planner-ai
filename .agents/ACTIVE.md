@@ -23,37 +23,41 @@ Three decisions the owner delegated, and what was decided:
 
 ## Open, and owner-facing
 
-- The rich editor silently discards task completion on a phone. Pre-existing,
-  reproduced at `64c15cf` and at the stack tip, and invisible to CI because the
-  `mobile-chromium` project runs only after merge. Whether it is the app or
-  Playwright's `.check()` under touch emulation is the first question.
-- `mobile-chromium` running only after merge is the gap that hid it.
+- ~~The rich editor silently discards task completion on a phone.~~ Fixed. It
+  was the application, not Playwright's touch emulation: the task item commits
+  its tick with `chain().focus().command(...)`, and `focus()` is synchronous on
+  a touch device where it is deferred to an animation frame on a desktop. The
+  synchronous focus dispatches a selection transaction in the middle of the
+  chain, so the chain's own transaction is built on a state that no longer
+  exists and ProseMirror rejects it -- "Applying a mismatched transaction" in
+  the console, a tick on screen, and `- [ ]` still in the Markdown. Cancelling
+  `pointerdown` over the checkbox keeps focus in the editor, which is what a
+  desktop already does by cancelling `mousedown`, and `focus()` then has
+  nothing to do.
+- ~~`mobile-chromium` running only after merge is the gap that hid it.~~ Both
+  browser projects now run on pull requests. The comment in `ci.yml` justified
+  the saving by saying mobile had never caught a defect first; the first
+  post-merge run after that comment was written is the run that falsified it.
 - `src/app/actions.ts` is the last of the three large action files. Audit it
   before assuming it needs splitting; the lesson from `notes/actions.ts` is
   that length and shape are different questions.
 - EH-05 waits on the personal MVP gate. EH-06's tracing and SLO halves want a
   running system with real traffic.
 
-## CI runs again, and integration itself is red
+## CI runs again, and integration is green
 
 The Actions billing block is cleared. The repository was made public on
 2026-09-09, which makes Actions free, and secret scanning with push protection
 free along with it. A red check is a test result again. Read it as one.
 
-**But `integration/dogfood` currently fails two of its own three jobs**, so
-every branch inherits those failures and a red check on your PR may not be
-about your work. Check whether integration fails the same job before
-investigating your own branch.
+`integration/dogfood` is green. The deadlock recorded here before -- `browser`
+failing on an Axe contrast ratio and `database` failing on checked-in Supabase
+types, each fixed only by the pull request the other made unmergeable -- was
+broken by #198 and #201 and is history.
 
-| Job           | State on integration | Cause                                                                         |
-| ------------- | -------------------- | ----------------------------------------------------------------------------- |
-| `application` | passing              | -                                                                             |
-| `browser`     | **failing**          | Axe contrast, 3.47:1 on `.export-scope-note` in Data settings. Fixed by #198. |
-| `database`    | **failing**          | Checked-in Supabase types do not describe the migrations. Fixed by #201.      |
-
-Those two must merge before any other result is trustworthy. They are a
-deadlock: each fixes the only job the other fails, so neither looks green
-alone.
+The habit that section taught is still worth keeping: when your pull request
+goes red, check whether integration fails the same job before you go looking
+in your own branch.
 
 ## Local verification
 
@@ -64,7 +68,7 @@ runs one worker.
 | ------------- | ---------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------- |
 | `application` | `cd web && npm run agent:check` and `npx vitest run` | Seconds. Run vitest from `web/`; from the parent, relative paths in tests break and invent failures.                          |
 | `database`    | `npx supabase db reset` then `npx supabase test db`  | Needs Docker. The CLI is a devDependency, so `npx supabase`, not a global binary.                                             |
-| `browser`     | `npx playwright test`                                | Needs `web/.env.local`. Generate a throwaway one from `npx supabase status -o json`; agents may not read or copy the owner's. |
+| `browser`     | `npx playwright test`                                | Needs `web/.env.local`. Generate a throwaway one from `npx supabase status -o json`; agents may not read or copy the owner's. Runs both projects, as CI now does; `--project=chromium` alone will not see a touch-only defect. |
 
 State what you actually ran and what you could not. A check nobody ran is not a
 passing check.

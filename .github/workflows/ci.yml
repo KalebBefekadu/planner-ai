@@ -88,18 +88,21 @@ jobs:
       # the last edit when you opened another Note. Both were found by running
       # the suite by hand.
       #
-      # The mobile project still runs only after merge, which is the one
-      # genuine saving: it doubles the runtime and has never been the project
-      # that caught a defect first.
-      - name: Run pull request browser suite
-        if: github.event_name == 'pull_request'
-        run: npm run test:e2e -- --project=chromium
-        env:
-          PLANNER_DATA_MODEL: canonical
-          PLANNER_UI_PREVIEW: enabled
-          NEXT_PUBLIC_APP_URL: http://127.0.0.1:3000
-      - name: Run full browser suite after merge
-        if: github.event_name == 'push'
+      # The mobile project used to run only after merge, justified here by the
+      # claim that it doubles the runtime and "has never been the project that
+      # caught a defect first". The first post-merge run after that comment was
+      # written is the run that falsified it: mobile-chromium, and only
+      # mobile-chromium, caught a rich editor that showed a task ticked and
+      # then wrote the unticked line back to the Note. Completion was silently
+      # discarded on a phone, which is where a checkbox is the natural way to
+      # work through a list.
+      #
+      # It reached the integration branch precisely because the project that
+      # could see it ran after the merge rather than before it. A saving that
+      # defers the only check capable of catching a class of defect is not a
+      # saving, so both projects run on pull requests now and the runtime cost
+      # is accepted.
+      - name: Run browser suite
         run: npm run test:e2e
         env:
           PLANNER_DATA_MODEL: canonical
