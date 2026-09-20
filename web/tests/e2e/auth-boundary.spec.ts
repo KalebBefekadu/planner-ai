@@ -126,20 +126,8 @@ test('canonical users see the complete workspace navigation after login', async 
     await page.getByLabel('Email').fill(email);
     await page.getByLabel('Password').fill(password);
     await page.getByRole('button', { name: 'Sign in' }).click();
-
-    await expect(page.getByRole('heading', { name: 'Set your direction' })).toBeVisible();
-    await page.getByRole('button', { name: 'Continue', exact: true }).click();
-    await page.getByRole('textbox', { name: 'Vision' }).fill('Build a dependable planner.');
-    await page
-      .getByRole('textbox', { name: 'First yearly Goal' })
-      .fill('Invite ten private beta users.');
-    await page.getByRole('button', { name: 'Continue', exact: true }).click();
-    await page.getByRole('textbox', { name: 'First Action' }).fill('Prepare the beta invitation.');
-    await page
-      .getByRole('textbox', { name: 'First Capture' })
-      .fill('Validate the canonical workspace journey.');
-    await page.getByRole('button', { name: 'Enter workspace', exact: true }).click();
     await expect(page).toHaveURL(/\/$/);
+    await expect(page).not.toHaveURL(/\/onboarding/);
 
     const experienceWorkspace = page.getByRole('link', { name: 'Workspace', exact: true }).last();
     if ((await experienceWorkspace.count()) === 0 || !(await experienceWorkspace.isVisible())) {
@@ -169,10 +157,10 @@ test('canonical users see the complete workspace navigation after login', async 
     }
     await expect(page).toHaveURL(/\/planner(?:\?|$)/);
     await expect(
-      page.getByRole('heading', { name: 'Plan with a clear line of sight', exact: true })
+      page
+        .getByRole('heading', { name: 'Plan with a clear line of sight', exact: true })
+        .or(page.getByRole('heading', { name: 'Start with your vision', exact: true }))
     ).toBeVisible();
-    await expect(page.getByRole('group', { name: 'Filter plan by horizon' })).toBeVisible();
-    await expect(page.getByRole('region', { name: 'Plan overview' })).toBeVisible();
     const weeklyReview = page.getByRole('link', { name: 'Weekly review', exact: true });
     if (!(await weeklyReview.isVisible())) {
       await page.getByRole('button', { name: 'Open menu' }).click();

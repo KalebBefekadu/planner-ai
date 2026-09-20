@@ -12,6 +12,9 @@ import { settingsRelatedLinks } from '@/components/settings-tabs';
 
 const account = {
   email: 'sam.rivera@example.com',
+  displayName: 'Sam Rivera',
+  avatarUrl: null,
+  avatarColor: 'emerald',
   workspaceName: 'Personal workspace',
   timezone: 'America/New_York',
   createdAt: '2026-02-14T09:30:00.000Z',

@@ -15,6 +15,16 @@ export type WorkspacePreferences = {
   onboardingCompletedAt: string | null;
 };
 
+const avatarColors = ['emerald', 'blue', 'violet', 'amber', 'rose'] as const;
+type AvatarColor = (typeof avatarColors)[number];
+
+export type OnboardingProfile = {
+  email: string;
+  displayName: string;
+  avatarUrl: string | null;
+  avatarColor: AvatarColor;
+};
+
 function ensureCanonical() {
   if (process.env.PLANNER_DATA_MODEL !== 'canonical') {
     throw new Error('Workspace preferences require the canonical data model.');
@@ -64,13 +74,42 @@ export async function saveWorkspacePreferences(input: OperationInput<'workspace.
 }
 
 export async function completeGuidedOnboarding(
-  input: OperationInput<'workspace.onboarding-complete.v1'>
+  input: OperationInput<'workspace.onboarding-complete.v1'> & {
+    displayName: string;
+    avatarColor: AvatarColor;
+  }
 ) {
   const { supabase } = await authenticatedClient();
-  const result = await executeOperation(supabase, 'workspace.onboarding-complete.v1', input, {
-    idempotencyKey: randomUUID(),
-    surface: 'ui',
+  const displayName = input.displayName.trim();
+  if (!displayName || displayName.length > 80 || !avatarColors.includes(input.avatarColor)) {
+    throw new Error('Please provide a name and choose an avatar color.');
+  }
+  const { error: profileError } = await supabase.auth.updateUser({
+    data: { display_name: displayName, avatar_color: input.avatarColor },
   });
+  if (profileError) throw new Error('Your profile could not be saved.');
+
+  const operationInput: OperationInput<'workspace.onboarding-complete.v1'> = {
+    timezone: input.timezone,
+    weekStartsOn: input.weekStartsOn,
+    coachingIntensity: input.coachingIntensity,
+    aiEnabled: input.aiEnabled,
+    weeklyReviewDay: input.weeklyReviewDay,
+    today: input.today,
+    visionText: input.visionText,
+    goalTitle: input.goalTitle,
+    actionTitle: input.actionTitle,
+    captureText: input.captureText,
+  };
+  const result = await executeOperation(
+    supabase,
+    'workspace.onboarding-complete.v1',
+    operationInput,
+    {
+      idempotencyKey: randomUUID(),
+      surface: 'ui',
+    }
+  );
   revalidatePath('/', 'layout');
   revalidatePath('/onboarding');
   // '/today' was named here but is not a route -- Today is served by '/' and
@@ -82,7 +121,20 @@ export async function completeGuidedOnboarding(
 /* The wizard keeps a device-local draft so an interrupted setup can be resumed.
    That draft is scoped to the owner, which means the client needs to know who
    it is holding a draft for. Only the identifier crosses the boundary. */
-export async function getOnboardingOwnerId(): Promise<string> {
+export async function getOnboardingProfile(): Promise<OnboardingProfile> {
   const { user } = await authenticatedClient();
-  return user.id;
+  const metadata = user.user_metadata as Record<string, unknown>;
+  const displayName = [metadata.display_name, metadata.full_name, metadata.name].find(
+    (value): value is string => typeof value === 'string' && Boolean(value.trim())
+  );
+  const avatar = [metadata.avatar_url, metadata.picture].find(
+    (value): value is string => typeof value === 'string' && value.startsWith('https://')
+  );
+  const color = metadata.avatar_color;
+  return {
+    email: user.email ?? '',
+    displayName: displayName?.trim() ?? '',
+    avatarUrl: avatar ?? null,
+    avatarColor: avatarColors.includes(color as AvatarColor) ? (color as AvatarColor) : 'emerald',
+  };
 }

@@ -1,34 +1,20 @@
 'use client';
 
-import { useEffect, useMemo, useState, useSyncExternalStore, useTransition } from 'react';
-import {
-  ArrowLeft,
-  ArrowRight,
-  Check,
-  FileInput,
-  ListTodo,
-  ShieldCheck,
-  Sparkles,
-  Target,
-} from 'lucide-react';
+import { useMemo, useState, useTransition } from 'react';
+import { ArrowLeft, ArrowRight, Check, ShieldCheck } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import { AsyncStatus } from '@/components/async-status';
-import { completeGuidedOnboarding, type WorkspacePreferences } from '@/app/onboarding/actions';
-import { actionFailureMessage } from '@/lib/operations/failure-message';
 import {
-  draftHasWrittenWork,
-  draftStorageKey,
-  parseDraft,
-  type OnboardingDraft,
-} from '@/app/onboarding/draft';
+  completeGuidedOnboarding,
+  type OnboardingProfile,
+  type WorkspacePreferences,
+} from '@/app/onboarding/actions';
+import { actionFailureMessage } from '@/lib/operations/failure-message';
 
 const days = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
-const steps = ['Rhythm', 'Direction', 'First moves'];
-
-function optional(value: string) {
-  const trimmed = value.trim();
-  return trimmed.length ? trimmed : null;
-}
+const steps = ['About you', 'Your rhythm'];
+const avatarColors = ['emerald', 'blue', 'violet', 'amber', 'rose'] as const;
+type AvatarColor = (typeof avatarColors)[number];
 
 function todayIn(timezone: string) {
   const parts = new Intl.DateTimeFormat('en-US', {
@@ -41,144 +27,30 @@ function todayIn(timezone: string) {
   return `${value.year}-${value.month}-${value.day}`;
 }
 
-function errorMessage(error: unknown) {
-  return actionFailureMessage(error, 'Workspace setup could not be completed.');
-}
-
-/* Reading `localStorage` is reading an external store, and the server has no
-   such store. `useSyncExternalStore` is the one hook that models that honestly:
-   it renders the server's answer (no draft) during SSR and hydration, then
-   re-renders with the browser's answer once hydration finishes. Restoring in an
-   effect instead would set state during a cascading second render, and would
-   race the first keystroke of anyone who started typing immediately.
-
-   A draft is read once and never watched. `subscribe` is therefore a no-op:
-   this wizard is the only writer, and re-reading on its own writes would fight
-   the fields the person is typing into. */
-function subscribe() {
-  return () => {};
-}
-
-function readStoredDraft(storageKey: string) {
-  try {
-    return window.localStorage.getItem(storageKey);
-  } catch {
-    // Private browsing and locked-down profiles throw on access rather than
-    // returning null. Treat that as "no draft" and start cleanly.
-    return null;
-  }
+function initials(name: string, email: string) {
+  const source = name.trim() || email.split('@')[0] || 'Planner AI';
+  const parts = source.split(/[\s._-]+/).filter(Boolean);
+  return (parts.length > 1 ? `${parts[0][0]}${parts[1][0]}` : source.slice(0, 2)).toUpperCase();
 }
 
 export function OnboardingWizard({
   initial,
-  ownerId,
+  profile,
 }: {
   initial: WorkspacePreferences;
-  ownerId: string;
-}) {
-  const storageKey = draftStorageKey(ownerId);
-  const fallback: OnboardingDraft = {
-    step: 0,
-    timezone: initial.timezone,
-    weekStartsOn: initial.weekStartsOn,
-    weeklyReviewDay: initial.weeklyReviewDay,
-    coachingIntensity: initial.coachingIntensity,
-    aiEnabled: initial.aiEnabled,
-    visionText: '',
-    goalTitle: '',
-    actionTitle: '',
-    captureText: '',
-  };
-  /* Three states, not two. `undefined` means "the browser has not answered
-     yet", which is what the server renders and what hydration replays; `null`
-     means the browser answered and there is no draft. Collapsing those two into
-     one was a real data-loss bug: the pre-hydration render would persist its
-     own empty fields over the draft the person came back for, so resuming
-     destroyed exactly the work it was meant to protect. */
-  const storedRaw = useSyncExternalStore(
-    subscribe,
-    () => readStoredDraft(storageKey),
-    () => undefined
-  );
-
-  /* The fields below are seeded from whichever draft this render knows about,
-     so the form is remounted once the browser's answer replaces the server's.
-     Keying on the presence of a draft -- not on its contents -- means the
-     remount happens at most once, and never while someone is typing. A person
-     who starts typing before hydration is on the `fresh` key either way, so
-     their keystrokes are not thrown away by that transition. */
-  return (
-    <WizardForm
-      key={storedRaw ? 'resumed' : 'fresh'}
-      initial={initial}
-      storageKey={storageKey}
-      persist={storedRaw !== undefined}
-      restored={parseDraft(storedRaw ?? null, fallback)}
-    />
-  );
-}
-
-function WizardForm({
-  initial,
-  storageKey,
-  persist,
-  restored,
-}: {
-  initial: WorkspacePreferences;
-  storageKey: string;
-  persist: boolean;
-  restored: OnboardingDraft;
+  profile: OnboardingProfile;
 }) {
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
-  const [step, setStep] = useState(restored.step);
-  const [timezone, setTimezone] = useState(restored.timezone);
-  const [weekStartsOn, setWeekStartsOn] = useState(restored.weekStartsOn);
-  const [weeklyReviewDay, setWeeklyReviewDay] = useState(restored.weeklyReviewDay);
-  const [coachingIntensity, setCoachingIntensity] = useState(restored.coachingIntensity);
-  const [aiEnabled, setAiEnabled] = useState(restored.aiEnabled);
-  const [visionText, setVisionText] = useState(restored.visionText);
-  const [goalTitle, setGoalTitle] = useState(restored.goalTitle);
-  const [actionTitle, setActionTitle] = useState(restored.actionTitle);
-  const [captureText, setCaptureText] = useState(restored.captureText);
+  const [step, setStep] = useState(0);
+  const [displayName, setDisplayName] = useState(profile.displayName);
+  const [avatarColor, setAvatarColor] = useState<AvatarColor>(profile.avatarColor);
+  const [timezone, setTimezone] = useState(initial.timezone);
+  const [weekStartsOn, setWeekStartsOn] = useState(initial.weekStartsOn);
+  const [weeklyReviewDay, setWeeklyReviewDay] = useState(initial.weeklyReviewDay);
+  const [coachingIntensity, setCoachingIntensity] = useState(initial.coachingIntensity);
+  const [aiEnabled, setAiEnabled] = useState(initial.aiEnabled);
   const [error, setError] = useState<string | null>(null);
-  // Announced once per resumed session, from the draft this form was seeded
-  // with, so it does not reappear after the person edits the restored text.
-  const resumed = draftHasWrittenWork(restored);
-
-  const draft: OnboardingDraft = {
-    step,
-    timezone,
-    weekStartsOn,
-    weeklyReviewDay,
-    coachingIntensity,
-    aiEnabled,
-    visionText,
-    goalTitle,
-    actionTitle,
-    captureText,
-  };
-
-  function clearDraft() {
-    try {
-      window.localStorage.removeItem(storageKey);
-    } catch {
-      // A browser with storage denied still completes setup; it just cannot resume.
-    }
-  }
-
-  const serialized = JSON.stringify(draft);
-  useEffect(() => {
-    // Never write before the stored draft has been read back, or this effect
-    // overwrites it with the empty fields of the pre-hydration render.
-    if (!persist) return;
-    try {
-      window.localStorage.setItem(storageKey, serialized);
-    } catch {
-      // Storage can be full or denied. Losing the ability to resume is not a
-      // reason to interrupt someone in the middle of setup.
-    }
-  }, [persist, storageKey, serialized]);
 
   const timezones = useMemo(() => {
     const supported =
@@ -186,55 +58,112 @@ function WizardForm({
     return supported.includes(initial.timezone) ? supported : [initial.timezone, ...supported];
   }, [initial.timezone]);
 
-  function finish(destination: '/' | '/notes?import=1') {
+  function finish() {
     setError(null);
     startTransition(async () => {
       try {
         await completeGuidedOnboarding({
+          displayName: displayName.trim(),
+          avatarColor,
           timezone,
           weekStartsOn,
           weeklyReviewDay,
           coachingIntensity,
           aiEnabled,
           today: todayIn(timezone),
-          visionText: optional(visionText),
-          goalTitle: optional(visionText) ? optional(goalTitle) : null,
-          actionTitle: optional(actionTitle),
-          captureText: captureText.trim() ? captureText : null,
+          visionText: null,
+          goalTitle: null,
+          actionTitle: null,
+          captureText: null,
         });
-        // The draft has been committed through the Operation, so the scratch
-        // copy must go: otherwise a later visit to /onboarding, or the next
-        // person to use this device, would meet stale half-finished text.
-        clearDraft();
-        router.push(destination);
+        router.push('/');
         router.refresh();
       } catch (caught) {
-        setError(errorMessage(caught));
+        setError(actionFailureMessage(caught, 'Workspace setup could not be completed.'));
       }
     });
   }
 
   return (
     <div className="onboarding-wizard">
-      <ol className="onboarding-progress" aria-label="Setup progress">
+      <ol className="onboarding-progress onboarding-progress-short" aria-label="Setup progress">
         {steps.map((label, index) => (
           <li key={label} aria-current={step === index ? 'step' : undefined}>
-            <span>{index < step ? <Check size={13} /> : index + 1}</span>
+            <span>{index < step ? <Check size={13} aria-hidden="true" /> : index + 1}</span>
             {label}
           </li>
         ))}
       </ol>
 
       {step === 0 ? (
+        <div className="onboarding-step onboarding-identity">
+          <section className="preference-section" aria-labelledby="onboarding-identity">
+            <div className="preference-heading">
+              <p className="eyebrow">About you</p>
+              <h2 id="onboarding-identity">Make this workspace yours</h2>
+              <p>Planner AI uses your name to make prompts and planning feel personal.</p>
+            </div>
+            <div className="onboarding-profile-row">
+              {profile.avatarUrl ? (
+                // Provider images are already selected by the person in their identity account.
+                // eslint-disable-next-line @next/next/no-img-element
+                <img className="onboarding-avatar" src={profile.avatarUrl} alt="Your profile" />
+              ) : (
+                <span
+                  className={`onboarding-avatar onboarding-avatar-${avatarColor}`}
+                  aria-hidden="true"
+                >
+                  {initials(displayName, profile.email)}
+                </span>
+              )}
+              <label className="onboarding-name-field">
+                What should we call you?
+                <input
+                  className="input-field"
+                  value={displayName}
+                  onChange={(event) => setDisplayName(event.target.value)}
+                  autoComplete="name"
+                  maxLength={80}
+                  placeholder="Your name"
+                  required
+                />
+              </label>
+            </div>
+            {!profile.avatarUrl ? (
+              <fieldset className="avatar-color-picker">
+                <legend>Choose an avatar color</legend>
+                <div>
+                  {avatarColors.map((color) => (
+                    <label key={color} className={`avatar-color avatar-color-${color}`}>
+                      <input
+                        type="radio"
+                        name="avatarColor"
+                        value={color}
+                        checked={avatarColor === color}
+                        onChange={() => setAvatarColor(color)}
+                      />
+                      <span className="visually-hidden">{color}</span>
+                    </label>
+                  ))}
+                </div>
+                <p>A connected identity-provider photo is used automatically when available.</p>
+              </fieldset>
+            ) : null}
+          </section>
+        </div>
+      ) : null}
+
+      {step === 1 ? (
         <div className="onboarding-step">
           <section className="preference-section" aria-labelledby="onboarding-rhythm">
             <div className="preference-heading">
               <p className="eyebrow">Planning rhythm</p>
               <h2 id="onboarding-rhythm">Set your working week</h2>
+              <p>These defaults organize Today, This Week, and your reviews.</p>
             </div>
             <div className="preference-fields">
               <label>
-                Timezone
+                Time zone
                 <select
                   className="input-field"
                   value={timezone}
@@ -321,10 +250,6 @@ function WizardForm({
               <div>
                 <h2 id="setup-ai">AI processing</h2>
                 <p>Relevant content is sent to the configured provider only when AI is used.</p>
-                <p>
-                  Planner AI supports adult planning. It is not medical, legal, financial, or crisis
-                  care.
-                </p>
               </div>
             </div>
             <label className="switch-control">
@@ -340,91 +265,7 @@ function WizardForm({
         </div>
       ) : null}
 
-      {step === 1 ? (
-        <div className="onboarding-step onboarding-direction">
-          <label>
-            <span>
-              <Sparkles size={16} /> Vision
-            </span>
-            <textarea
-              value={visionText}
-              onChange={(event) => {
-                setVisionText(event.target.value);
-                if (!event.target.value.trim()) setGoalTitle('');
-              }}
-              rows={7}
-              maxLength={50_000}
-              placeholder="What kind of life or work are you building?"
-            />
-          </label>
-          <label>
-            <span>
-              <Target size={16} /> First yearly Goal
-            </span>
-            <input
-              value={goalTitle}
-              onChange={(event) => setGoalTitle(event.target.value)}
-              maxLength={1_000}
-              placeholder={visionText.trim() ? 'A measurable outcome' : 'Add a Vision first'}
-              disabled={!visionText.trim()}
-            />
-          </label>
-        </div>
-      ) : null}
-
-      {step === 2 ? (
-        <div className="onboarding-step onboarding-first-moves">
-          <label>
-            <span>
-              <ListTodo size={16} /> First Action
-            </span>
-            <input
-              value={actionTitle}
-              onChange={(event) => setActionTitle(event.target.value)}
-              maxLength={1_000}
-              placeholder="One concrete next move"
-            />
-          </label>
-          <label>
-            <span>
-              <FileInput size={16} /> First Capture
-            </span>
-            <textarea
-              value={captureText}
-              onChange={(event) => setCaptureText(event.target.value)}
-              rows={6}
-              maxLength={60_000}
-              placeholder="Anything you do not want to lose"
-            />
-          </label>
-        </div>
-      ) : null}
-
-      {resumed ? (
-        <p className="status-message onboarding-resumed" role="status">
-          We kept what you had already written. Pick up where you left off.
-        </p>
-      ) : null}
-
-      <AsyncStatus message={isPending ? 'Creating your workspace. This takes a moment.' : ''} />
-
-      {step === steps.length - 1 && (visionText.trim() || goalTitle.trim()) ? (
-        <ol className="onboarding-recap" aria-label="What you have written so far">
-          {visionText.trim() ? (
-            <li>
-              <span>Vision</span>
-              <p>{visionText.trim()}</p>
-            </li>
-          ) : null}
-          {goalTitle.trim() ? (
-            <li>
-              <span>Goal</span>
-              <p>{goalTitle.trim()}</p>
-            </li>
-          ) : null}
-        </ol>
-      ) : null}
-
+      <AsyncStatus message={isPending ? 'Finishing your workspace setup.' : ''} />
       {error ? (
         <p className="status-message status-message-error" role="alert">
           {error}
@@ -437,52 +278,30 @@ function WizardForm({
             <button
               className="btn-secondary button-with-icon"
               type="button"
-              onClick={() => setStep(step - 1)}
+              onClick={() => setStep(0)}
             >
-              <ArrowLeft size={16} /> Back
+              <ArrowLeft size={16} aria-hidden="true" /> Back
             </button>
-          ) : (
-            <button
-              className="btn-secondary"
-              type="button"
-              disabled={isPending}
-              onClick={() => finish('/')}
-            >
-              Skip setup
-            </button>
-          )}
+          ) : null}
         </div>
         <div>
-          {step < steps.length - 1 ? (
+          {step === 0 ? (
             <button
               className="btn-primary button-with-icon"
               type="button"
-              onClick={() => setStep(step + 1)}
+              disabled={!displayName.trim()}
+              onClick={() => setStep(1)}
             >
-              Continue <ArrowRight size={16} />
+              Continue <ArrowRight size={16} aria-hidden="true" />
             </button>
           ) : (
-            <>
-              <button
-                className="btn-secondary button-with-icon"
-                type="button"
-                disabled={isPending}
-                onClick={() => finish('/notes?import=1')}
-              >
-                <FileInput size={16} /> Import Notes
-              </button>
-              <button
-                className="btn-primary"
-                type="button"
-                disabled={isPending}
-                onClick={() => finish('/')}
-              >
-                {isPending ? 'Creating workspace...' : 'Enter workspace'}
-              </button>
-            </>
+            <button className="btn-primary" type="button" disabled={isPending} onClick={finish}>
+              {isPending ? 'Finishing setup...' : 'Enter Planner AI'}
+            </button>
           )}
         </div>
       </div>
+      <p className="onboarding-change-note">You can change these preferences later in Settings.</p>
     </div>
   );
 }

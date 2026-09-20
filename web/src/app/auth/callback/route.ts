@@ -1,5 +1,4 @@
 import { NextResponse } from 'next/server';
-import { postLoginPath } from '@/lib/auth/post-login';
 import { createClient } from '@/lib/supabase/server';
 
 function safeNextPath(value: string | null) {
@@ -15,11 +14,7 @@ export async function GET(request: Request) {
     const supabase = await createClient();
     const { error } = await supabase.auth.exchangeCodeForSession(code);
     if (!error) {
-      const {
-        data: { user },
-      } = await supabase.auth.getUser();
-      const destination = user ? await postLoginPath(supabase, user.id, next) : next;
-      return NextResponse.redirect(new URL(destination, url.origin));
+      return NextResponse.redirect(new URL(next, url.origin));
     }
   }
 

@@ -40,25 +40,59 @@ export const onboardingSeed = {
   capture: 'Remember to ask Dana about the pricing page copy.',
 } as const;
 
-export async function completeOnboarding(page: Page) {
+async function seedJourneyPlan(admin: SupabaseClient, userId: string) {
+  const anonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+  expect(anonKey).toBeTruthy();
+  const owner = await admin.auth.admin.getUserById(userId);
+  expect(owner.error).toBeNull();
+  const client = createClient(LOCAL_SUPABASE_URL, anonKey!, {
+    auth: { autoRefreshToken: false, persistSession: false },
+  });
+  const signedIn = await client.auth.signInWithPassword({
+    email: owner.data.user!.email!,
+    password: TEST_PASSWORD,
+  });
+  expect(signedIn.error).toBeNull();
+  const workspace = await client
+    .from('workspaces')
+    .select('timezone,week_starts_on,coaching_intensity,ai_enabled,weekly_review_day')
+    .single();
+  expect(workspace.error).toBeNull();
+  const today = new Date().toISOString().slice(0, 10);
+  const seeded = await client.rpc('execute_ui_operation', {
+    p_operation_id: 'workspace.onboarding-complete.v1',
+    p_input: {
+      timezone: workspace.data!.timezone,
+      weekStartsOn: workspace.data!.week_starts_on,
+      coachingIntensity: workspace.data!.coaching_intensity,
+      aiEnabled: workspace.data!.ai_enabled,
+      weeklyReviewDay: workspace.data!.weekly_review_day,
+      today,
+      visionText: onboardingSeed.vision,
+      goalTitle: onboardingSeed.goal,
+      actionTitle: onboardingSeed.action,
+      captureText: onboardingSeed.capture,
+    },
+    p_idempotency_key: `journey-seed-${userId}`,
+  });
+  expect(seeded.error).toBeNull();
+}
+
+export async function completeOnboarding(page: Page, admin?: SupabaseClient, userId?: string) {
   // The dev server compiles each route the first time it is requested, so a
   // cold /onboarding can take well over the default expect timeout. Waiting
   // longer here is not papering over a slow product: production serves this
   // prebuilt. Anything genuinely broken still fails, just later.
-  await expect(page.getByRole('heading', { name: 'Set your direction' })).toBeVisible({
+  await expect(
+    page.getByRole('heading', { name: 'A one-minute setup, then you’re in.' })
+  ).toBeVisible({
     timeout: 60_000,
   });
+  await page.getByLabel('What should we call you?').fill('Journey Tester');
   await page.getByRole('button', { name: 'Continue', exact: true }).click();
-  await page.getByRole('textbox', { name: 'Vision' }).fill(onboardingSeed.vision);
-  await page.getByRole('textbox', { name: 'First yearly Goal' }).fill(onboardingSeed.goal);
-  await page.getByRole('button', { name: 'Continue', exact: true }).click();
-  await page.getByRole('textbox', { name: 'First Action' }).fill(onboardingSeed.action);
-  await page.getByRole('textbox', { name: 'First Capture' }).fill(onboardingSeed.capture);
-  await page.getByRole('button', { name: 'Enter workspace', exact: true }).click();
-  // Finishing onboarding writes a Vision, a Goal, an Action and a Capture in
-  // one go. Under parallel workers on the local stack that is comfortably the
-  // slowest step in any journey.
+  await page.getByRole('button', { name: 'Enter Planner AI', exact: true }).click();
   await expect(page).toHaveURL(/\/$/, { timeout: 60_000 });
+  if (admin && userId) await seedJourneyPlan(admin, userId);
 }
 
 export async function signIn(page: Page, email: string, baseURL?: string, returnTo?: string) {
@@ -177,7 +211,7 @@ export const test = base.extend<{ workspace: Workspace }>({
       // journey cannot fail before it starts. Default redirect behavior stays
       // covered by the onboarding journey, which does not pass returnTo.
       await signIn(page, email, undefined, '/onboarding');
-      await completeOnboarding(page);
+      await completeOnboarding(page, admin, userId);
       await provide({ page, email, userId, admin });
     } finally {
       // Deleting the Auth user cascades to the Workspace, so a failed test
@@ -225,7 +259,7 @@ export const scanTest = base.extend<
       );
       try {
         await signIn(page, email, workerInfo.project.use.baseURL, '/onboarding');
-        await completeOnboarding(page);
+        await completeOnboarding(page, admin, userId);
         await context.storageState({ path: statePath });
         await context.close();
         await provide(statePath);

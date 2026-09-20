@@ -1,31 +1,21 @@
-import { notFound } from 'next/navigation';
-import { getOnboardingOwnerId, getWorkspacePreferences } from '@/app/onboarding/actions';
-import { getActiveVision } from '@/app/vision/actions';
-import { OnboardingCenter } from '@/components/onboarding-center';
+import { notFound, redirect } from 'next/navigation';
+import { getOnboardingProfile, getWorkspacePreferences } from '@/app/onboarding/actions';
 import { OnboardingWizard } from '@/components/onboarding-wizard';
 
 export default async function OnboardingPage() {
   if (process.env.PLANNER_DATA_MODEL !== 'canonical') notFound();
   const preferences = await getWorkspacePreferences();
-  const ownerId = await getOnboardingOwnerId();
-  const vision = preferences.onboardingCompletedAt ? await getActiveVision() : null;
-
-  if (preferences.onboardingCompletedAt) {
-    return (
-      <div className="page onboarding-page">
-        <OnboardingCenter hasVision={Boolean(vision)} />
-      </div>
-    );
-  }
+  if (preferences.onboardingCompletedAt) redirect('/');
+  const profile = await getOnboardingProfile();
 
   return (
     <div className="page onboarding-page">
       <header className="onboarding-heading">
-        <p className="eyebrow">Workspace setup</p>
-        <h1>Set your direction</h1>
-        <p>Start with as much or as little structure as you need.</p>
+        <p className="eyebrow">Welcome to Planner AI</p>
+        <h1>A one-minute setup, then you&rsquo;re in.</h1>
+        <p>Your direction, goals, and first actions belong inside the product—not in setup.</p>
       </header>
-      <OnboardingWizard initial={preferences} ownerId={ownerId} />
+      <OnboardingWizard initial={preferences} profile={profile} />
     </div>
   );
 }

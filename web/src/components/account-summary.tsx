@@ -2,9 +2,9 @@ import Link from 'next/link';
 import { ArrowUpRight } from 'lucide-react';
 import type { AccountOverview } from '@/app/settings/account/actions';
 
-function initials(email: string) {
-  const local = email.split('@')[0] ?? '';
-  const parts = local.split(/[._-]+/).filter(Boolean);
+function initials(name: string, email: string) {
+  const local = name.trim() || email.split('@')[0] || '';
+  const parts = local.split(/[\s._-]+/).filter(Boolean);
   const letters = parts.length > 1 ? `${parts[0][0]}${parts[1][0]}` : local.slice(0, 2) || 'PA';
   return letters.toUpperCase();
 }
@@ -38,12 +38,20 @@ export function AccountSummary({ account }: { account: AccountOverview }) {
   return (
     <div className="account-summary">
       <section className="account-identity">
-        <span className="account-avatar" aria-hidden="true">
-          {initials(account.email)}
-        </span>
+        {account.avatarUrl ? (
+          // eslint-disable-next-line @next/next/no-img-element
+          <img className="account-avatar account-avatar-image" src={account.avatarUrl} alt="" />
+        ) : (
+          <span
+            className={`account-avatar account-avatar-${account.avatarColor}`}
+            aria-hidden="true"
+          >
+            {initials(account.displayName, account.email)}
+          </span>
+        )}
         <div>
-          <strong>{account.email}</strong>
-          <small>Owner · {account.workspaceName}</small>
+          <strong>{account.displayName || account.email}</strong>
+          <small>{account.email} · Owner</small>
         </div>
       </section>
 

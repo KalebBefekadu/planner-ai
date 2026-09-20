@@ -5,7 +5,6 @@ import { headers } from 'next/headers';
 import { revalidatePath } from 'next/cache';
 import { redirect } from 'next/navigation';
 import { createClient } from '@/lib/supabase/server';
-import { postLoginPath } from '@/lib/auth/post-login';
 
 type CredentialPage = '/login' | '/signup' | '/forgot-password' | '/update-password';
 
@@ -85,7 +84,7 @@ export async function login(formData: FormData) {
   const returnTo = safeReturnTo(formData.get('returnTo'));
   const email = readField(formData, 'email', '/login').toLowerCase();
   const password = readField(formData, 'password', '/login', true);
-  const { data, error } = await supabase.auth.signInWithPassword({ email, password });
+  const { error } = await supabase.auth.signInWithPassword({ email, password });
 
   if (error) {
     redirect(
@@ -98,7 +97,7 @@ export async function login(formData: FormData) {
   }
 
   revalidatePath('/', 'layout');
-  redirect(await postLoginPath(supabase, data.user.id, returnTo));
+  redirect(returnTo);
 }
 
 export async function loginWithGoogle(formData: FormData) {
@@ -134,7 +133,7 @@ export async function signup(formData: FormData) {
   const { error } = await supabase.auth.signUp({
     email,
     password,
-    options: { emailRedirectTo: `${origin}/auth/callback` },
+    options: { emailRedirectTo: `${origin}/auth/callback?next=/onboarding` },
   });
 
   if (error) {
