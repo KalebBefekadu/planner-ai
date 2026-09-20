@@ -127,6 +127,11 @@ export type WeeklyReviewData = {
     itemCount: number;
     priorityCount: number;
   }>;
+  completedReview: {
+    id: string;
+    reflectionMarkdown: string;
+    completedAt: string;
+  } | null;
   aiProposal: ReviewAiProposalView | null;
   analysisJob: ReviewAnalysisJobView | null;
 };
@@ -287,6 +292,7 @@ export async function getWeeklyReviewData(): Promise<WeeklyReviewData> {
     recurringResult,
     goalTreeResult,
     reviewsResult,
+    completedReviewResult,
     proposalResult,
     jobResult,
   ] = await Promise.all([
@@ -365,6 +371,14 @@ export async function getWeeklyReviewData(): Promise<WeeklyReviewData> {
       .order('completed_at', { ascending: false })
       .limit(8),
     supabase
+      .from('reviews')
+      .select('id,reflection_markdown,completed_at,planning_horizons!inner(starts_on)')
+      .eq('workspace_id', workspaceId)
+      .eq('kind', 'weekly')
+      .eq('status', 'completed')
+      .eq('planning_horizons.starts_on', startsOn)
+      .maybeSingle(),
+    supabase
       .from('review_ai_proposals')
       .select('id,payload,model_id,prompt_version,created_at')
       .eq('workspace_id', workspaceId)
@@ -391,6 +405,7 @@ export async function getWeeklyReviewData(): Promise<WeeklyReviewData> {
     recurringResult.error ||
     goalTreeResult.error ||
     reviewsResult.error ||
+    completedReviewResult.error ||
     proposalResult.error ||
     jobResult.error
   ) {
@@ -476,6 +491,13 @@ export async function getWeeklyReviewData(): Promise<WeeklyReviewData> {
         priorityCount: items.filter((item) => item.priority).length,
       };
     }),
+    completedReview: completedReviewResult.data
+      ? {
+          id: completedReviewResult.data.id as string,
+          reflectionMarkdown: completedReviewResult.data.reflection_markdown as string,
+          completedAt: completedReviewResult.data.completed_at as string,
+        }
+      : null,
     aiProposal: reviewProposalView(proposalResult.data as Record<string, unknown> | null),
     analysisJob: reviewAnalysisJobView(jobResult.data as Record<string, unknown> | null),
   };

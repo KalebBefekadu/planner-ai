@@ -94,15 +94,11 @@ not expire with it. Read the reason, not the label.
   mobile failure happened during fixture setup rather than favourite behavior
   and did not reproduce under the original contention condition, so no product
   code, timeout, retry, or worker-count change was justified.
-- A completed **weekly** review still reopens as an editable form, while a
-  completed month or quarter reopens as a saved record. PL-11 (#185) built the
-  weekly saved-record view, and it was deliberately not carried across when that
-  branch was merged: `getWeeklyReview` had been rewritten underneath it by the
-  weekly initiative ritual, and rebuilding the UI on the new shape is separate
-  work rather than a merge resolution. The server still refuses a second review
-  of a reviewed period, so nothing is lost -- but the week is the one period
-  that answers a second completion with an error instead of by showing what is
-  already saved. The original implementation is in #185's history if it helps.
+- ~~A completed weekly review reopened as an editable form.~~ Restored on
+  2026-09-20 against the current initiative-aware Review shape. The current
+  weekly horizon now loads its completed Review explicitly and renders the
+  saved reflection and completion date as a read-only decision record, matching
+  the month and quarter behavior without reviving the stale PL-11 data model.
 - `src/app/actions.ts` is the last of the three large action files. Audit it
   before assuming it needs splitting; the lesson from `notes/actions.ts` is
   that length and shape are different questions.

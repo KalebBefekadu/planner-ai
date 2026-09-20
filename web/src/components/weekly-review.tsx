@@ -138,7 +138,58 @@ function errorMessage(error: unknown) {
   return actionFailureMessage(error, 'Weekly Review could not be completed.');
 }
 
-export function WeeklyReview({ data }: { data: WeeklyReviewData }) {
+function formatWeeklyDate(value: string) {
+  return new Intl.DateTimeFormat('en-US', { month: 'short', day: 'numeric' }).format(
+    new Date(`${value}T12:00:00Z`)
+  );
+}
+
+function CompletedWeeklyReview({ data }: { data: WeeklyReviewData }) {
+  const completed = data.completedReview!;
+  return (
+    <div className="page review-page">
+      <ReviewTabs active="week" />
+      <header className="page-heading review-heading">
+        <div>
+          <p className="eyebrow">Weekly reset</p>
+          <h1>Review</h1>
+          <p className="lede">This week is closed. Its reflection is preserved as a record.</p>
+        </div>
+        <div className="review-range" aria-label="Review period">
+          <CalendarRange size={17} aria-hidden="true" />
+          <span>
+            {formatWeeklyDate(data.startsOn)} to {formatWeeklyDate(data.endsOn)}
+          </span>
+        </div>
+      </header>
+
+      <section className="period-reflection" aria-labelledby="weekly-record-heading">
+        <div className="section-heading">
+          <div>
+            <p className="eyebrow">Decision record</p>
+            <h2 id="weekly-record-heading">Week complete</h2>
+          </div>
+          <CheckCircle2 size={18} aria-hidden="true" />
+        </div>
+        <div className="period-reflection-complete">
+          <p>{completed.reflectionMarkdown || 'No reflection recorded.'}</p>
+          <time dateTime={completed.completedAt}>
+            Completed{' '}
+            {new Intl.DateTimeFormat('en-US', { dateStyle: 'medium' }).format(
+              new Date(completed.completedAt)
+            )}
+          </time>
+        </div>
+        <p className="review-next-links">
+          <Link href="/planner">Plan next week</Link>
+          <Link href="/">Open Today</Link>
+        </p>
+      </section>
+    </div>
+  );
+}
+
+function OpenWeeklyReview({ data }: { data: WeeklyReviewData }) {
   const [isPending, startTransition] = useTransition();
   // Null until this screen submits, and cleared when a submission succeeds, so
   // the next completion of the same period is recognised as a new decision
@@ -755,5 +806,13 @@ export function WeeklyReview({ data }: { data: WeeklyReviewData }) {
         </aside>
       </div>
     </div>
+  );
+}
+
+export function WeeklyReview({ data }: { data: WeeklyReviewData }) {
+  return data.completedReview ? (
+    <CompletedWeeklyReview data={data} />
+  ) : (
+    <OpenWeeklyReview data={data} />
   );
 }
