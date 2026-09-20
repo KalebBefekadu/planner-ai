@@ -63,7 +63,7 @@ See [Production](runbooks/production.md) and [Migration reconciliation](runbooks
 
 ### Release operations
 
-- Apply the three Notes-vault migrations and MCP manual-token repair that remain local-only.
+- Refresh the protected production database connection credential, create a fresh encrypted backup, rehearse it, then apply the seven additive migrations from `20260915090000` through `20260915150000` in a recorded maintenance window.
 - Verify Vercel production environment, deployment protection, owned domain, SMTP, cron ownership, external alerts, and canonical application mode.
 - Establish off-machine backup custody and prove a hosted recovery drill covering Auth, Storage, and managed configuration.
 

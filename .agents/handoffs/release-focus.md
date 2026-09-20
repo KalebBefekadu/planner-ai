@@ -23,6 +23,7 @@ No product behavior changed. Notes conflict comparison and recoverable-draft pro
 - Read-only migration inspection found seven local-only migrations, `20260915090000` through `20260915150000`.
 - The guarded preflight stopped on that expected drift.
 - A fresh encrypted backup attempt stopped before creating an archive because the protected release file's database password is no longer accepted by the correctly shaped shared-pooler connection.
+- The newest existing encrypted archive, created 2026-09-07, decrypted and passed archive validation on 2026-09-20; an isolated local restore passed with 55 public tables, 55 RLS-enabled tables, and 128 public functions.
 - No production mutation occurred. Migration and fresh recovery evidence remain blocked until the owner refreshes `PLANNER_PRODUCTION_DATABASE_URL` in the gitignored `web/.env.release.local` file.
 
 ## Commit

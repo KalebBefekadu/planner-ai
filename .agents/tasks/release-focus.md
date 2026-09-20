@@ -10,10 +10,11 @@
   - `docs/roadmap.md`
   - `docs/status.md`
   - `docs/product/requirements.md`
+  - `docs/runbooks/production.md`
   - `web/src/components/notes-workspace.tsx`
   - `web/src/components/note-recovery-panels.tsx`
   - `.agents/ACTIVE.md`
   - `.agents/tasks/release-focus.md`
   - `.agents/handoffs/release-focus.md`
 - Forbidden: production mutation, schema, migrations, Operations, styles, and `/preview`.
-- Acceptance: authority documents agree on the revised gates; Notes conflict and draft recovery behavior is preserved; unit, agent, build, and affected browser checks pass.
+- Acceptance: authority documents agree on the revised gates; Notes conflict and draft recovery behavior is preserved; available backup/restore evidence is recorded accurately; unit, agent, build, and affected browser checks pass.
