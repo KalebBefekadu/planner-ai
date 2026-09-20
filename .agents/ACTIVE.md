@@ -86,15 +86,14 @@ not expire with it. Read the reason, not the label.
   browser projects now run on pull requests. The comment in `ci.yml` justified
   the saving by saying mobile had never caught a defect first; the first
   post-merge run after that comment was written is the run that falsified it.
-- Two browser journeys are flaky, and both retried green in the run that
-  merged the task-completion fix (#260):
-  `journey-notes.spec.ts:666` "typing and immediately opening another Note does
-  not lose the last edit" on `chromium`, and `journey-notes.spec.ts:893`
-  "a favourite Note stays reachable without the tree and survives reload" on
-  `mobile-chromium`. Neither is related to that fix. The first guards a defect
-  that has actually shipped before -- a Notes editor discarding the last edit --
-  so a retry hiding it is the wrong kind of quiet. Worth a task; a journey that
-  only passes on the second attempt is not evidence that the journey works.
+- ~~Two Notes browser journeys depended on retries.~~ Closed on 2026-09-20.
+  The extracted Note draft pipeline made immediate navigation flush the draft;
+  that journey passed 10/10 on Chromium with retries disabled. Favourite
+  persistence passed 10/10 on mobile Chromium in isolation and 8/8 with four
+  concurrent signup/onboarding workers, also with retries disabled. The earlier
+  mobile failure happened during fixture setup rather than favourite behavior
+  and did not reproduce under the original contention condition, so no product
+  code, timeout, retry, or worker-count change was justified.
 - A completed **weekly** review still reopens as an editable form, while a
   completed month or quarter reopens as a saved record. PL-11 (#185) built the
   weekly saved-record view, and it was deliberately not carried across when that
