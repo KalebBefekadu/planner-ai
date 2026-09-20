@@ -11,7 +11,7 @@ import {
   type CaptureProposalItemView,
   type CaptureAnalysisJobView,
 } from '@/app/inbox/actions';
-import type { CaptureView } from '@/app/actions';
+import type { CaptureView } from '@/app/captures/actions';
 import { AsyncStatus } from '@/components/async-status';
 import {
   changeKind,

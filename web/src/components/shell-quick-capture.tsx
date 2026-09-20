@@ -4,7 +4,7 @@ import { useId, useRef, useState } from 'react';
 import Link from 'next/link';
 import { Inbox, Loader2 } from 'lucide-react';
 
-import { saveTranscript } from '@/app/actions';
+import { saveTranscript } from '@/app/captures/actions';
 import { actionFailureMessage } from '@/lib/operations/failure-message';
 
 /* Capturing a thought without leaving the page you are on.

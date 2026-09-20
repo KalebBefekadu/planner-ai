@@ -1,6 +1,7 @@
 import Link from 'next/link';
 import { ArrowRight, CheckCircle2, Inbox, Plus, Target } from 'lucide-react';
-import { getGoalsHierarchy, getTranscripts } from '@/app/actions';
+import { getGoalsHierarchy } from '@/app/actions';
+import { getTranscripts } from '@/app/captures/actions';
 import { getTodayData } from '@/app/today/actions';
 import { TodayWorkspace } from '@/components/today-workspace';
 

@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState, useSyncExternalStore } from 'react';
 import { CloudOff, RefreshCw, Trash2 } from 'lucide-react';
-import { saveTranscript, syncTranscript, type CaptureView } from '@/app/actions';
+import { saveTranscript, syncTranscript, type CaptureView } from '@/app/captures/actions';
 import { CoachingCue } from '@/components/coaching-cue';
 import {
   applyQueuedCaptureJournalEvents,

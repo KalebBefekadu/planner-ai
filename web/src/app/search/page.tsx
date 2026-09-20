@@ -1,6 +1,7 @@
 import Link from 'next/link';
 import { FileText, Inbox, Search, Target, WandSparkles } from 'lucide-react';
-import { getGoalsHierarchy, getTranscripts } from '@/app/actions';
+import { getGoalsHierarchy } from '@/app/actions';
+import { getTranscripts } from '@/app/captures/actions';
 import { getNoteBodies, getNotes, type NoteView } from '@/app/notes/actions';
 import { buildWorkspaceSearchResults, type WorkspaceSearchResult } from '@/lib/workspace-search';
 import { noteLocationLabel } from '@/lib/notes/note-paths';

@@ -1,5 +1,5 @@
 import { DumpUI } from '@/components/dump-ui';
-import { getTranscripts } from '@/app/actions';
+import { getTranscripts } from '@/app/captures/actions';
 import { getWorkspacePreferences } from '@/app/onboarding/actions';
 import { getCaptureAnalysisJobs, getCaptureProposalQueue } from '@/app/inbox/actions';
 
