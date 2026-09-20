@@ -10,6 +10,8 @@ const visionOutput = z
   .object({
     id,
     workspace_id: id,
+    /* Null is the overall life Vision. An id is that area's direction. */
+    area_id: id.nullable(),
     body_markdown: z.string(),
     version,
     created_at: timestamp,
@@ -26,6 +28,7 @@ const goalOutput = z
     vision_id: id,
     horizon_id: id,
     parent_goal_id: id.nullable(),
+    primary_area_id: id.nullable(),
     title: z.string(),
     description_markdown: z.string().nullable(),
     status: z.enum(['draft', 'active', 'paused', 'achieved', 'abandoned']),
@@ -48,6 +51,7 @@ const actionOutput = z
     goal_id: id.nullable(),
     parent_action_id: id.nullable(),
     horizon_id: id,
+    primary_area_id: id.nullable(),
     title: z.string(),
     description_markdown: z.string().nullable(),
     status: z.enum(['open', 'in_progress', 'blocked', 'done', 'dropped']),
@@ -431,8 +435,42 @@ export const operationDefinitions = {
     input: z.object({ id, aiExcluded: z.boolean(), expectedVersion: version }).strict(),
     output: areaOutput,
   },
+  'area.assign.v1': {
+    summary: 'File a Goal, Action, or Note under one life area.',
+    risk: 'low',
+    exposure: ['ui', 'chat', 'mcp'],
+    reversible: true,
+    domain: 'life_area',
+    input: z
+      .object({
+        itemType: z.enum(['goal', 'action', 'note']),
+        id,
+        /* Null unfiles it. Work without an area is ordinary work. */
+        areaId: id.nullable(),
+        expectedVersion: version,
+      })
+      .strict(),
+    output: z
+      .object({
+        id,
+        workspace_id: id,
+        primary_area_id: id.nullable(),
+        version,
+        item_type: z.enum(['goal', 'action', 'note']),
+      })
+      .passthrough(),
+  },
+  'area.vision.v1': {
+    summary: 'Write what one life area is for.',
+    risk: 'low',
+    exposure: ['ui', 'chat', 'mcp'],
+    reversible: true,
+    domain: 'life_area',
+    input: z.object({ areaId: id, bodyMarkdown: z.string().min(3).max(50_000) }).strict(),
+    output: visionOutput,
+  },
   'vision.upsert.v1': {
-    summary: 'Create or revise the active Vision.',
+    summary: 'Create or revise the overall life Vision.',
     risk: 'low',
     exposure: ['ui', 'chat', 'mcp'],
     reversible: true,
@@ -453,6 +491,9 @@ export const operationDefinitions = {
         startsOn: date,
         endsOn: date,
         parentGoalId: id.nullable(),
+        /* Optional, so every existing caller is still valid. Omitted, a
+           quarterly Goal inherits the area of the yearly Goal above it. */
+        areaId: id.nullable().optional(),
         /**
          * An 'initiative' is a Goal that is never finished -- a business, a
          * project, a standing concern that recurs every week with new work
@@ -532,6 +573,9 @@ export const operationDefinitions = {
         goalId: id.nullable(),
         parentActionId: id.nullable(),
         scheduledOn: date.nullable(),
+        /* Optional. Omitted, the Action takes the area of its parent Action,
+           then of its Goal -- which is what "add a task here" means. */
+        areaId: id.nullable().optional(),
       })
       .strict(),
     output: actionOutput,
@@ -1292,6 +1336,8 @@ export const operationDefinitions = {
 } as const;
 
 export const undoableOperationIds = [
+  'area.assign.v1',
+  'area.vision.v1',
   'area.create.v1',
   'area.update.v1',
   'area.move.v1',
@@ -1465,6 +1511,9 @@ function stableFailure(message: string) {
       'note_already_canonical',
       'That page is already another life area’s page. Choose a different one.'
     );
+  }
+  if (message.includes('area_not_found')) {
+    return new OperationFailure('area_not_found', 'That life area no longer exists.');
   }
   if (message.includes('area_cycle')) {
     return new OperationFailure(

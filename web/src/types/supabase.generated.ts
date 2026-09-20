@@ -212,6 +212,7 @@ export type Database = {
           horizon_id: string;
           id: string;
           parent_action_id: string | null;
+          primary_area_id: string | null;
           purge_after: string | null;
           recurrence_template_id: string | null;
           scheduled_on: string | null;
@@ -234,6 +235,7 @@ export type Database = {
           horizon_id: string;
           id?: string;
           parent_action_id?: string | null;
+          primary_area_id?: string | null;
           purge_after?: string | null;
           recurrence_template_id?: string | null;
           scheduled_on?: string | null;
@@ -256,6 +258,7 @@ export type Database = {
           horizon_id?: string;
           id?: string;
           parent_action_id?: string | null;
+          primary_area_id?: string | null;
           purge_after?: string | null;
           recurrence_template_id?: string | null;
           scheduled_on?: string | null;
@@ -287,6 +290,13 @@ export type Database = {
             columns: ['parent_action_id', 'workspace_id'];
             isOneToOne: false;
             referencedRelation: 'actions';
+            referencedColumns: ['id', 'workspace_id'];
+          },
+          {
+            foreignKeyName: 'actions_primary_area_fk';
+            columns: ['primary_area_id', 'workspace_id'];
+            isOneToOne: false;
+            referencedRelation: 'life_areas';
             referencedColumns: ['id', 'workspace_id'];
           },
           {
@@ -1037,6 +1047,7 @@ export type Database = {
           id: string;
           kind: string;
           parent_goal_id: string | null;
+          primary_area_id: string | null;
           purge_after: string | null;
           status: string;
           target_value: number | null;
@@ -1060,6 +1071,7 @@ export type Database = {
           id?: string;
           kind?: string;
           parent_goal_id?: string | null;
+          primary_area_id?: string | null;
           purge_after?: string | null;
           status?: string;
           target_value?: number | null;
@@ -1083,6 +1095,7 @@ export type Database = {
           id?: string;
           kind?: string;
           parent_goal_id?: string | null;
+          primary_area_id?: string | null;
           purge_after?: string | null;
           status?: string;
           target_value?: number | null;
@@ -1107,6 +1120,13 @@ export type Database = {
             columns: ['parent_goal_id', 'workspace_id'];
             isOneToOne: false;
             referencedRelation: 'goals';
+            referencedColumns: ['id', 'workspace_id'];
+          },
+          {
+            foreignKeyName: 'goals_primary_area_fk';
+            columns: ['primary_area_id', 'workspace_id'];
+            isOneToOne: false;
+            referencedRelation: 'life_areas';
             referencedColumns: ['id', 'workspace_id'];
           },
           {
@@ -1896,6 +1916,7 @@ export type Database = {
           icon_emoji: string | null;
           id: string;
           parent_note_id: string | null;
+          primary_area_id: string | null;
           purge_after: string | null;
           search_vector: unknown;
           sort_key: number;
@@ -1916,6 +1937,7 @@ export type Database = {
           icon_emoji?: string | null;
           id?: string;
           parent_note_id?: string | null;
+          primary_area_id?: string | null;
           purge_after?: string | null;
           search_vector?: unknown;
           sort_key?: number;
@@ -1936,6 +1958,7 @@ export type Database = {
           icon_emoji?: string | null;
           id?: string;
           parent_note_id?: string | null;
+          primary_area_id?: string | null;
           purge_after?: string | null;
           search_vector?: unknown;
           sort_key?: number;
@@ -1951,6 +1974,13 @@ export type Database = {
             columns: ['parent_note_id', 'workspace_id'];
             isOneToOne: false;
             referencedRelation: 'notes';
+            referencedColumns: ['id', 'workspace_id'];
+          },
+          {
+            foreignKeyName: 'notes_primary_area_fk';
+            columns: ['primary_area_id', 'workspace_id'];
+            isOneToOne: false;
+            referencedRelation: 'life_areas';
             referencedColumns: ['id', 'workspace_id'];
           },
           {
@@ -2620,6 +2650,7 @@ export type Database = {
       visions: {
         Row: {
           archived_at: string | null;
+          area_id: string | null;
           body_markdown: string;
           created_at: string;
           id: string;
@@ -2631,6 +2662,7 @@ export type Database = {
         };
         Insert: {
           archived_at?: string | null;
+          area_id?: string | null;
           body_markdown: string;
           created_at?: string;
           id?: string;
@@ -2642,6 +2674,7 @@ export type Database = {
         };
         Update: {
           archived_at?: string | null;
+          area_id?: string | null;
           body_markdown?: string;
           created_at?: string;
           id?: string;
@@ -2652,6 +2685,13 @@ export type Database = {
           workspace_id?: string;
         };
         Relationships: [
+          {
+            foreignKeyName: 'visions_area_fk';
+            columns: ['area_id', 'workspace_id'];
+            isOneToOne: false;
+            referencedRelation: 'life_areas';
+            referencedColumns: ['id', 'workspace_id'];
+          },
           {
             foreignKeyName: 'visions_workspace_id_fkey';
             columns: ['workspace_id'];
