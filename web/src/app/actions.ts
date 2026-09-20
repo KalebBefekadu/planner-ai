@@ -9,8 +9,8 @@ import { ancestorDepth, indexActions, nearestMonthlyAncestor } from '@/lib/plann
 import { revalidatePlannerAndRecords, revalidatePlannerViews } from '@/lib/planner-revalidation';
 import { periodBounds, type HorizonKind, type PeriodBounds } from '@/lib/planning-period';
 import { dateInTimezone } from '@/lib/date';
-import { executeOperation, OperationFailure } from '@/lib/operations';
-import { createClient } from '@/lib/supabase/server';
+import { executeOperation } from '@/lib/operations';
+import { requireAuthenticatedUser as requireUser } from '@/lib/supabase/authenticated-context';
 import type { GoalStatus } from '@/types/supabase';
 
 export type { GoalType };
@@ -120,15 +120,6 @@ function validateContent(content: string, maxLength = 1_000) {
   if (trimmed.length > maxLength)
     throw new Error(`Keep this item under ${maxLength.toLocaleString()} characters.`);
   return trimmed;
-}
-
-async function requireUser() {
-  const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-  if (!user) throw new OperationFailure('authentication_required', 'Please sign in to continue.');
-  return { supabase, user };
 }
 
 async function requireWorkspaceId() {

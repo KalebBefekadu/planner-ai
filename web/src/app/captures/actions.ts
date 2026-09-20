@@ -4,7 +4,10 @@ import { randomUUID } from 'node:crypto';
 
 import { revalidatePlannerAndRecords } from '@/lib/planner-revalidation';
 import { executeOperation, OperationFailure } from '@/lib/operations';
-import { createClient } from '@/lib/supabase/server';
+import {
+  requireAuthenticatedUser as requireUser,
+  requireOwnedWorkspaceId as requireWorkspaceId,
+} from '@/lib/supabase/authenticated-context';
 
 export type CaptureView = {
   id: string;
@@ -24,26 +27,6 @@ function validateRawCapture(rawText: string) {
   if (rawText.trim().length < 3) throw new Error('Please write at least three characters.');
   if (rawText.length > 60_000) throw new Error('Keep this capture under 60,000 characters.');
   return rawText;
-}
-
-async function requireUser() {
-  const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-  if (!user) throw new OperationFailure('authentication_required', 'Please sign in to continue.');
-  return { supabase, user };
-}
-
-async function requireWorkspaceId() {
-  const { supabase, user } = await requireUser();
-  const { data, error } = await supabase
-    .from('workspaces')
-    .select('id')
-    .eq('owner_user_id', user.id)
-    .single();
-  if (error || !data) throw new Error('Unable to load your workspace.');
-  return { supabase, workspaceId: data.id as string };
 }
 
 export async function getTranscripts(limit = 7): Promise<CaptureView[]> {

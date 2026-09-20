@@ -3,9 +3,12 @@
 import { randomUUID } from 'node:crypto';
 
 import { dateInTimezone } from '@/lib/date';
-import { executeOperation, OperationFailure } from '@/lib/operations';
+import { executeOperation } from '@/lib/operations';
 import { revalidatePlannerViews } from '@/lib/planner-revalidation';
-import { createClient } from '@/lib/supabase/server';
+import {
+  requireAuthenticatedUser as requireUser,
+  requireOwnedWorkspaceId as requireWorkspaceId,
+} from '@/lib/supabase/authenticated-context';
 
 export type ActionTemplateView = {
   id: string;
@@ -26,26 +29,6 @@ function validateTitle(title: string, maxLength = 1_000) {
   if (trimmed.length > maxLength)
     throw new Error(`Keep this item under ${maxLength.toLocaleString()} characters.`);
   return trimmed;
-}
-
-async function requireUser() {
-  const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-  if (!user) throw new OperationFailure('authentication_required', 'Please sign in to continue.');
-  return { supabase, user };
-}
-
-async function requireWorkspaceId() {
-  const { supabase, user } = await requireUser();
-  const { data, error } = await supabase
-    .from('workspaces')
-    .select('id')
-    .eq('owner_user_id', user.id)
-    .single();
-  if (error || !data) throw new Error('Unable to load your workspace.');
-  return { supabase, workspaceId: data.id as string };
 }
 
 export async function getActionTemplates(): Promise<ActionTemplateView[] | null> {
