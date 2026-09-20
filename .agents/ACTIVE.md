@@ -101,8 +101,11 @@ not expire with it. Read the reason, not the label.
   the month and quarter behavior without reviving the stale PL-11 data model.
 - `src/app/actions.ts` audit found one clean remaining ownership boundary:
   Vision's read/write pair and its three direct callers. That extraction is
-  active on `codex/vision-actions`; Goals and planning remain together until a
-  similarly cohesive boundary is justified.
+  complete. Goals and planning remain together until a similarly cohesive
+  boundary is justified.
+- Focused UI extraction is active on `codex/planner-summary`: the Planner's
+  read-only filters, flow, counters, and drift summary are moving out of the
+  stateful workspace without changing routes, styles, or mutations.
 - EH-05 waits on the personal MVP gate. EH-06's tracing and SLO halves want a
   running system with real traffic.
 

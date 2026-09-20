@@ -1,26 +1,19 @@
 'use client';
 
 import { useState, useTransition } from 'react';
-import Link from 'next/link';
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import {
   Archive,
-  CalendarDays,
   CalendarPlus,
   ChevronLeft,
   ChevronRight,
-  CircleCheckBig,
-  Compass,
   Layers3,
-  ListTodo,
   Pause,
   Pencil,
   Play,
   Plus,
   Repeat2,
   Save,
-  Target,
-  TriangleAlert,
   X,
 } from 'lucide-react';
 import { assessGoalPace, summariseDrift } from '@/lib/goal-pace';
@@ -45,19 +38,19 @@ import {
 } from '@/app/planner/templates/actions';
 import { actionFailureMessage } from '@/lib/operations/failure-message';
 import { MeasuredFill } from '@/components/measured-fill';
+import { PlannerSummary, type PlannerPeriodFilter } from '@/components/planner-summary';
 import { overlapsPeriod } from '@/lib/planning-period';
 import {
   childHorizonTypes as childTypes,
   horizonKinds,
   horizonLabels as labels,
-  periodRangeLabel,
   type HorizonFilter,
 } from '@/lib/planner/horizon-labels';
 
 type ComposerTarget = { type: GoalType; parentId: string; label: string } | null;
 type GoalItem = GoalView;
 type EditTarget = { type: GoalType; item: GoalItem } | null;
-type PeriodFilter = 'current' | 'all';
+type PeriodFilter = PlannerPeriodFilter;
 
 function messageFor(error: unknown) {
   return actionFailureMessage(error, 'Something went wrong. Please try again.');
@@ -628,131 +621,23 @@ export function PlannerWorkspace({
         </div>
       </header>
 
-      <div className="planner-period-bar">
-        <div className="planner-period-choice" role="group" aria-label="Filter plan by period">
-          <button
-            type="button"
-            aria-pressed={periodFilter === 'current'}
-            className={periodFilter === 'current' ? 'planner-horizon-active' : undefined}
-            onClick={() => setFilters({ period: 'current' })}
-          >
-            This period
-          </button>
-          <button
-            type="button"
-            aria-pressed={periodFilter === 'all'}
-            className={periodFilter === 'all' ? 'planner-horizon-active' : undefined}
-            onClick={() => setFilters({ period: 'all' })}
-          >
-            All time
-          </button>
-        </div>
-        <p className="planner-period-range">
-          {periodFilter === 'current'
-            ? periodRangeLabel(horizonFilter, currentPeriods)
-            : 'Every period on record'}
-        </p>
-      </div>
-
-      {periodFilter === 'current' && hiddenByPeriod > 0 ? (
-        // Work outside the period is filtered, never hidden: the count says
-        // how much, and one control brings all of it back.
-        <p className="planner-period-hidden">
-          {hiddenByPeriod} {hiddenByPeriod === 1 ? 'item is' : 'items are'} outside this period.{' '}
-          <button
-            type="button"
-            className="link-button"
-            onClick={() => setFilters({ period: 'all' })}
-          >
-            Show all time
-          </button>
-        </p>
-      ) : null}
-
-      {/* A group of toggles, not navigation: these buttons filter the plan in
-          place and route nowhere, so a nav landmark announced a list of links
-          that does not exist. The period filter above already says group. */}
-      <div className="planner-horizon-tabs" role="group" aria-label="Filter plan by horizon">
-        {horizonOptions.map((option) => (
-          <button
-            key={option.id}
-            type="button"
-            aria-pressed={horizonFilter === option.id}
-            className={horizonFilter === option.id ? 'planner-horizon-active' : undefined}
-            onClick={() => setFilters({ horizon: option.id })}
-          >
-            <span>{option.label}</span>
-            <small>{option.count}</small>
-          </button>
-        ))}
-      </div>
-
-      <nav className="planner-flow" aria-label="Planning flow">
-        <Link href="/vision">
-          <Compass size={16} aria-hidden="true" />
-          <span>
-            <strong>Vision</strong>
-            <small>The direction</small>
-          </span>
-        </Link>
-        <span className="planner-flow-connector" aria-hidden="true" />
-        <a href="#plan-horizons">
-          <Target size={16} aria-hidden="true" />
-          <span>
-            <strong>Horizons</strong>
-            <small>{yearly.length + quarterly.length} active goals</small>
-          </span>
-        </a>
-        <span className="planner-flow-connector" aria-hidden="true" />
-        <Link href="/planner/calendar">
-          <CalendarDays size={16} aria-hidden="true" />
-          <span>
-            <strong>Calendar</strong>
-            <small>{weekly.length} weekly actions</small>
-          </span>
-        </Link>
-        <span className="planner-flow-connector" aria-hidden="true" />
-        <Link href="/review">
-          <CircleCheckBig size={16} aria-hidden="true" />
-          <span>
-            <strong>Review</strong>
-            <small>Close the loop</small>
-          </span>
-        </Link>
-      </nav>
-
-      <section className="planner-overview" aria-label="Plan overview">
-        <div>
-          <Target size={17} aria-hidden="true" />
-          <span>Active goals</span>
-          <strong>{goalItems.filter((item) => item.status !== 'completed').length}</strong>
-        </div>
-        <div>
-          <ListTodo size={17} aria-hidden="true" />
-          <span>Open actions</span>
-          <strong>{actionItems.filter((item) => item.status !== 'completed').length}</strong>
-        </div>
-        <div>
-          <CircleCheckBig size={17} aria-hidden="true" />
-          <span>Completed</span>
-          <strong>{completedItems}</strong>
-        </div>
-        <div>
-          <Repeat2 size={17} aria-hidden="true" />
-          <span>Active routines</span>
-          <strong>{activeTemplates ?? 0}</strong>
-        </div>
-      </section>
-
-      {drift.headline ? (
-        <aside className="drift-banner" role="status">
-          <TriangleAlert size={16} aria-hidden="true" />
-          <div>
-            <strong>{drift.headline}</strong>
-            <p>Nothing has been changed. Review each one and decide what it is worth.</p>
-          </div>
-        </aside>
-      ) : null}
+      <PlannerSummary
+        periodFilter={periodFilter}
+        horizonFilter={horizonFilter}
+        currentPeriods={currentPeriods}
+        hiddenByPeriod={hiddenByPeriod}
+        horizonOptions={horizonOptions}
+        yearlyCount={yearly.length}
+        quarterlyCount={quarterly.length}
+        weeklyCount={weekly.length}
+        activeGoalCount={goalItems.filter((item) => item.status !== 'completed').length}
+        openActionCount={actionItems.filter((item) => item.status !== 'completed').length}
+        completedCount={completedItems}
+        activeTemplateCount={activeTemplates ?? 0}
+        driftHeadline={drift.headline}
+        onPeriodChange={(period) => setFilters({ period })}
+        onHorizonChange={(horizon) => setFilters({ horizon })}
+      />
 
       {notice ? (
         <p className="status-message" role="status">
