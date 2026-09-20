@@ -1,6 +1,6 @@
 import { notFound } from 'next/navigation';
 import { getOnboardingOwnerId, getWorkspacePreferences } from '@/app/onboarding/actions';
-import { getActiveVision } from '@/app/actions';
+import { getActiveVision } from '@/app/vision/actions';
 import { OnboardingCenter } from '@/components/onboarding-center';
 import { OnboardingWizard } from '@/components/onboarding-wizard';
 

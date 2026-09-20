@@ -99,9 +99,10 @@ not expire with it. Read the reason, not the label.
   weekly horizon now loads its completed Review explicitly and renders the
   saved reflection and completion date as a read-only decision record, matching
   the month and quarter behavior without reviving the stale PL-11 data model.
-- `src/app/actions.ts` is the last of the three large action files. Audit it
-  before assuming it needs splitting; the lesson from `notes/actions.ts` is
-  that length and shape are different questions.
+- `src/app/actions.ts` audit found one clean remaining ownership boundary:
+  Vision's read/write pair and its three direct callers. That extraction is
+  active on `codex/vision-actions`; Goals and planning remain together until a
+  similarly cohesive boundary is justified.
 - EH-05 waits on the personal MVP gate. EH-06's tracing and SLO halves want a
   running system with real traffic.
 

@@ -12,16 +12,9 @@ import { dateInTimezone } from '@/lib/date';
 import { executeOperation } from '@/lib/operations';
 import { requireAuthenticatedUser as requireUser } from '@/lib/supabase/authenticated-context';
 import type { GoalStatus } from '@/types/supabase';
+import { getActiveVision, type VisionView } from '@/app/vision/actions';
 
 export type { GoalType };
-export type VisionView = {
-  id: string;
-  content: string;
-  created_at: string;
-  updated_at: string;
-  deleted_at: string | null;
-  version: number;
-};
 export type GoalView = {
   id: string;
   content: string;
@@ -197,70 +190,6 @@ function rangeFor(type: GoalType, now = new Date()) {
   const ends = new Date(starts);
   ends.setUTCDate(starts.getUTCDate() + 6);
   return { horizonKind: 'week' as const, startsOn: dateOnly(starts), endsOn: dateOnly(ends) };
-}
-
-export async function getActiveVision(): Promise<VisionView | null> {
-  if (canonicalEnabled) {
-    const { supabase, workspaceId } = await requireWorkspaceId();
-    const { data, error } = await supabase
-      .from('visions')
-      .select('*')
-      .eq('workspace_id', workspaceId)
-      .is('archived_at', null)
-      .is('trashed_at', null)
-      .maybeSingle();
-    if (error) throw new Error('Unable to load your vision.');
-    if (!data) return null;
-    return {
-      id: data.id as string,
-      content: data.body_markdown as string,
-      created_at: data.created_at as string,
-      updated_at: data.updated_at as string,
-      deleted_at: null,
-      version: Number(data.version),
-    };
-  }
-
-  const { supabase, user } = await requireUser();
-  const { data, error } = await supabase
-    .from('visions')
-    .select('*')
-    .eq('user_id', user.id)
-    .is('deleted_at', null)
-    .order('updated_at', { ascending: false })
-    .limit(1)
-    .maybeSingle();
-  if (error) throw new Error('Unable to load your vision.');
-  return data ? ({ ...data, version: 1 } as VisionView) : null;
-}
-
-export async function saveVision(content: string) {
-  const bodyMarkdown = validateContent(content, 50_000);
-  if (canonicalEnabled) {
-    const { supabase } = await requireUser();
-    await executeOperation(
-      supabase,
-      'vision.upsert.v1',
-      { bodyMarkdown },
-      {
-        idempotencyKey: randomUUID(),
-        surface: 'ui',
-      }
-    );
-  } else {
-    const { supabase, user } = await requireUser();
-    const currentVision = await getActiveVision();
-    const query = currentVision
-      ? supabase
-          .from('visions')
-          .update({ content: bodyMarkdown })
-          .eq('id', currentVision.id)
-          .eq('user_id', user.id)
-      : supabase.from('visions').insert({ user_id: user.id, content: bodyMarkdown });
-    const { error } = await query;
-    if (error) throw new Error('Unable to save your vision.');
-  }
-  revalidatePlanner();
 }
 
 export async function getGoalsHierarchy(): Promise<GoalsData | null> {

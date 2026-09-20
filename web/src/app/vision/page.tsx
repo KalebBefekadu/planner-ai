@@ -1,5 +1,5 @@
 import { VisionUI } from '@/components/vision-ui';
-import { getActiveVision } from '@/app/actions';
+import { getActiveVision } from '@/app/vision/actions';
 
 export default async function VisionPage() {
   const initialVision = await getActiveVision();

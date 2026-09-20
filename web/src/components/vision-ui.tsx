@@ -2,7 +2,7 @@
 
 import { useState } from 'react';
 import { RefreshCw } from 'lucide-react';
-import { saveVision, type VisionView } from '@/app/actions';
+import { saveVision, type VisionView } from '@/app/vision/actions';
 import { actionFailureMessage } from '@/lib/operations/failure-message';
 
 type Vision = VisionView;
