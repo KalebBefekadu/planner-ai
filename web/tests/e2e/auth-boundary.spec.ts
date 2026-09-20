@@ -8,6 +8,7 @@ test('anonymous users cannot see the workspace', async ({ page }) => {
   await expect(page).toHaveURL(/\/login(?:\?|$)/);
   await expect(page).not.toHaveURL(/message=/);
   await expect(page.getByRole('heading', { name: 'Welcome back' })).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Show entered value' })).toBeVisible();
   await expect(page.getByText('What is on your mind?')).toHaveCount(0);
 });
 
@@ -83,7 +84,12 @@ test('planner and settings use their own navigation surfaces', async ({ page }) 
 
 test('authentication screens expose complete recovery and invite flows', async ({ page }) => {
   await page.goto('/login');
+  await expect(page.getByText('Your plans, notes, and actions — connected.')).toHaveCount(1);
   await expect(page.getByRole('button', { name: 'Continue with Google' })).toBeVisible();
+  await page.getByLabel('Password').fill('visible password');
+  await page.getByRole('button', { name: 'Show entered value' }).click();
+  await expect(page.getByLabel('Password')).toHaveAttribute('type', 'text');
+  await expect(page.getByRole('button', { name: 'Hide entered value' })).toBeVisible();
   await page.getByRole('link', { name: 'Forgot password?' }).click();
   await expect(page.getByRole('heading', { name: 'Reset your password' })).toBeVisible();
 

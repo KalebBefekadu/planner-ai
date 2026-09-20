@@ -1,25 +1,25 @@
 import type { ReactNode } from 'react';
 
 /* The shell for every screen before the workspace: sign in, sign up, password
-   reset, and password update. It is the only place the product gets to say
-   what it is, so the marketing column carries the three promises rather than a
-   logo and empty space. Server component — none of this needs client JS.
+   reset, and password update. It gives the product one concise introduction
+   without competing with the task the person came here to complete. Server
+   component — none of this needs client JS.
 
    Design follows the /preview reference implementation and
    docs/product/experience.md. */
 
 const promises = [
   {
-    title: 'Say it once, keep it forever',
-    body: 'Talk through the week. Nothing gets lost and nothing gets summarized away.',
+    title: 'Capture without losing context',
+    body: 'Keep the original thought alongside the plan it becomes.',
   },
   {
-    title: 'Every action ladders up',
-    body: 'Today connects to the month, the quarter, the year, and the life you are building.',
+    title: 'Turn direction into action',
+    body: 'Connect today’s work to the goals and life you are building.',
   },
   {
-    title: 'Nothing changes without a preview',
-    body: 'AI proposes exact changes with evidence. You approve, and you can always undo.',
+    title: 'Stay in control of AI',
+    body: 'Preview and approve every lasting change, with a clear path to undo.',
   },
 ];
 
@@ -33,10 +33,7 @@ export function PerimeterShell({ children }: { children: ReactNode }) {
           </span>
           Planner AI
         </p>
-        <p className="perimeter-tagline">
-          Talk through your week. Planner keeps the structure — from this week&rsquo;s actions up to
-          the life you&rsquo;re building.
-        </p>
+        <p className="perimeter-tagline">Your plans, notes, and actions — connected.</p>
         <ul className="perimeter-promises">
           {promises.map((promise) => (
             <li key={promise.title}>
@@ -45,9 +42,7 @@ export function PerimeterShell({ children }: { children: ReactNode }) {
             </li>
           ))}
         </ul>
-        <p className="perimeter-foot">
-          Your material stays exportable as Markdown. Delete your account and it goes with you.
-        </p>
+        <p className="perimeter-foot">Your data stays private and exportable.</p>
       </aside>
       <main className="perimeter-main">{children}</main>
     </div>
@@ -61,6 +56,7 @@ export function PerimeterMessage({ message, tone }: { message: string; tone: 'er
         tone === 'error' ? 'perimeter-message perimeter-message-error' : 'perimeter-message'
       }
       role={tone === 'error' ? 'alert' : 'status'}
+      aria-live="polite"
     >
       {message}
     </p>

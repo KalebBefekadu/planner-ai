@@ -7200,15 +7200,15 @@ button:disabled {
 .perimeter {
   display: grid;
   min-height: 100vh;
-  grid-template-columns: minmax(320px, 460px) minmax(0, 1fr);
+  grid-template-columns: minmax(320px, 40%) minmax(0, 1fr);
   background: var(--canvas);
 }
 .perimeter-aside {
   display: flex;
   flex-direction: column;
-  gap: 22px;
+  gap: 28px;
   border-right: 1px solid var(--line);
-  padding: 48px 44px;
+  padding: clamp(40px, 5vw, 72px);
   background: var(--surface-muted);
 }
 .perimeter-brand {
@@ -7230,7 +7230,7 @@ button:disabled {
   font-weight: 700;
 }
 .perimeter-tagline {
-  max-width: 26ch;
+  max-width: 22ch;
   margin: 0;
   font-size: var(--fs-title);
   font-weight: 600;
@@ -7239,7 +7239,7 @@ button:disabled {
 }
 .perimeter-promises {
   display: grid;
-  gap: 18px;
+  gap: 20px;
   margin: 0;
   padding: 0;
   list-style: none;
@@ -7267,12 +7267,26 @@ button:disabled {
 .perimeter-main {
   display: grid;
   place-items: center;
-  padding: 40px 24px;
+  padding: 48px 32px;
 }
 .perimeter-form {
   display: grid;
-  width: min(384px, 100%);
-  gap: 8px;
+  width: min(420px, 100%);
+  gap: 10px;
+}
+.perimeter-card {
+  border: 1px solid var(--line);
+  border-radius: 16px;
+  padding: 32px;
+  background: var(--surface);
+  box-shadow: var(--shadow-lg);
+}
+.perimeter-mobile-brand {
+  display: none;
+  align-items: center;
+  gap: 10px;
+  margin: 0 0 14px;
+  font-weight: 600;
 }
 .perimeter-form h1 {
   margin: 0;
@@ -7297,6 +7311,35 @@ button:disabled {
 .perimeter-form .btn-primary {
   margin-top: 14px;
   justify-content: center;
+}
+.password-field {
+  position: relative;
+}
+.password-field .input-field {
+  padding-right: 46px;
+}
+.password-visibility {
+  position: absolute;
+  top: 50%;
+  right: 8px;
+  display: grid;
+  width: 36px;
+  height: 36px;
+  transform: translateY(-50%);
+  place-items: center;
+  border: 0;
+  border-radius: var(--r-record);
+  background: transparent;
+  color: var(--muted);
+  cursor: pointer;
+}
+.password-visibility:hover {
+  background: var(--surface-muted);
+  color: var(--ink);
+}
+.password-visibility:focus-visible {
+  outline: 2px solid var(--focus);
+  outline-offset: 1px;
 }
 .perimeter-label-row {
   display: flex;
@@ -7357,6 +7400,7 @@ button:disabled {
 }
 .perimeter-provider {
   width: 100%;
+  gap: 9px;
   justify-content: center;
 }
 .perimeter-switch,
@@ -7384,6 +7428,29 @@ button:disabled {
   }
   .perimeter-main {
     padding: 28px 24px 56px;
+  }
+  .perimeter-card {
+    padding: 28px;
+  }
+}
+@media (max-width: 600px) {
+  .perimeter-aside {
+    display: none;
+  }
+  .perimeter {
+    display: block;
+  }
+  .perimeter-main {
+    min-height: 100vh;
+    padding: 24px 18px;
+  }
+  .perimeter-card {
+    border: 0;
+    padding: 18px 6px;
+    box-shadow: none;
+  }
+  .perimeter-mobile-brand {
+    display: flex;
   }
 }
 .perimeter-back {

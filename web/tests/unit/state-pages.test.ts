@@ -54,6 +54,7 @@ describe('perimeter shell', () => {
   it('renders the promises as a real list', () => {
     expect(html).toContain('<ul');
     expect(html.match(/<li>/g)?.length).toBe(3);
+    expect(html).toContain('Capture without losing context');
   });
 
   it('renders whatever form it is given', () => {
