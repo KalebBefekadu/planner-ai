@@ -1,15 +1,6 @@
 'use client';
 
-import Link from 'next/link';
-import {
-  CalendarDays,
-  CircleCheckBig,
-  Compass,
-  ListTodo,
-  Repeat2,
-  Target,
-  TriangleAlert,
-} from 'lucide-react';
+import { CircleCheckBig, ListTodo, Repeat2, Target, TriangleAlert } from 'lucide-react';
 import { periodRangeLabel, type HorizonFilter } from '@/lib/planner/horizon-labels';
 import type { GoalsData } from '@/app/actions';
 
@@ -27,9 +18,6 @@ export function PlannerSummary({
   currentPeriods,
   hiddenByPeriod,
   horizonOptions,
-  yearlyCount,
-  quarterlyCount,
-  weeklyCount,
   activeGoalCount,
   openActionCount,
   completedCount,
@@ -43,9 +31,6 @@ export function PlannerSummary({
   currentPeriods: GoalsData['currentPeriods'];
   hiddenByPeriod: number;
   horizonOptions: HorizonOption[];
-  yearlyCount: number;
-  quarterlyCount: number;
-  weeklyCount: number;
   activeGoalCount: number;
   openActionCount: number;
   completedCount: number;
@@ -54,6 +39,13 @@ export function PlannerSummary({
   onPeriodChange: (period: PlannerPeriodFilter) => void;
   onHorizonChange: (horizon: HorizonFilter) => void;
 }) {
+  const tiles = [
+    { label: 'Active goals', count: activeGoalCount, Icon: Target },
+    { label: 'Open actions', count: openActionCount, Icon: ListTodo },
+    { label: 'Completed', count: completedCount, Icon: CircleCheckBig, always: true },
+    { label: 'Active routines', count: activeTemplateCount, Icon: Repeat2 },
+  ].filter((tile) => tile.count > 0 || (tile.always && activeGoalCount + openActionCount > 0));
+
   return (
     <>
       <div className="planner-period-bar">
@@ -75,11 +67,10 @@ export function PlannerSummary({
             All time
           </button>
         </div>
-        <p className="planner-period-range">
-          {periodFilter === 'current'
-            ? periodRangeLabel(horizonFilter, currentPeriods)
-            : 'Every period on record'}
-        </p>
+        {/* The dates moved into the page heading, where the name of the slice
+            and the dates it covers are read together. Saying them twice, six
+            centimetres apart, made the second one look like a different
+            answer. */}
       </div>
 
       {periodFilter === 'current' && hiddenByPeriod > 0 ? (
@@ -106,62 +97,28 @@ export function PlannerSummary({
         ))}
       </div>
 
-      <nav className="planner-flow" aria-label="Planning flow">
-        <Link href="/vision">
-          <Compass size={16} aria-hidden="true" />
-          <span>
-            <strong>Vision</strong>
-            <small>The direction</small>
-          </span>
-        </Link>
-        <span className="planner-flow-connector" aria-hidden="true" />
-        <a href="#plan-horizons">
-          <Target size={16} aria-hidden="true" />
-          <span>
-            <strong>Horizons</strong>
-            <small>{yearlyCount + quarterlyCount} active goals</small>
-          </span>
-        </a>
-        <span className="planner-flow-connector" aria-hidden="true" />
-        <Link href="/planner/calendar">
-          <CalendarDays size={16} aria-hidden="true" />
-          <span>
-            <strong>Calendar</strong>
-            <small>{weeklyCount} weekly actions</small>
-          </span>
-        </Link>
-        <span className="planner-flow-connector" aria-hidden="true" />
-        <Link href="/review">
-          <CircleCheckBig size={16} aria-hidden="true" />
-          <span>
-            <strong>Review</strong>
-            <small>Close the loop</small>
-          </span>
-        </Link>
-      </nav>
-
-      <section className="planner-overview" aria-label="Plan overview">
-        <div>
-          <Target size={17} aria-hidden="true" />
-          <span>Active goals</span>
-          <strong>{activeGoalCount}</strong>
-        </div>
-        <div>
-          <ListTodo size={17} aria-hidden="true" />
-          <span>Open actions</span>
-          <strong>{openActionCount}</strong>
-        </div>
-        <div>
-          <CircleCheckBig size={17} aria-hidden="true" />
-          <span>Completed</span>
-          <strong>{completedCount}</strong>
-        </div>
-        <div>
-          <Repeat2 size={17} aria-hidden="true" />
-          <span>Active routines</span>
-          <strong>{activeTemplateCount}</strong>
-        </div>
-      </section>
+      {/* The flow strip that stood here linked to Vision, Calendar and Review --
+         all three of which are in the Planner sidebar, two clicks apart from
+         themselves -- plus an anchor to the list further down this same page.
+         Four destinations, none of them new, above the work. */}
+      {/* A counter reading zero is not information; four of them are a
+          dashboard telling a new account how little it holds. Each tile
+          appears once it has something to count, and the row disappears
+          entirely until one does -- which is also what puts the actual plan
+          above the fold on a phone. Completed keeps its zero, because a
+          completed count is read against the work beside it and "none yet" is
+          the answer someone is looking for. */}
+      {tiles.length ? (
+        <section className="planner-overview" aria-label="Plan overview">
+          {tiles.map((tile) => (
+            <div key={tile.label}>
+              <tile.Icon size={17} aria-hidden="true" />
+              <span>{tile.label}</span>
+              <strong>{tile.count}</strong>
+            </div>
+          ))}
+        </section>
+      ) : null}
 
       {driftHeadline ? (
         <aside className="drift-banner" role="status">

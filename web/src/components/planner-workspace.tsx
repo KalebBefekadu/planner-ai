@@ -1,6 +1,8 @@
 'use client';
 
 import { useState, useTransition } from 'react';
+import ReactMarkdown from 'react-markdown';
+import remarkGfm from 'remark-gfm';
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import {
   Archive,
@@ -44,6 +46,8 @@ import {
   childHorizonTypes as childTypes,
   horizonKinds,
   horizonLabels as labels,
+  periodRangeLabel,
+  plannerHeading,
   type HorizonFilter,
 } from '@/lib/planner/horizon-labels';
 
@@ -54,6 +58,20 @@ type PeriodFilter = PlannerPeriodFilter;
 
 function messageFor(error: unknown) {
   return actionFailureMessage(error, 'Something went wrong. Please try again.');
+}
+
+/** The first sentence of a Markdown document, as plain text, bounded. */
+function firstSentenceOf(markdown: string) {
+  const plain = markdown
+    .replace(/```[\s\S]*?```/g, ' ')
+    .replace(/^\s*[#>*\-+]+\s*/gm, '')
+    .replace(/[*_`]/g, '')
+    .replace(/\[([^\]]*)\]\([^)]*\)/g, '$1')
+    .replace(/\s+/g, ' ')
+    .trim();
+  const end = plain.search(/[.!?](\s|$)/);
+  const sentence = end === -1 ? plain : plain.slice(0, end + 1);
+  return sentence.length > 160 ? `${sentence.slice(0, 157)}…` : sentence;
 }
 
 export function PlannerWorkspace({
@@ -409,6 +427,10 @@ export function PlannerWorkspace({
   }
 
   const { vision, currentPeriods } = initialData;
+  /* One line of the vision, with its Markdown markers taken off rather than
+     rendered -- a summary line is not a document, and `## ` in the middle of a
+     sentence is what this band used to show. */
+  const visionSummary = firstSentenceOf(vision.content);
 
   // Filtering by period keeps the items whose horizon overlaps the period the
   // person is actually in. Anything without a horizon -- legacy rows, and work
@@ -591,12 +613,15 @@ export function PlannerWorkspace({
     <div className="page plan-page planner-workspace">
       <header className="page-heading planner-workspace-header">
         <div>
-          <p className="eyebrow">Direction to action</p>
-          <h1>Plan with a clear line of sight</h1>
-          <p className="lede">
-            Move from your North Star to the next useful action without losing the reason behind the
-            work.
+          {/* The dates first, then the name of the slice they cover. A
+              repeat-use screen is opened to find out where you are, and a
+              slogan cannot answer that. */}
+          <p className="eyebrow">
+            {periodFilter === 'current'
+              ? periodRangeLabel(horizonFilter, currentPeriods)
+              : 'Every period on record'}
           </p>
+          <h1>{plannerHeading(horizonFilter, periodFilter)}</h1>
         </div>
         <div className="page-heading-actions">
           {initialTemplates ? (
@@ -627,9 +652,6 @@ export function PlannerWorkspace({
         currentPeriods={currentPeriods}
         hiddenByPeriod={hiddenByPeriod}
         horizonOptions={horizonOptions}
-        yearlyCount={yearly.length}
-        quarterlyCount={quarterly.length}
-        weeklyCount={weekly.length}
         activeGoalCount={goalItems.filter((item) => item.status !== 'completed').length}
         openActionCount={actionItems.filter((item) => item.status !== 'completed').length}
         completedCount={completedItems}
@@ -705,117 +727,6 @@ export function PlannerWorkspace({
                   : `Save ${composer.label.toLowerCase()}`}
             </button>
           </div>
-        </section>
-      ) : null}
-
-      <section className="vision-anchor planner-direction-band">
-        <div className="planner-direction-icon" aria-hidden="true">
-          <Layers3 size={18} />
-        </div>
-        <div>
-          <p className="eyebrow">North Star</p>
-          <p>{vision.content}</p>
-        </div>
-        <a href="/vision">Edit vision</a>
-      </section>
-
-      {initialTemplates ? (
-        <section className="recurrence-section" aria-labelledby="recurrence-title">
-          <header>
-            <div>
-              <p className="eyebrow">Simple recurrence</p>
-              <h2 id="recurrence-title">Recurring Actions</h2>
-            </div>
-            <button
-              className="icon-button"
-              type="button"
-              onClick={() => setTemplateEditor('new')}
-              disabled={isPending}
-              aria-label="Create recurring Action"
-              title="Create recurring Action"
-            >
-              <Plus size={17} />
-            </button>
-          </header>
-          {initialTemplates.length === 0 ? (
-            <div className="recurrence-empty">
-              <p>No recurring Actions yet.</p>
-              <button
-                className="text-button"
-                type="button"
-                onClick={() => setTemplateEditor('new')}
-              >
-                Create one
-              </button>
-            </div>
-          ) : (
-            <div className="recurrence-list">
-              {initialTemplates.map((template) => (
-                <article className="recurrence-item" key={template.id}>
-                  <div className="recurrence-mark" aria-hidden="true">
-                    <Repeat2 size={17} />
-                  </div>
-                  <div className="recurrence-copy">
-                    <h3>{template.title}</h3>
-                    <p>
-                      {template.cadence === 'weekly' ? 'Weekly' : 'Monthly'} · Next{' '}
-                      <time dateTime={template.nextOccurrenceOn}>
-                        {new Intl.DateTimeFormat('en-US', {
-                          month: 'short',
-                          day: 'numeric',
-                          year: 'numeric',
-                          timeZone: 'UTC',
-                        }).format(new Date(`${template.nextOccurrenceOn}T12:00:00Z`))}
-                      </time>
-                      {template.status === 'paused' ? ' · Paused' : ''}
-                    </p>
-                  </div>
-                  <div className="recurrence-actions">
-                    <button
-                      className="icon-button"
-                      type="button"
-                      onClick={() => createDueActions(template)}
-                      disabled={isPending || template.status === 'paused'}
-                      aria-label={`Create due Actions for ${template.title}`}
-                      title="Create due Actions"
-                    >
-                      <CalendarPlus size={16} />
-                    </button>
-                    <button
-                      className="icon-button"
-                      type="button"
-                      onClick={() => toggleTemplate(template)}
-                      disabled={isPending}
-                      aria-label={`${template.status === 'active' ? 'Pause' : 'Resume'} ${template.title}`}
-                      title={template.status === 'active' ? 'Pause' : 'Resume'}
-                    >
-                      {template.status === 'active' ? <Pause size={16} /> : <Play size={16} />}
-                    </button>
-                    <button
-                      className="icon-button"
-                      type="button"
-                      onClick={() => setTemplateEditor(template)}
-                      disabled={isPending}
-                      aria-label={`Edit ${template.title}`}
-                      title="Edit"
-                    >
-                      <Pencil size={16} />
-                    </button>
-                    <button
-                      className="icon-button icon-button-danger"
-                      type="button"
-                      onClick={() => archiveTemplate(template)}
-                      disabled={isPending}
-                      aria-label={`Archive ${template.title}`}
-                      title="Archive"
-                    >
-                      <Archive size={16} />
-                    </button>
-                  </div>
-                </article>
-              ))}
-            </div>
-          )}
         </section>
       ) : null}
 
@@ -1069,6 +980,127 @@ export function PlannerWorkspace({
             </form>
           </section>
         </div>
+      ) : null}
+
+      {/* Collapsed, and below the work rather than in front of it. The whole
+          vision used to open this page as a wall of raw Markdown -- asterisks
+          and hashes on screen -- so the reason for the work pushed the work
+          itself off the first screenful. It is one line here, formatted, and
+          one click from the page that holds all of it. */}
+      <details className="vision-anchor planner-direction-band">
+        <summary>
+          <span className="planner-direction-icon" aria-hidden="true">
+            <Layers3 size={16} />
+          </span>
+          <span>
+            <strong>Why this work</strong>
+            <small>{visionSummary}</small>
+          </span>
+        </summary>
+        <div className="planner-direction-body">
+          <ReactMarkdown remarkPlugins={[remarkGfm]}>{vision.content}</ReactMarkdown>
+          <a href="/vision">Open your vision</a>
+        </div>
+      </details>
+
+      {initialTemplates ? (
+        <section className="recurrence-section" aria-labelledby="recurrence-title">
+          <header>
+            <div>
+              <p className="eyebrow">Simple recurrence</p>
+              <h2 id="recurrence-title">Recurring Actions</h2>
+            </div>
+            <button
+              className="icon-button"
+              type="button"
+              onClick={() => setTemplateEditor('new')}
+              disabled={isPending}
+              aria-label="Create recurring Action"
+              title="Create recurring Action"
+            >
+              <Plus size={17} />
+            </button>
+          </header>
+          {initialTemplates.length === 0 ? (
+            <div className="recurrence-empty">
+              <p>No recurring Actions yet.</p>
+              <button
+                className="text-button"
+                type="button"
+                onClick={() => setTemplateEditor('new')}
+              >
+                Create one
+              </button>
+            </div>
+          ) : (
+            <div className="recurrence-list">
+              {initialTemplates.map((template) => (
+                <article className="recurrence-item" key={template.id}>
+                  <div className="recurrence-mark" aria-hidden="true">
+                    <Repeat2 size={17} />
+                  </div>
+                  <div className="recurrence-copy">
+                    <h3>{template.title}</h3>
+                    <p>
+                      {template.cadence === 'weekly' ? 'Weekly' : 'Monthly'} · Next{' '}
+                      <time dateTime={template.nextOccurrenceOn}>
+                        {new Intl.DateTimeFormat('en-US', {
+                          month: 'short',
+                          day: 'numeric',
+                          year: 'numeric',
+                          timeZone: 'UTC',
+                        }).format(new Date(`${template.nextOccurrenceOn}T12:00:00Z`))}
+                      </time>
+                      {template.status === 'paused' ? ' · Paused' : ''}
+                    </p>
+                  </div>
+                  <div className="recurrence-actions">
+                    <button
+                      className="icon-button"
+                      type="button"
+                      onClick={() => createDueActions(template)}
+                      disabled={isPending || template.status === 'paused'}
+                      aria-label={`Create due Actions for ${template.title}`}
+                      title="Create due Actions"
+                    >
+                      <CalendarPlus size={16} />
+                    </button>
+                    <button
+                      className="icon-button"
+                      type="button"
+                      onClick={() => toggleTemplate(template)}
+                      disabled={isPending}
+                      aria-label={`${template.status === 'active' ? 'Pause' : 'Resume'} ${template.title}`}
+                      title={template.status === 'active' ? 'Pause' : 'Resume'}
+                    >
+                      {template.status === 'active' ? <Pause size={16} /> : <Play size={16} />}
+                    </button>
+                    <button
+                      className="icon-button"
+                      type="button"
+                      onClick={() => setTemplateEditor(template)}
+                      disabled={isPending}
+                      aria-label={`Edit ${template.title}`}
+                      title="Edit"
+                    >
+                      <Pencil size={16} />
+                    </button>
+                    <button
+                      className="icon-button icon-button-danger"
+                      type="button"
+                      onClick={() => archiveTemplate(template)}
+                      disabled={isPending}
+                      aria-label={`Archive ${template.title}`}
+                      title="Archive"
+                    >
+                      <Archive size={16} />
+                    </button>
+                  </div>
+                </article>
+              ))}
+            </div>
+          )}
+        </section>
       ) : null}
 
       {templateEditor ? (

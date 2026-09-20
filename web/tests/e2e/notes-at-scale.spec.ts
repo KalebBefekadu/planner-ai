@@ -168,7 +168,7 @@ test('a plan past the row cap still shows every Goal', async ({ workspace }) => 
   expect(count, 'the seed did not pass the row cap').toBeGreaterThan(1000);
 
   await goTo(page, '/planner');
-  await expect(page.getByRole('heading', { name: 'Plan with a clear line of sight' })).toBeVisible({
+  await expect(page.getByRole('heading', { name: 'Your plan now' })).toBeVisible({
     timeout: 120_000,
   });
 

@@ -59,3 +59,31 @@ export function periodRangeLabel(
   }
   return readableRange(periods[horizonKinds[horizon]]);
 }
+
+/**
+ * What to call the page, given what it is actually showing.
+ *
+ * "Plan with a clear line of sight" was a slogan, and it was the heading
+ * whether the page held every horizon ever recorded or this week alone. A
+ * heading that never changes cannot tell you where you are, so it stops being
+ * read -- and the person then has to work the two filter groups out from the
+ * rows underneath. These names say which slice is on screen, and the date
+ * range beside them says which dates that slice covers.
+ */
+export function plannerHeading(horizon: HorizonFilter, period: 'current' | 'all') {
+  if (horizon === 'all') return period === 'current' ? 'Your plan now' : 'Your whole plan';
+  if (period === 'all') {
+    return {
+      yearly: 'Every year on record',
+      quarterly: 'Every quarter on record',
+      monthly: 'Every month on record',
+      weekly: 'Every week on record',
+    }[horizon];
+  }
+  return {
+    yearly: 'This year',
+    quarterly: 'This quarter',
+    monthly: 'This month',
+    weekly: 'This week',
+  }[horizon];
+}

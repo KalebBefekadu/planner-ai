@@ -1212,16 +1212,55 @@ button:disabled {
 .planner-overview strong {
   font-size: var(--fs-read);
 }
+/* Now a disclosure rather than a banner: one line by default, the whole
+   document when asked for. */
 .planner-direction-band {
-  grid-template-columns: 38px minmax(0, 1fr) auto;
-  align-items: center;
-  gap: 14px;
+  display: block;
   border-block: 1px solid var(--line);
   border-left: 0;
-  padding: 18px 0;
+  padding: 0;
+}
+.planner-direction-band > summary {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  /* 44px, the comfortable target this product aims at. */
+  min-height: 44px;
+  padding: 12px 0;
+  cursor: pointer;
+  list-style: none;
+}
+.planner-direction-band > summary::-webkit-details-marker {
+  display: none;
+}
+.planner-direction-band > summary > span:last-child {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  gap: 2px;
+}
+.planner-direction-band > summary strong {
+  font-size: var(--fs-body);
+}
+.planner-direction-band > summary small {
+  overflow: hidden;
+  color: var(--muted);
+  font-size: var(--fs-label);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.planner-direction-body {
+  padding: 0 0 16px 48px;
+  color: var(--ink-soft);
+  font-size: var(--fs-read);
+  line-height: var(--lh-read);
+}
+.planner-direction-body > :first-child {
+  margin-top: 0;
 }
 .planner-direction-icon {
   display: grid;
+  flex: none;
   width: 36px;
   height: 36px;
   place-items: center;

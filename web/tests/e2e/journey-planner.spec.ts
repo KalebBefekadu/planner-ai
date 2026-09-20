@@ -8,8 +8,10 @@ test('the cascade runs from Vision to a weekly Action', async ({ workspace }) =>
   const { page } = workspace;
   await goTo(page, '/planner');
 
-  // The Vision set during onboarding anchors the plan.
-  await expect(page.getByText(onboardingSeed.vision)).toBeVisible();
+  // The Vision set during onboarding anchors the plan. It is a collapsed line
+  // below the work now rather than a banner above it, so the summary is what
+  // is on screen until someone opens it.
+  await expect(page.locator('summary').getByText(onboardingSeed.vision)).toBeVisible();
 
   const hierarchy = page.getByRole('region', { name: 'Goal hierarchy' });
   await expect(hierarchy).toContainText(onboardingSeed.goal);
@@ -338,4 +340,45 @@ test('a breakdown is an offer, and an initiative works without one', async ({ wo
   await expect(
     page.getByRole('button', { name: /^Initiative Real estate agent business/ })
   ).toBeVisible();
+});
+
+/* ENG-01. The page opened with a slogan, a lede, a four-link flow strip
+   repeating the sidebar, four counters that read zero on a new account, and
+   the entire Vision in raw Markdown -- all of it above the plan. */
+test('the planner opens on the plan, not on a preamble about the plan', async ({ workspace }) => {
+  const { page } = workspace;
+  await goTo(page, '/planner');
+
+  // The heading says which slice is on screen, and the dates say which dates.
+  await expect(page.getByRole('heading', { name: 'Your plan now', level: 1 })).toBeVisible();
+  await expect(page.getByRole('heading', { name: /clear line of sight/ })).toHaveCount(0);
+  await expect(page.getByRole('navigation', { name: 'Planning flow' })).toHaveCount(0);
+
+  // The vision is a closed disclosure carrying one line, not the document.
+  const direction = page.getByText('Why this work');
+  const openVision = page.getByRole('link', { name: 'Open your vision' });
+  await expect(direction).toBeVisible();
+  await expect(openVision).toBeHidden();
+  await direction.click();
+  await expect(openVision).toBeVisible();
+
+  // And it is below the work it explains, not in front of it.
+  const hierarchyY = await page
+    .getByRole('region', { name: 'Goal hierarchy' })
+    .evaluate((node) => node.getBoundingClientRect().top + window.scrollY);
+  const directionY = await direction.evaluate(
+    (node) => node.getBoundingClientRect().top + window.scrollY
+  );
+  expect(directionY).toBeGreaterThan(hierarchyY);
+});
+
+test('a counter appears once it has something to count', async ({ workspace }) => {
+  const { page } = workspace;
+  await goTo(page, '/planner');
+  // The seeded workspace has one Goal and one Action, so three tiles earn
+  // their place and "Active routines" -- which has nothing to report -- does
+  // not take one.
+  const overview = page.getByRole('region', { name: 'Plan overview' });
+  await expect(overview).toContainText('Active goals');
+  await expect(overview).not.toContainText('Active routines');
 });

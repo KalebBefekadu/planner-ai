@@ -4,6 +4,7 @@ import {
   horizonKinds,
   horizonLabels,
   periodRangeLabel,
+  plannerHeading,
   readableRange,
 } from '@/lib/planner/horizon-labels';
 
@@ -92,5 +93,29 @@ describe('the horizon ladder', () => {
      that does not exist. */
   it('offers nothing beneath a weekly action', () => {
     expect(childHorizonTypes.weekly).toBeUndefined();
+  });
+});
+
+describe('what the planner page is called', () => {
+  /* One heading for every combination of two filters told the reader nothing
+     about which of the eight slices they were looking at. */
+  it('names the slice on screen rather than the product', () => {
+    expect(plannerHeading('weekly', 'current')).toBe('This week');
+    expect(plannerHeading('quarterly', 'current')).toBe('This quarter');
+    expect(plannerHeading('yearly', 'current')).toBe('This year');
+    expect(plannerHeading('monthly', 'current')).toBe('This month');
+  });
+
+  it('says so when the period filter has been taken off', () => {
+    expect(plannerHeading('weekly', 'all')).toBe('Every week on record');
+    expect(plannerHeading('all', 'all')).toBe('Your whole plan');
+  });
+
+  it('has a name for every combination the two filters can make', () => {
+    for (const horizon of ['all', 'yearly', 'quarterly', 'monthly', 'weekly'] as const) {
+      for (const period of ['current', 'all'] as const) {
+        expect(plannerHeading(horizon, period), `${horizon}/${period}`).toBeTruthy();
+      }
+    }
   });
 });

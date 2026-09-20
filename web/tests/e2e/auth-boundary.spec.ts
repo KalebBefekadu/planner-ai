@@ -158,7 +158,7 @@ test('canonical users see the complete workspace navigation after login', async 
     await expect(page).toHaveURL(/\/planner(?:\?|$)/);
     await expect(
       page
-        .getByRole('heading', { name: 'Plan with a clear line of sight', exact: true })
+        .getByRole('heading', { name: 'Your plan now', exact: true })
         .or(page.getByRole('heading', { name: 'Start with your vision', exact: true }))
     ).toBeVisible();
     const weeklyReview = page.getByRole('link', { name: 'Weekly review', exact: true });
