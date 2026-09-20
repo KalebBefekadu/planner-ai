@@ -25,22 +25,24 @@ import {
 } from 'lucide-react';
 import { assessGoalPace, summariseDrift } from '@/lib/goal-pace';
 import {
-  archiveActionTemplate,
   archiveGoal,
-  createActionTemplate,
   createGoal,
-  materializeActionTemplate,
   movePlanAction,
-  setActionTemplateStatus,
-  updateActionTemplate,
   updatePlanAction,
   updatePlanGoal,
   updateGoalStatus,
-  type ActionTemplateView,
   type GoalType,
   type GoalView,
   type GoalsData,
 } from '@/app/actions';
+import {
+  archiveActionTemplate,
+  createActionTemplate,
+  materializeActionTemplate,
+  setActionTemplateStatus,
+  updateActionTemplate,
+  type ActionTemplateView,
+} from '@/app/planner/templates/actions';
 import { actionFailureMessage } from '@/lib/operations/failure-message';
 import { MeasuredFill } from '@/components/measured-fill';
 import { overlapsPeriod } from '@/lib/planning-period';

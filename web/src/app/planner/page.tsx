@@ -1,4 +1,5 @@
-import { getActionTemplates, getGoalsHierarchy } from '@/app/actions';
+import { getGoalsHierarchy } from '@/app/actions';
+import { getActionTemplates } from '@/app/planner/templates/actions';
 import { PlannerWorkspace } from '@/components/planner-workspace';
 
 export default async function PlannerPage() {

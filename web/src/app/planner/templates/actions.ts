@@ -1,0 +1,163 @@
+'use server';
+
+import { randomUUID } from 'node:crypto';
+
+import { dateInTimezone } from '@/lib/date';
+import { executeOperation, OperationFailure } from '@/lib/operations';
+import { revalidatePlannerViews } from '@/lib/planner-revalidation';
+import { createClient } from '@/lib/supabase/server';
+
+export type ActionTemplateView = {
+  id: string;
+  goalId: string | null;
+  title: string;
+  descriptionMarkdown: string | null;
+  cadence: 'weekly' | 'monthly';
+  nextOccurrenceOn: string;
+  status: 'active' | 'paused';
+  version: number;
+};
+
+const canonicalEnabled = process.env.PLANNER_DATA_MODEL === 'canonical';
+
+function validateTitle(title: string, maxLength = 1_000) {
+  const trimmed = title.trim();
+  if (trimmed.length < 3) throw new Error('Please write at least three characters.');
+  if (trimmed.length > maxLength)
+    throw new Error(`Keep this item under ${maxLength.toLocaleString()} characters.`);
+  return trimmed;
+}
+
+async function requireUser() {
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) throw new OperationFailure('authentication_required', 'Please sign in to continue.');
+  return { supabase, user };
+}
+
+async function requireWorkspaceId() {
+  const { supabase, user } = await requireUser();
+  const { data, error } = await supabase
+    .from('workspaces')
+    .select('id')
+    .eq('owner_user_id', user.id)
+    .single();
+  if (error || !data) throw new Error('Unable to load your workspace.');
+  return { supabase, workspaceId: data.id as string };
+}
+
+export async function getActionTemplates(): Promise<ActionTemplateView[] | null> {
+  if (!canonicalEnabled) return null;
+  const { supabase, workspaceId } = await requireWorkspaceId();
+  const { data, error } = await supabase
+    .from('action_templates')
+    .select('id,goal_id,title,description_markdown,cadence,next_occurrence_on,status,version')
+    .eq('workspace_id', workspaceId)
+    .is('archived_at', null)
+    .order('next_occurrence_on')
+    .order('created_at');
+  if (error) throw new Error('Unable to load recurring Actions.');
+  return (data ?? []).map((template) => ({
+    id: template.id as string,
+    goalId: (template.goal_id as string | null) ?? null,
+    title: template.title as string,
+    descriptionMarkdown: (template.description_markdown as string | null) ?? null,
+    cadence: template.cadence as 'weekly' | 'monthly',
+    nextOccurrenceOn: template.next_occurrence_on as string,
+    status: template.status as 'active' | 'paused',
+    version: Number(template.version),
+  }));
+}
+
+export async function createActionTemplate(input: {
+  title: string;
+  descriptionMarkdown: string | null;
+  goalId: string | null;
+  cadence: 'weekly' | 'monthly';
+  firstOccurrenceOn: string;
+}) {
+  const title = validateTitle(input.title);
+  if (input.cadence === 'monthly' && Number(input.firstOccurrenceOn.slice(8, 10)) > 28) {
+    throw new Error('Monthly templates must use day 1 through 28.');
+  }
+  const { supabase } = await requireUser();
+  const result = await executeOperation(
+    supabase,
+    'action-template.create.v1',
+    { ...input, title },
+    { idempotencyKey: randomUUID(), surface: 'ui' }
+  );
+  revalidatePlannerViews();
+  return result;
+}
+
+export async function updateActionTemplate(input: {
+  id: string;
+  expectedVersion: number;
+  title: string;
+  descriptionMarkdown: string | null;
+  goalId: string | null;
+  cadence: 'weekly' | 'monthly';
+  nextOccurrenceOn: string;
+}) {
+  const title = validateTitle(input.title);
+  if (input.cadence === 'monthly' && Number(input.nextOccurrenceOn.slice(8, 10)) > 28) {
+    throw new Error('Monthly templates must use day 1 through 28.');
+  }
+  const { supabase } = await requireUser();
+  const result = await executeOperation(
+    supabase,
+    'action-template.update.v1',
+    { ...input, title },
+    { idempotencyKey: randomUUID(), surface: 'ui' }
+  );
+  revalidatePlannerViews();
+  return result;
+}
+
+export async function setActionTemplateStatus(
+  id: string,
+  expectedVersion: number,
+  status: 'active' | 'paused'
+) {
+  const { supabase } = await requireUser();
+  const result = await executeOperation(
+    supabase,
+    'action-template.status.v1',
+    { id, expectedVersion, status },
+    { idempotencyKey: randomUUID(), surface: 'ui' }
+  );
+  revalidatePlannerViews();
+  return result;
+}
+
+export async function materializeActionTemplate(id: string, expectedVersion: number) {
+  const { supabase, workspaceId } = await requireWorkspaceId();
+  const { data: workspace, error } = await supabase
+    .from('workspaces')
+    .select('timezone')
+    .eq('id', workspaceId)
+    .single();
+  if (error || !workspace) throw new Error('Unable to load your Workspace time settings.');
+  const result = await executeOperation(
+    supabase,
+    'action-template.materialize.v1',
+    { id, expectedVersion, throughOn: dateInTimezone(workspace.timezone as string) },
+    { idempotencyKey: randomUUID(), surface: 'ui' }
+  );
+  revalidatePlannerViews();
+  return result;
+}
+
+export async function archiveActionTemplate(id: string, expectedVersion: number) {
+  const { supabase } = await requireUser();
+  await executeOperation(
+    supabase,
+    'action-template.archive.v1',
+    { id, expectedVersion },
+    { idempotencyKey: randomUUID(), surface: 'ui' }
+  );
+  revalidatePlannerViews();
+}

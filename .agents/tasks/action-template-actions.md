@@ -1,0 +1,21 @@
+# Action Template Actions Ownership
+
+- Owner: Codex
+- Branch: `codex/action-template-actions`
+- Base: `integration/dogfood` at `e637ba5`
+- Goal: move Action Template server actions and their view type out of the root application action module into a Planner-owned module without changing behavior.
+- Writable paths:
+  - `web/src/app/actions.ts`
+  - `web/src/app/planner/page.tsx`
+  - `web/src/app/planner/templates/actions.ts`
+  - `web/src/components/planner-workspace.tsx`
+  - `web/tests/unit/bounded-reads.test.ts`
+  - `.agents/tasks/action-template-actions.md`
+  - `.agents/handoffs/action-template-actions.md`
+- Forbidden: database schema, Operations, `/preview`, production configuration, dependencies, and unrelated Planner behavior.
+- Acceptance:
+  - all Action Template action consumers import from the owning module;
+  - root `app/actions.ts` no longer defines Action Template behavior;
+  - the bounded-read ownership record follows the moved query;
+  - signatures, validation, Operations, and revalidation remain unchanged;
+  - typecheck, lint/format architecture gate, unit suite, and production build pass.

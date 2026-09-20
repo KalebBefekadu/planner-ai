@@ -21,7 +21,10 @@ const ALLOWED = new Map<string, string>([
   ['src/app/today/actions.ts::daily_focus_items', "one day's focus list"],
   ['src/app/inbox/actions.ts::ai_proposals', 'in(batch_id, batchIds), from a bounded batch list'],
   ['src/app/review/actions.ts::actions', "one week's planning horizon"],
-  ['src/app/actions.ts::action_templates', 'recurring templates, a hand-sized set'],
+  [
+    'src/app/planner/templates/actions.ts::action_templates',
+    'recurring templates, a hand-sized set',
+  ],
   [
     'src/app/api/note-import/route.ts::note_import_items',
     'one job, capped at IMPORT_LIMITS.candidates (500)',

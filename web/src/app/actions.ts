@@ -66,17 +66,6 @@ export type GoalsData = {
   /** Whether a breakdown can be offered. An initiative works without one. */
   aiEnabled?: boolean;
 };
-export type ActionTemplateView = {
-  id: string;
-  goalId: string | null;
-  title: string;
-  descriptionMarkdown: string | null;
-  cadence: 'weekly' | 'monthly';
-  nextOccurrenceOn: string;
-  status: 'active' | 'paused';
-  version: number;
-};
-
 type GoalInput = {
   type: GoalType;
   parentId: string;
@@ -560,120 +549,6 @@ export async function createGoal(input: GoalInput) {
       .insert({ user_id: user.id, monthly_id: parent.id, content });
     if (error) throw new Error('Unable to create the weekly action.');
   }
-  revalidatePlanner();
-}
-
-export async function getActionTemplates(): Promise<ActionTemplateView[] | null> {
-  if (!canonicalEnabled) return null;
-  const { supabase, workspaceId } = await requireWorkspaceId();
-  const { data, error } = await supabase
-    .from('action_templates')
-    .select('id,goal_id,title,description_markdown,cadence,next_occurrence_on,status,version')
-    .eq('workspace_id', workspaceId)
-    .is('archived_at', null)
-    .order('next_occurrence_on')
-    .order('created_at');
-  if (error) throw new Error('Unable to load recurring Actions.');
-  return (data ?? []).map((template) => ({
-    id: template.id as string,
-    goalId: (template.goal_id as string | null) ?? null,
-    title: template.title as string,
-    descriptionMarkdown: (template.description_markdown as string | null) ?? null,
-    cadence: template.cadence as 'weekly' | 'monthly',
-    nextOccurrenceOn: template.next_occurrence_on as string,
-    status: template.status as 'active' | 'paused',
-    version: Number(template.version),
-  }));
-}
-
-export async function createActionTemplate(input: {
-  title: string;
-  descriptionMarkdown: string | null;
-  goalId: string | null;
-  cadence: 'weekly' | 'monthly';
-  firstOccurrenceOn: string;
-}) {
-  const title = validateContent(input.title);
-  if (input.cadence === 'monthly' && Number(input.firstOccurrenceOn.slice(8, 10)) > 28) {
-    throw new Error('Monthly templates must use day 1 through 28.');
-  }
-  const { supabase } = await requireUser();
-  const result = await executeOperation(
-    supabase,
-    'action-template.create.v1',
-    { ...input, title },
-    { idempotencyKey: randomUUID(), surface: 'ui' }
-  );
-  revalidatePlanner();
-  return result;
-}
-
-export async function updateActionTemplate(input: {
-  id: string;
-  expectedVersion: number;
-  title: string;
-  descriptionMarkdown: string | null;
-  goalId: string | null;
-  cadence: 'weekly' | 'monthly';
-  nextOccurrenceOn: string;
-}) {
-  const title = validateContent(input.title);
-  if (input.cadence === 'monthly' && Number(input.nextOccurrenceOn.slice(8, 10)) > 28) {
-    throw new Error('Monthly templates must use day 1 through 28.');
-  }
-  const { supabase } = await requireUser();
-  const result = await executeOperation(
-    supabase,
-    'action-template.update.v1',
-    { ...input, title },
-    { idempotencyKey: randomUUID(), surface: 'ui' }
-  );
-  revalidatePlanner();
-  return result;
-}
-
-export async function setActionTemplateStatus(
-  id: string,
-  expectedVersion: number,
-  status: 'active' | 'paused'
-) {
-  const { supabase } = await requireUser();
-  const result = await executeOperation(
-    supabase,
-    'action-template.status.v1',
-    { id, expectedVersion, status },
-    { idempotencyKey: randomUUID(), surface: 'ui' }
-  );
-  revalidatePlanner();
-  return result;
-}
-
-export async function materializeActionTemplate(id: string, expectedVersion: number) {
-  const { supabase, workspaceId } = await requireWorkspaceId();
-  const { data: workspace, error } = await supabase
-    .from('workspaces')
-    .select('timezone')
-    .eq('id', workspaceId)
-    .single();
-  if (error || !workspace) throw new Error('Unable to load your Workspace time settings.');
-  const result = await executeOperation(
-    supabase,
-    'action-template.materialize.v1',
-    { id, expectedVersion, throughOn: dateInTimezone(workspace.timezone as string) },
-    { idempotencyKey: randomUUID(), surface: 'ui' }
-  );
-  revalidatePlanner();
-  return result;
-}
-
-export async function archiveActionTemplate(id: string, expectedVersion: number) {
-  const { supabase } = await requireUser();
-  await executeOperation(
-    supabase,
-    'action-template.archive.v1',
-    { id, expectedVersion },
-    { idempotencyKey: randomUUID(), surface: 'ui' }
-  );
   revalidatePlanner();
 }
 
