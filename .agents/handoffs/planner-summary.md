@@ -29,4 +29,4 @@ The repository wrapper did not propagate local Supabase values when Playwright a
 
 ## Commit
 
-Recorded after the implementation commit.
+`6575a0e`
