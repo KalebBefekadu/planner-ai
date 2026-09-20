@@ -103,9 +103,16 @@ not expire with it. Read the reason, not the label.
   Vision's read/write pair and its three direct callers. That extraction is
   complete. Goals and planning remain together until a similarly cohesive
   boundary is justified.
-- Focused UI extraction is active on `codex/planner-summary`: the Planner's
-  read-only filters, flow, counters, and drift summary are moving out of the
-  stateful workspace without changing routes, styles, or mutations.
+- ~~The Planner summary was interleaved with its stateful workspace.~~ Extracted
+  on 2026-09-20: read-only filters, flow, counters, and drift now have a typed
+  component boundary without changing routes, styles, or mutations.
+- Notes conflict comparison and recoverable-draft prompts are now the active
+  focused UI boundary on `codex/release-focus`.
+- Owner decision, 2026-09-20: the owner-dependent Notion pilot is removed from
+  the current program. Declarative schemas, live tracing/SLO certification,
+  and external MCP certification are deferred until after personal dogfood.
+  Current release focus is the remaining justified UI boundary work,
+  production migrations, backup custody, and recovery evidence.
 - EH-05 waits on the personal MVP gate. EH-06's tracing and SLO halves want a
   running system with real traffic.
 

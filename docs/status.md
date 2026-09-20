@@ -1,6 +1,6 @@
 # Planner AI Status
 
-Updated: 2026-09-10
+Updated: 2026-09-20
 
 ## Current State
 
@@ -8,7 +8,7 @@ Planner AI has a mature, tested application foundation but is not yet production
 
 The earlier 78/55/27 percent estimates had no documented weighting and are not release evidence. Track implemented, locally verified, deployed verified and owner-accepted gates in the [build manual](build-manual.md) and its linked GitHub issues.
 
-The owner's actual Notion workflow inventory remains open. Notes import alone cannot establish replacement of required databases, relations, formulas, attachments or sharing.
+Owner decision, 2026-09-20: the representative Notion pilot is removed from the current program. Import remains implemented, but this release will not claim complete Notion replacement. Declarative schemas, live tracing/SLO certification, and external MCP certification are deferred until after personal dogfood.
 
 ## Verified Foundation
 
@@ -56,10 +56,8 @@ See [Production](runbooks/production.md) and [Migration reconciliation](runbooks
 ### Personal dogfood
 
 - Complete and verify the real direction-to-action loop, including deferral and weekly-review continuity.
-- Run a representative owner Notion import and reconcile imported, duplicate, and unsupported items.
 - Finish authenticated Workspace and Planner parity. `/preview` itself stays: its six deferred screens are gone and their design is preserved, and the six patterns still behind it are unbuilt MVP features tracked under WS-01 through WS-04. See the Preview Policy in the roadmap for why that is an accepted cost rather than an open task.
 - Certify embedded-assistant parity for critical Note and Planner Operations, including useful provider-failure behavior.
-- Verify one external AI client through narrow authenticated MCP discovery, grants, execution, and revocation.
 - Apply pending production migrations during an approved maintenance window and run authenticated deployed smoke tests.
 - Complete seven consecutive days of daily use and resolve workflow-blocking defects.
 
@@ -68,6 +66,12 @@ See [Production](runbooks/production.md) and [Migration reconciliation](runbooks
 - Apply the three Notes-vault migrations and MCP manual-token repair that remain local-only.
 - Verify Vercel production environment, deployment protection, owned domain, SMTP, cron ownership, external alerts, and canonical application mode.
 - Establish off-machine backup custody and prove a hosted recovery drill covering Auth, Storage, and managed configuration.
+
+### Deferred until after personal dogfood
+
+- Introduce declarative database schemas.
+- Verify one external AI client through narrow authenticated MCP discovery, grants, execution, and revocation.
+- Complete production tracing/SLO certification using live traffic.
 
 ### Later beta gates
 

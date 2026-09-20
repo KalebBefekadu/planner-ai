@@ -87,8 +87,8 @@ import {
   subscribeToCollapsedNotes,
   writeCollapsedNotes,
 } from '@/lib/notes/collapsed-branches';
-import { conflictSummary, describeNoteConflict } from '@/lib/notes/conflict-resolution';
 import { NoteAppearanceHeader } from '@/components/note-appearance-header';
+import { NoteConflictPanel, NoteDraftRecoveryPanel } from '@/components/note-recovery-panels';
 import { noteLocationLabel, notePath, orderFavorites } from '@/lib/notes/note-paths';
 import { useNoteDraft } from '@/lib/notes/use-note-draft';
 import { useVoiceTranscription } from '@/lib/use-voice-transcription';
@@ -953,71 +953,9 @@ export function NotesWorkspace({
                 </button>
               </div>
             </div>
-            {conflict && selected
-              ? (() => {
-                  const comparison = describeNoteConflict(conflict.mine, conflict.theirs);
-                  return (
-                    <section className="note-conflict" role="alert" aria-label="Version conflict">
-                      <p className="note-conflict-summary">{conflictSummary(comparison)}</p>
-                      <p className="note-conflict-help">
-                        Your writing is safe. Read both, then choose which one this Note keeps.
-                      </p>
-                      {comparison.titleDiffers ? (
-                        <dl className="note-conflict-titles">
-                          <dt>Your title</dt>
-                          <dd>{conflict.mine.title || 'Untitled'}</dd>
-                          <dt>Saved title</dt>
-                          <dd>{conflict.theirs.title || 'Untitled'}</dd>
-                        </dl>
-                      ) : null}
-                      {comparison.bodyDiffers ? (
-                        <ol className="note-conflict-diff">
-                          {comparison.lines.map((line, index) => (
-                            <li
-                              key={`${line.kind}-${index}`}
-                              className={`note-conflict-line note-conflict-line-${line.kind}`}
-                            >
-                              <span className="note-conflict-marker" aria-hidden="true">
-                                {line.kind === 'mine'
-                                  ? '+'
-                                  : line.kind === 'theirs'
-                                    ? '\u2212'
-                                    : ' '}
-                              </span>
-                              {/* The screen reader hears which side a line is on;
-                                sighted readers get the colour and the marker. */}
-                              <span className="note-conflict-side">
-                                {line.kind === 'mine'
-                                  ? 'Yours: '
-                                  : line.kind === 'theirs'
-                                    ? 'Saved: '
-                                    : ''}
-                              </span>
-                              <span className="note-conflict-text">{line.text || '\u00a0'}</span>
-                            </li>
-                          ))}
-                        </ol>
-                      ) : null}
-                      <div className="note-conflict-actions">
-                        <button
-                          className="btn-primary"
-                          type="button"
-                          onClick={() => void resolveConflict('mine')}
-                        >
-                          Keep what I wrote
-                        </button>
-                        <button
-                          className="btn-secondary"
-                          type="button"
-                          onClick={() => void resolveConflict('theirs')}
-                        >
-                          Use the saved version
-                        </button>
-                      </div>
-                    </section>
-                  );
-                })()
-              : null}
+            {conflict && selected ? (
+              <NoteConflictPanel conflict={conflict} onResolve={resolveConflict} />
+            ) : null}
             {error ? (
               <p className="status-message status-message-error" role="alert">
                 {error}
@@ -1029,35 +967,11 @@ export function NotesWorkspace({
               </p>
             ) : null}
             {recoverableDraft ? (
-              // A refused save left the only copy of this writing in the
-              // browser. Offer it back rather than deciding for the person
-              // which version wins. Not a live region: this is a prompt to act
-              // on, and the save state is the editor's one status.
-              <section className="note-draft-recovery" aria-label="Recover unsaved changes">
-                <p>
-                  Unsaved changes from{' '}
-                  {new Intl.DateTimeFormat('en-US', {
-                    month: 'short',
-                    day: 'numeric',
-                    hour: 'numeric',
-                    minute: '2-digit',
-                  }).format(new Date(recoverableDraft.savedAt))}{' '}
-                  were kept on this device because a save did not go through.
-                </p>
-                <div className="note-draft-recovery-actions">
-                  <button
-                    className="btn-primary"
-                    type="button"
-                    onClick={() => restoreDraft(recoverableDraft)}
-                  >
-                    Restore them
-                  </button>
-                  <button className="btn-secondary" type="button" onClick={dismissRecoverableDraft}>
-                    Discard
-                  </button>
-                </div>
-                <small>Kept on this device for seven days, then removed.</small>
-              </section>
+              <NoteDraftRecoveryPanel
+                draft={recoverableDraft}
+                onRestore={restoreDraft}
+                onDiscard={dismissRecoverableDraft}
+              />
             ) : null}
             <div className="markdown-toolbar" role="toolbar" aria-label="Markdown formatting">
               <div className="markdown-tools">

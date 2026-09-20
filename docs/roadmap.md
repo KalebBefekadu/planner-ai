@@ -24,17 +24,15 @@ Ship one private, deployed Planner AI that its owner can trust and use every day
 The MVP is complete only when the owner can:
 
 1. sign in and use one coherent, branded application on desktop and mobile;
-2. import a representative Notion export with an item-level reconciliation report and no silent loss;
-3. create, edit, organize, search, link, export, and restore Markdown Notes;
-4. capture a thought, connect an Action to a Goal, plan Today and This Week, complete or defer work, and finish Weekly Review;
-5. ask the embedded assistant to perform the critical Note and Planner Operations with confirmation, evidence, Activity, and useful failure recovery;
-6. connect an authenticated external AI client through the approved narrow MCP surface;
-7. continue core work when AI is unavailable; and
-8. recover the product data from a verified backup.
+2. create, edit, organize, search, link, export, and restore Markdown Notes;
+3. capture a thought, connect an Action to a Goal, plan Today and This Week, complete or defer work, and finish Weekly Review;
+4. ask the embedded assistant to perform the critical Note and Planner Operations with confirmation, evidence, Activity, and useful failure recovery;
+5. continue core work when AI is unavailable; and
+6. recover the product data from a verified backup.
 
 The MVP is for one owner. It is not yet an invite beta, team product, or public launch.
 
-Before declaring Notion replaced, complete [MVP-01](https://github.com/KalebBefekadu/planner-ai/issues/115): inventory the owner's actual workflows. If native databases, formulas, relations, files, or sharing are essential, create a bounded implementation or record an explicitly accepted workaround. CSV converted into Markdown is not equivalent to a working database. An unanswered inventory is an open gate, not an assumption that notes-only is sufficient.
+Owner decision, 2026-09-20: the representative Notion pilot is removed from the current delivery program. Import foundations remain available, but Planner AI will not claim complete Notion replacement from this release. Workflow-equivalence research can resume after personal dogfood if the owner chooses.
 
 ## Four Product States
 
@@ -92,29 +90,24 @@ Status: **active.** Finish the smallest complete direction-to-action workflow us
 
 **Exit gate:** the owner completes the full loop through real UI and persisted Operations on desktop and mobile.
 
-### Stage 2: Notion Replacement Pilot
+### Stage 2: Knowledge And Portability
 
-Status: **Notes/import foundations exist; workflow equivalence and owner-data pilot pending.**
+Status: **foundations implemented; owner-data pilot removed from the current program.**
 
-- Run preflight and dry-run on a representative Notion export.
-- Reconcile every imported, duplicate, skipped, and unsupported item.
 - Close blocking gaps in hierarchy, Markdown, links, properties, covers/icons, search, export, or restore.
 - Compare the real Workspace with accepted Preview references and remove superseded fixtures.
 
-**Exit gate:** the owner can move a representative workspace into Planner AI, use it for daily Notes, export it, and restore it without silent loss.
-
-The pilot requires owner data. Stage 1 work continues while that gate is waiting, but the MVP cannot close without it.
+**Exit gate:** the owner can use, export, and restore Planner AI's Knowledge workspace without silent loss. No Notion-equivalence claim is part of this gate.
 
 ### Stage 3: Core AI And MCP
 
-Status: **foundations implemented; live certification pending.**
+Status: **embedded foundations implemented; external MCP certification deferred.**
 
 - Verify assistant parity for critical MVP Note, Capture, Action, Goal, Today, and Review Operations.
 - Preserve confirmation, evidence, undo, Activity, and input during provider failure.
 - Certify provider fallback, budgets, retention controls, and deterministic evaluations.
-- Verify authenticated MCP discovery, least-privilege read access, selected reversible writes, revocation, and compatibility with one supported external AI client.
 
-**Exit gate:** AI materially accelerates core workflows but is never required to complete them, and external access cannot exceed the same Operation permissions.
+**Exit gate:** embedded AI materially accelerates core workflows but is never required to complete them.
 
 ### Stage 4: Private Release
 
@@ -123,7 +116,7 @@ Status: **pending explicit production approval.**
 - Apply reviewed pending migrations during a recorded maintenance window.
 - Deploy the canonical app behind private access.
 - Verify authentication, workspace isolation, Notes, import/export, Planner, assistant fallback, MCP revocation, backup, and restore in the deployed environment.
-- Establish monitoring, alerts, cron ownership, and off-machine backup custody.
+- Establish basic operational health checks, cron ownership, and off-machine backup custody. Quantitative tracing/SLO certification is deferred until live traffic exists after personal dogfood.
 
 **Exit gate:** all eight MVP outcomes pass in the deployed environment with a documented rollback path.
 
@@ -146,6 +139,7 @@ Status: **pending private release.**
 5. **Structured Knowledge:** typed page properties, relations, filters, and saved table/board/calendar views. Formulas and rollups wait for verified owner workflows.
 6. **Ownership guarantee:** prove zero-loss vault export and re-import, then evaluate an opt-in read-only folder mirror. Postgres remains authoritative for this program.
 7. **Gated frontier:** true local-first editing, richer collaboration, native clients, broader MCP, automations, integrations, canvas, and sandboxed extensions require their own accepted architecture and evidence gates.
+8. **Deferred engineering gates:** introduce declarative database schemas, certify one external MCP client, and finish production tracing/SLO evidence after personal dogfood.
 
 Each capability must first exist as a user-facing, authorized Operation before an assistant or external agent may control it.
 
@@ -161,10 +155,9 @@ open MVP workflow gate.
 Only one Codex implementation ticket may be active:
 
 1. implement `PL-05`: create an Action directly from Today, optionally connect it to a real Goal, schedule it for today, and commit it to focus through existing Operations;
-2. run the Notion pilot as soon as representative owner data is available;
-3. certify critical embedded-assistant Operations and one external MCP client;
-4. close remaining Workspace and Planner Preview parity gaps;
-5. execute the approved private-release gate and begin seven-day dogfood.
+2. certify critical embedded-assistant Operations;
+3. close remaining Workspace and Planner Preview parity gaps;
+4. execute the approved private-release migration and recovery gates and begin seven-day dogfood.
 
 Completed convergence work through PR #111 includes the shared shell, Notes-owned tree, focused Note inspector, persistent import report, Planner-scoped Today and Action Inbox, outcome-focused Today hierarchy, and real Goal direction band.
 

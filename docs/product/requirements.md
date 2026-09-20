@@ -164,10 +164,9 @@ Microphone permission is requested only after the person initiates voice Capture
 
 - private authentication and one owner-isolated Workspace;
 - Today, Plan, Notes, Capture, Review, Settings, and Activity through the real UI;
-- representative Notion import with item-level reconciliation, complete export, and verified restore;
+- complete Knowledge export and verified restore; import remains available without a Notion-equivalence release claim;
 - embedded assistant parity for critical Note and Planner Operations with graceful provider failure;
-- one authenticated external MCP client using narrow, revocable grants;
-- responsive desktop/mobile workflows, production migration, monitoring, backup, rollback, and seven-day owner dogfood.
+- responsive desktop/mobile workflows, production migration, basic operational health checks, backup, rollback, and seven-day owner dogfood.
 
 ### Required before invite beta
 
