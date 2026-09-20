@@ -32,11 +32,30 @@ describe('experience navigation', () => {
       'Weekly review',
       'Goals & horizons',
       'Vision',
+      'Life areas',
     ]);
     expect(navigation.subtitle).not.toContain('Personal workspace');
     expect(
       experienceNavItems(navigation).every((item) => experienceAreaForPath(item.href) === 'planner')
     ).toBe(true);
+  });
+
+  /* The tree is one tree, so the destination appears under both pillars. The
+     rail can only resolve a path to one, and it resolves /areas to Planner --
+     opening an area from Notes moves the rail, which is a seam worth naming
+     rather than a behaviour to discover. */
+  it('reaches life areas from Planning and from Knowledge', () => {
+    const planner = experienceNavItems(experienceNavigationForPath('/planner', true));
+    const workspace = experienceNavItems(experienceNavigationForPath('/notes', true));
+    expect(planner.map((item) => item.href)).toContain('/areas');
+    expect(workspace.map((item) => item.href)).toContain('/areas');
+    expect(experienceAreaForPath('/areas')).toBe('planner');
+    expect(experienceAreaForPath('/areas/abc?tab=notes')).toBe('planner');
+  });
+
+  it('hides life areas while the legacy model is active', () => {
+    const planner = experienceNavItems(experienceNavigationForPath('/planner', false));
+    expect(planner.map((item) => item.href)).not.toContain('/areas');
   });
 
   it('keeps Workspace and Settings destinations separate', () => {
@@ -118,6 +137,7 @@ describe('command palette results', () => {
       'Calendar',
       'Weekly review',
       'Goals & horizons',
+      'Life areas',
       'Notes',
       'Conversations',
       'Capture inbox',
@@ -145,6 +165,7 @@ describe('command palette results', () => {
       'Calendar',
       'Weekly review',
       'Goals & horizons',
+      'Life areas',
     ]);
   });
 

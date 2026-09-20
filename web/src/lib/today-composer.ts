@@ -13,6 +13,9 @@ const REQUEST_KEY = /^[A-Za-z0-9-]{8,150}$/;
 export type TodayComposerInput = {
   title: string;
   goalId: string | null;
+  /* Where the task was typed. Null from Today, which is the whole point of
+     Today: a task does not need a part of life named before it can exist. */
+  areaId?: string | null;
   scheduledOn: string;
   focus: boolean;
   requestKey: string;
@@ -27,6 +30,7 @@ export type TodayComposerPlan = {
     startsOn: string;
     endsOn: string;
     goalId: string | null;
+    areaId: string | null;
     parentActionId: null;
     scheduledOn: string;
   };
@@ -61,6 +65,7 @@ export function planTodayAction(input: TodayComposerInput, localDate: string): T
       startsOn,
       endsOn: addCalendarDays(startsOn, 6),
       goalId: input.goalId || null,
+      areaId: input.areaId || null,
       parentActionId: null,
       scheduledOn: input.scheduledOn,
     },

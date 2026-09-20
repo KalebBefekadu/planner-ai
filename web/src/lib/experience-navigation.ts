@@ -38,7 +38,13 @@ export type ExperienceCommand = {
   href: string;
 };
 
-const plannerPaths = ['/planner', '/goals', '/vision', '/review'];
+/* Life areas sit in both pillars' sidebars, because the tree is shared: the
+   same Health opens from Planning and from Knowledge. The rail has to resolve
+   a path to exactly one pillar, though, and the area page leads with its
+   direction and its work, so /areas resolves to Planner. Opening an area from
+   Notes therefore moves the rail -- a known seam, written down rather than
+   discovered. */
+const plannerPaths = ['/planner', '/goals', '/vision', '/review', '/areas'];
 const workspacePaths = ['/notes', '/inbox', '/conversations', '/activity', '/trash'];
 
 function matchesPath(pathname: string, path: string) {
@@ -134,6 +140,9 @@ export function experienceNavigationForPath(
                 ]
               : []),
             { label: 'Vision', href: '/vision', match: 'prefix' },
+            ...(canonical
+              ? [{ label: 'Life areas', href: '/areas', match: 'prefix' as const }]
+              : []),
           ],
         },
       ],
@@ -153,6 +162,9 @@ export function experienceNavigationForPath(
             { label: 'Capture inbox', href: '/inbox', match: 'prefix' },
             ...(canonical
               ? [{ label: 'Conversations', href: '/conversations', match: 'prefix' as const }]
+              : []),
+            ...(canonical
+              ? [{ label: 'Life areas', href: '/areas', match: 'prefix' as const }]
               : []),
           ],
         },
@@ -280,6 +292,7 @@ export function experienceCommands(canonical: boolean): ExperienceCommand[] {
           { label: 'Calendar', detail: 'Planner', href: '/planner/calendar' },
           { label: 'Weekly review', detail: 'Planner', href: '/review' },
           { label: 'Goals & horizons', detail: 'Planner', href: '/planner?period=all' },
+          { label: 'Life areas', detail: 'Planner', href: '/areas' },
           { label: 'Notes', detail: 'Workspace', href: '/notes' },
           { label: 'Conversations', detail: 'Workspace', href: '/conversations' },
         ]

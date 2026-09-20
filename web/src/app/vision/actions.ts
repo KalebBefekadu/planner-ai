@@ -32,6 +32,10 @@ export async function getActiveVision(): Promise<VisionView | null> {
     const { data, error } = await supabase
       .from('visions')
       .select('*')
+      /* The overall life Vision, which is the one with no area. Areas hold
+         their own now, and without this the screen asks for one row and gets
+         as many as the person has written. */
+      .is('area_id', null)
       .eq('workspace_id', workspaceId)
       .is('archived_at', null)
       .is('trashed_at', null)

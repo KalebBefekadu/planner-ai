@@ -160,6 +160,9 @@ async function readMinimalContext(route: string, requestedSelection?: AssistantS
             .from('visions')
             .select('id, body_markdown, version')
             .eq('workspace_id', workspaceId)
+            /* The overall Vision. An area's direction reaches the assistant
+               through that area, where its AI exclusion applies. */
+            .is('area_id', null)
             .is('archived_at', null)
             .is('trashed_at', null)
             .maybeSingle()
