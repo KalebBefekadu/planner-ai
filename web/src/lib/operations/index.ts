@@ -61,6 +61,30 @@ const actionOutput = z
   })
   .passthrough();
 
+/* Every area Operation returns the area row plus the three things about its
+   page a caller would otherwise have to fetch separately: its title, its
+   version for the next edit, and whether this call is what created it. */
+const areaOutput = z
+  .object({
+    id,
+    workspace_id: id,
+    parent_area_id: id.nullable(),
+    name: z.string(),
+    icon: z.string().nullable(),
+    color: z.string().nullable(),
+    sort_key: z.union([z.number(), z.string()]),
+    canonical_note_id: id,
+    ai_excluded: z.boolean(),
+    version,
+    created_at: timestamp,
+    updated_at: timestamp,
+    archived_at: timestamp.nullable(),
+    note_title: z.string(),
+    note_version: version,
+    note_created: z.boolean(),
+  })
+  .passthrough();
+
 const actionTemplateOutput = z
   .object({
     id,
@@ -312,7 +336,101 @@ const trashMoveInput = z.discriminatedUnion('itemType', [
   z.object({ itemType: z.literal('conversation'), id }).strict(),
 ]);
 
+const areaName = z.string().trim().min(1).max(120);
+const areaIcon = z.string().trim().max(40).nullable();
+const areaColor = z
+  .string()
+  .regex(/^[a-z][a-z0-9-]{0,23}$/)
+  .nullable();
+
 export const operationDefinitions = {
+  'area.create.v1': {
+    summary: 'Create a life area and connect its canonical page.',
+    risk: 'low',
+    exposure: ['ui', 'chat', 'mcp'],
+    reversible: true,
+    domain: 'life_area',
+    input: z
+      .object({
+        name: areaName,
+        parentAreaId: id.nullable(),
+        /* Passing a Note here adopts it as the area's page, contents and
+           position untouched. Omitting it makes an empty page at the Notes
+           root. Either way the area ends with exactly one page. */
+        existingNoteId: id.nullable(),
+        icon: areaIcon,
+        color: areaColor,
+      })
+      .strict(),
+    output: areaOutput,
+  },
+  'area.update.v1': {
+    summary: 'Rename a life area, and optionally its page with it.',
+    risk: 'low',
+    exposure: ['ui', 'chat', 'mcp'],
+    reversible: true,
+    domain: 'life_area',
+    input: z
+      .object({
+        id,
+        name: areaName,
+        icon: areaIcon,
+        color: areaColor,
+        renameCanonicalNote: z.boolean(),
+        expectedVersion: version,
+      })
+      .strict(),
+    output: areaOutput,
+  },
+  'area.move.v1': {
+    summary: 'Move a life area under another one without creating a cycle.',
+    risk: 'low',
+    exposure: ['ui', 'chat', 'mcp'],
+    reversible: true,
+    domain: 'life_area',
+    input: z
+      .object({ id, parentAreaId: id.nullable(), sortKey: z.number(), expectedVersion: version })
+      .strict(),
+    output: areaOutput,
+  },
+  'area.archive.v1': {
+    summary: 'Archive a life area and, by inheritance, everything under it.',
+    risk: 'medium',
+    exposure: ['ui', 'chat', 'mcp'],
+    reversible: true,
+    domain: 'life_area',
+    input: z.object({ id, expectedVersion: version }).strict(),
+    output: areaOutput,
+  },
+  'area.restore.v1': {
+    summary: 'Return an archived life area to active navigation.',
+    risk: 'low',
+    exposure: ['ui', 'chat', 'mcp'],
+    reversible: true,
+    domain: 'life_area',
+    input: z.object({ id, expectedVersion: version }).strict(),
+    output: areaOutput,
+  },
+  'area.replace-note.v1': {
+    summary: 'Point a life area at a different canonical page.',
+    risk: 'medium',
+    /* UI only. Repointing an area at another page is the kind of change that
+       wants the person to see both pages while they decide. */
+    exposure: ['ui'],
+    reversible: true,
+    domain: 'life_area',
+    input: z.object({ id, noteId: id, expectedVersion: version }).strict(),
+    output: areaOutput,
+  },
+  'area.ai-exclusion.v1': {
+    summary: 'Exclude a life area and its descendants from AI retrieval.',
+    risk: 'low',
+    exposure: ['ui', 'chat', 'mcp'],
+    reversible: true,
+    domain: 'life_area',
+    input: z.object({ id, aiExcluded: z.boolean(), expectedVersion: version }).strict(),
+    output: areaOutput,
+  },
   'vision.upsert.v1': {
     summary: 'Create or revise the active Vision.',
     risk: 'low',
@@ -1174,6 +1292,13 @@ export const operationDefinitions = {
 } as const;
 
 export const undoableOperationIds = [
+  'area.create.v1',
+  'area.update.v1',
+  'area.move.v1',
+  'area.archive.v1',
+  'area.restore.v1',
+  'area.replace-note.v1',
+  'area.ai-exclusion.v1',
   'vision.upsert.v1',
   'goal.create.v1',
   'goal.update.v1',
@@ -1328,6 +1453,27 @@ function stableFailure(message: string) {
       'review_already_completed',
       'This period has already been reviewed. Undo the completed review before recording a different one.'
     );
+  }
+  if (message.includes('area_canonical_note_in_use')) {
+    return new OperationFailure(
+      'area_canonical_note_in_use',
+      'This page belongs to a life area. Give that area a different page before moving this one to Trash.'
+    );
+  }
+  if (message.includes('note_already_canonical')) {
+    return new OperationFailure(
+      'note_already_canonical',
+      'That page is already another life area’s page. Choose a different one.'
+    );
+  }
+  if (message.includes('area_cycle')) {
+    return new OperationFailure(
+      'area_cycle',
+      'A life area cannot be moved inside itself or one of its own subareas.'
+    );
+  }
+  if (message.includes('note_not_found')) {
+    return new OperationFailure('note_not_found', 'That page no longer exists.');
   }
   if (message.includes('vision_required')) {
     return new OperationFailure('vision_required', 'Create a Vision before adding Goals.');

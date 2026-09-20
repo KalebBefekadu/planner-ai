@@ -1125,6 +1125,76 @@ export type Database = {
           },
         ];
       };
+      life_areas: {
+        Row: {
+          ai_excluded: boolean;
+          archived_at: string | null;
+          canonical_note_id: string;
+          color: string | null;
+          created_at: string;
+          icon: string | null;
+          id: string;
+          name: string;
+          parent_area_id: string | null;
+          sort_key: number;
+          updated_at: string;
+          version: number;
+          workspace_id: string;
+        };
+        Insert: {
+          ai_excluded?: boolean;
+          archived_at?: string | null;
+          canonical_note_id: string;
+          color?: string | null;
+          created_at?: string;
+          icon?: string | null;
+          id?: string;
+          name: string;
+          parent_area_id?: string | null;
+          sort_key?: number;
+          updated_at?: string;
+          version?: number;
+          workspace_id: string;
+        };
+        Update: {
+          ai_excluded?: boolean;
+          archived_at?: string | null;
+          canonical_note_id?: string;
+          color?: string | null;
+          created_at?: string;
+          icon?: string | null;
+          id?: string;
+          name?: string;
+          parent_area_id?: string | null;
+          sort_key?: number;
+          updated_at?: string;
+          version?: number;
+          workspace_id?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: 'life_areas_canonical_note_id_workspace_id_fkey';
+            columns: ['canonical_note_id', 'workspace_id'];
+            isOneToOne: false;
+            referencedRelation: 'notes';
+            referencedColumns: ['id', 'workspace_id'];
+          },
+          {
+            foreignKeyName: 'life_areas_parent_area_id_workspace_id_fkey';
+            columns: ['parent_area_id', 'workspace_id'];
+            isOneToOne: false;
+            referencedRelation: 'life_areas';
+            referencedColumns: ['id', 'workspace_id'];
+          },
+          {
+            foreignKeyName: 'life_areas_workspace_id_fkey';
+            columns: ['workspace_id'];
+            isOneToOne: false;
+            referencedRelation: 'workspaces';
+            referencedColumns: ['id'];
+          },
+        ];
+      };
       lifecycle_job_runs: {
         Row: {
           error_code: string | null;
@@ -2927,6 +2997,15 @@ export type Database = {
         };
         Returns: Json;
       };
+      execute_life_area_operation: {
+        Args: {
+          p_idempotency_key: string;
+          p_input: Json;
+          p_operation_id: string;
+          p_surface?: string;
+        };
+        Returns: Json;
+      };
       execute_mcp_oauth_operation: {
         Args: {
           p_grant_id: string;
@@ -3090,6 +3169,15 @@ export type Database = {
         Returns: Json;
       };
       execute_operation_undo_focus_base: {
+        Args: {
+          p_idempotency_key: string;
+          p_input: Json;
+          p_operation_id: string;
+          p_surface: string;
+        };
+        Returns: Json;
+      };
+      execute_operation_undo_life_area_base: {
         Args: {
           p_idempotency_key: string;
           p_input: Json;
