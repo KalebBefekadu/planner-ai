@@ -10,4 +10,4 @@
   - complete `journey-review.spec.ts` Chromium suite with one worker: 10 passed.
 - Diagnosis note: restored saved-record rendering revalidates immediately after submission, so transient `role=status` assertions raced the durable record. Journeys now assert the persisted `Week complete` region; the duplicate-review journey verifies that a completed period exposes no editable or submit controls.
 - Known risks/blockers: no schema or Operation behavior changed. The query relies on the existing `reviews.horizon_id -> planning_horizons.starts_on` relation and existing owner RLS. Production verification remains part of the later release gate.
-- Commit SHA: recorded after commit.
+- Commit SHA: `2c550fd` (handoff metadata added in the final amend).
