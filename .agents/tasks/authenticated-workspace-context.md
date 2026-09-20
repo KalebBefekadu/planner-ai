@@ -18,4 +18,3 @@
   - the richer Planner workspace lookup remains local to its feature;
   - error messages and return behavior remain unchanged;
   - unit tests, `agent:check`, and production build pass.
-
