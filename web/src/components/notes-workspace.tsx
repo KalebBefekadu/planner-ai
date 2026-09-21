@@ -41,6 +41,7 @@ import {
   RotateCcw,
   Search,
   ShieldOff,
+  Sparkles,
   Star,
   Table2,
   Tags,
@@ -242,6 +243,16 @@ export function NotesWorkspace({
     flushPendingSave,
   } = draft;
   const titleRef = useRef<HTMLTextAreaElement>(null);
+  /* A proposed arrangement of this page, held here and nowhere else until the
+     person accepts it. Discarding leaves no trace, because nothing was
+     written. */
+  const [arrangement, setArrangement] = useState<{
+    markdown: string;
+    questions: string[];
+    invented: string[];
+    unsorted: number;
+  } | null>(null);
+  const [arranging, setArranging] = useState(false);
 
   /* A wrapping title has no fixed height, so it is measured rather than
      guessed: reset to nothing, then take the height the content actually
@@ -505,6 +516,50 @@ export function NotesWorkspace({
         setError(errorMessage(caught));
       }
     });
+  }
+
+  /* Asking is a read. The page is sent, an arrangement of its own lines comes
+     back, and the editor is untouched until Accept is pressed -- so a refused
+     suggestion costs the person nothing but the moment they spent reading it. */
+  async function organizeWriting() {
+    if (!selected) return;
+    setError(null);
+    setArrangement(null);
+    setArranging(true);
+    try {
+      // Whatever is on screen, saved first: an arrangement is built from the
+      // stored page, and offering one built from a stale copy would discard
+      // the words typed since.
+      await flushPendingSave();
+      const response = await fetch('/api/note-organize', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ noteId: selected.id, expectedVersion: versionRef.current }),
+      });
+      const payload = (await response.json()) as {
+        markdown?: string;
+        questions?: string[];
+        invented?: string[];
+        unsorted?: number;
+        detail?: string;
+        title?: string;
+      };
+      if (!response.ok || typeof payload.markdown !== 'string') {
+        throw new Error(
+          payload.detail ?? payload.title ?? 'Planner AI could not arrange this page.'
+        );
+      }
+      setArrangement({
+        markdown: payload.markdown,
+        questions: payload.questions ?? [],
+        invented: payload.invented ?? [],
+        unsorted: payload.unsorted ?? 0,
+      });
+    } catch (caught) {
+      setError(errorMessage(caught));
+    } finally {
+      setArranging(false);
+    }
   }
 
   function wrapSelection(prefix: string, suffix = prefix) {
@@ -888,6 +943,18 @@ export function NotesWorkspace({
                   />
                   Exclude from AI
                 </label>
+                {!selected.aiExcluded ? (
+                  <button
+                    className="icon-button"
+                    type="button"
+                    title="Organize this writing"
+                    aria-label="Organize this writing"
+                    disabled={arranging || isPending}
+                    onClick={organizeWriting}
+                  >
+                    <Sparkles size={16} />
+                  </button>
+                ) : null}
                 {availableMoves.up ||
                 availableMoves.down ||
                 availableMoves.indent ||
@@ -953,6 +1020,53 @@ export function NotesWorkspace({
                 </button>
               </div>
             </div>
+            {arrangement ? (
+              <section className="note-arrangement" aria-label="Proposed arrangement">
+                <div className="section-heading">
+                  <h2>A way to arrange this</h2>
+                </div>
+                <p className="note-inspector-note">
+                  Every line below is one you wrote. Nothing has been reworded, and nothing has been
+                  left out — what could not be grouped is under “Not sorted”. Your page is unchanged
+                  until you accept this, and the version before it stays in history.
+                </p>
+                {arrangement.invented.length > 0 ? (
+                  <p className="status-message status-message-error" role="status">
+                    {arrangement.invented.length === 1
+                      ? 'One line was suggested that you had not written. It was removed.'
+                      : `${arrangement.invented.length} lines were suggested that you had not written. They were removed.`}
+                  </p>
+                ) : null}
+                {arrangement.questions.length > 0 ? (
+                  <ul className="note-arrangement-questions">
+                    {arrangement.questions.map((question) => (
+                      <li key={question}>{question}</li>
+                    ))}
+                  </ul>
+                ) : null}
+                <pre className="note-arrangement-preview">{arrangement.markdown}</pre>
+                <div className="note-arrangement-actions">
+                  <button
+                    className="btn-primary"
+                    type="button"
+                    disabled={isPending}
+                    onClick={() => {
+                      setBody(arrangement.markdown);
+                      setArrangement(null);
+                    }}
+                  >
+                    Use this arrangement
+                  </button>
+                  <button
+                    className="btn-secondary"
+                    type="button"
+                    onClick={() => setArrangement(null)}
+                  >
+                    Leave it as it is
+                  </button>
+                </div>
+              </section>
+            ) : null}
             {conflict && selected ? (
               <NoteConflictPanel conflict={conflict} onResolve={resolveConflict} />
             ) : null}

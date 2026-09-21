@@ -9196,3 +9196,47 @@ button:disabled {
   background: var(--brand-soft);
   color: var(--ink-soft);
 }
+
+/* ---------- a proposed arrangement of a page ---------- */
+
+.note-arrangement {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin: 12px 0;
+  padding: 14px 16px;
+  border: 1px solid var(--brand-line);
+  border-radius: var(--r-record);
+  background: var(--brand-soft);
+}
+.note-arrangement-questions {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin: 0;
+  padding-left: 18px;
+  color: var(--ink-soft);
+  font-size: var(--fs-label);
+}
+/* The proposal is read, not edited. It scrolls inside its own box so a long
+   page cannot push the editor sideways. */
+.note-arrangement-preview {
+  max-height: 320px;
+  margin: 0;
+  padding: 12px;
+  overflow: auto;
+  border: 1px solid var(--line);
+  border-radius: var(--r-control);
+  background: var(--surface);
+  color: var(--ink);
+  font-family: var(--font-mono, ui-monospace, monospace);
+  font-size: var(--fs-label);
+  line-height: var(--lh-read);
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+.note-arrangement-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
