@@ -43,6 +43,9 @@ export type TodayData = {
   /** 0 = Sunday. A stored workspace preference, not an assumption. */
   weekStartsOn: number;
   coachingIntensity: CoachingIntensity;
+  /* Whether to offer AI at all here. A suggestion button that fails every
+     time is worse than no button. */
+  aiEnabled: boolean;
   focusActionIds: string[];
   actions: TodayAction[];
   goals: TodayGoalOption[];
@@ -75,7 +78,7 @@ async function todayClient() {
   if (!user) throw new Error('Please sign in to continue.');
   const { data: workspace, error } = await supabase
     .from('workspaces')
-    .select('id,timezone,week_starts_on,coaching_intensity')
+    .select('id,timezone,week_starts_on,coaching_intensity,ai_enabled')
     .eq('owner_user_id', user.id)
     .single();
   if (error || !workspace) throw new Error('Unable to load your Workspace.');
@@ -85,6 +88,7 @@ async function todayClient() {
     timezone: workspace.timezone as string,
     weekStartsOn: Number(workspace.week_starts_on),
     coachingIntensity: workspace.coaching_intensity as CoachingIntensity,
+    aiEnabled: Boolean(workspace.ai_enabled),
   };
 }
 
@@ -128,7 +132,8 @@ function areaOptions(
 }
 
 export async function getTodayData(): Promise<TodayData> {
-  const { supabase, workspaceId, timezone, weekStartsOn, coachingIntensity } = await todayClient();
+  const { supabase, workspaceId, timezone, weekStartsOn, coachingIntensity, aiEnabled } =
+    await todayClient();
   const localDate = dateInTimezone(timezone);
   const [actionsResult, focusResult, goalsResult, capturesResult, recentNotesResult, areasResult] =
     await Promise.all([
@@ -231,6 +236,7 @@ export async function getTodayData(): Promise<TodayData> {
     timezone,
     weekStartsOn,
     coachingIntensity,
+    aiEnabled,
     focusActionIds,
     actions,
     goals: (goalsResult.data ?? []).map((goal) => ({

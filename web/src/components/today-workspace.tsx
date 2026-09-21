@@ -108,6 +108,13 @@ export function TodayWorkspace({ data }: { data: TodayData }) {
      it is wanted. Work that already has one shows it straight away -- hiding
      a date someone set would be worse than the extra control. */
   const [showDeadline, setShowDeadline] = useState(false);
+  /* A suggestion is not a plan until someone says so. It lives here until it
+     is committed or dismissed, and is never written on arrival. */
+  const [suggestion, setSuggestion] = useState<{
+    picks: Array<{ id: string; title: string; reason: string }>;
+    candidates: number;
+  } | null>(null);
+  const [suggesting, setSuggesting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   // A conflict raised while a person is inside the edit dialog has to be
   // readable from inside the dialog. Reported at the top of the page it sits
@@ -558,6 +565,118 @@ export function TodayWorkspace({ data }: { data: TodayData }) {
               </div>
             </div>
           ))}
+        </section>
+      ) : null}
+
+      {data.aiEnabled ? (
+        <section className="today-section" aria-labelledby="today-suggestion">
+          <div className="section-heading">
+            <div>
+              <p className="eyebrow">Optional</p>
+              <h2 id="today-suggestion">Help me choose today</h2>
+            </div>
+          </div>
+          {suggestion === null ? (
+            <div className="inline-empty">
+              <p>A short list drawn from work you have already planned.</p>
+              <button
+                className="btn-secondary"
+                type="button"
+                disabled={suggesting || isPending}
+                onClick={() => {
+                  setError(null);
+                  setNotice(null);
+                  setSuggesting(true);
+                  void (async () => {
+                    try {
+                      const response = await fetch('/api/choose-today', {
+                        method: 'POST',
+                        headers: { 'content-type': 'application/json' },
+                        body: JSON.stringify({}),
+                      });
+                      const body = (await response.json().catch(() => null)) as {
+                        data?: {
+                          picks?: Array<{ id: string; title: string; reason: string }>;
+                          candidates?: number;
+                        };
+                        detail?: string;
+                      } | null;
+                      if (!response.ok) {
+                        throw new Error(body?.detail ?? 'No suggestion could be produced.');
+                      }
+                      setSuggestion({
+                        picks: body?.data?.picks ?? [],
+                        candidates: body?.data?.candidates ?? 0,
+                      });
+                    } catch (caught) {
+                      // The manual list is untouched and still usable.
+                      setError(caught instanceof Error ? caught.message : errorMessage(caught));
+                    } finally {
+                      setSuggesting(false);
+                    }
+                  })();
+                }}
+              >
+                {suggesting ? 'Thinking...' : 'Suggest a short list'}
+              </button>
+            </div>
+          ) : suggestion.picks.length === 0 ? (
+            <div className="inline-empty">
+              <p>
+                {suggestion.candidates === 0
+                  ? 'There is no planned work to choose from yet.'
+                  : 'No confident suggestion from what is planned. Choose for yourself below.'}
+              </p>
+              <button className="btn-secondary" type="button" onClick={() => setSuggestion(null)}>
+                Dismiss
+              </button>
+            </div>
+          ) : (
+            <div className="today-action-list">
+              <ul className="area-list">
+                {suggestion.picks.map((pick) => (
+                  <li key={pick.id}>
+                    <span className="area-list-title">{pick.title}</span>
+                    <span className="area-list-meta">{pick.reason}</span>
+                  </li>
+                ))}
+              </ul>
+              <div className="dialog-actions">
+                <button
+                  className="btn-secondary"
+                  type="button"
+                  onClick={() => setSuggestion(null)}
+                  disabled={isPending}
+                >
+                  Dismiss
+                </button>
+                {/* The write is the same Operation a manual choice uses, from
+                    an explicit press. Nothing was committed on arrival. */}
+                <button
+                  className="btn-primary"
+                  type="button"
+                  disabled={isPending}
+                  onClick={() => {
+                    const ids = suggestion.picks.map((pick) => pick.id);
+                    setError(null);
+                    startTransition(async () => {
+                      try {
+                        await saveDailyFocus(data.localDate, ids);
+                        setFocusIds(ids);
+                        setSuggestion(null);
+                        setNotice(`${ids.length} committed to today. You can change any of them.`);
+                        router.refresh();
+                      } catch (caught) {
+                        setError(errorMessage(caught));
+                      }
+                    });
+                  }}
+                >
+                  Commit these to today
+                </button>
+              </div>
+            </div>
+          )}
         </section>
       ) : null}
 
