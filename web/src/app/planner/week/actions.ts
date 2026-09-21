@@ -51,6 +51,8 @@ export type WeeklyWorksheet = {
   quarter: string;
   today: string;
   weekStartsOn: number;
+  /** Whether to offer a proposed week at all. */
+  aiEnabled: boolean;
   grouping: WeeklyGrouping;
   planId: string | null;
   planVersion: number | null;
@@ -79,7 +81,7 @@ async function weekContext() {
   const { supabase, workspaceId } = await requireOwnedWorkspaceId();
   const { data, error } = await supabase
     .from('workspaces')
-    .select('timezone,week_starts_on')
+    .select('timezone,week_starts_on,ai_enabled')
     .eq('id', workspaceId)
     .single();
   if (error || !data) throw new Error('Unable to load your workspace.');
@@ -88,6 +90,7 @@ async function weekContext() {
     workspaceId,
     timezone: data.timezone as string,
     weekStartsOn: Number(data.week_starts_on),
+    aiEnabled: Boolean(data.ai_enabled),
   };
 }
 
@@ -95,7 +98,7 @@ export async function getWeeklyWorksheet(
   anyDateInWeek: string | null,
   grouping: WeeklyGrouping
 ): Promise<WeeklyWorksheet> {
-  const { supabase, workspaceId, timezone, weekStartsOn } = await weekContext();
+  const { supabase, workspaceId, timezone, weekStartsOn, aiEnabled } = await weekContext();
   const today = dateInTimezone(timezone);
   const bounds = weekBounds(anyDateInWeek ?? today, weekStartsOn);
 
@@ -270,6 +273,7 @@ export async function getWeeklyWorksheet(
     quarter: weekQuarterLabel(bounds),
     today,
     weekStartsOn,
+    aiEnabled,
     grouping,
     planId: (plan?.id as string) ?? null,
     planVersion: plan ? Number(plan.version) : null,

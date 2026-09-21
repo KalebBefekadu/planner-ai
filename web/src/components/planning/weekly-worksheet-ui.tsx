@@ -56,6 +56,14 @@ export function WeeklyWorksheetUI({ data }: { data: WeeklyWorksheet }) {
      it is clicked; the server is still the authority, and a refusal puts it
      back with the reason beside it. */
   const [completedHere, setCompletedHere] = useState<Record<string, boolean>>({});
+  /* A proposed week, held until it is applied or dismissed. Nothing about it
+     is written on arrival. */
+  const [proposal, setProposal] = useState<{
+    intention: string | null;
+    picks: Array<{ id: string; title: string; reason: string }>;
+    candidates: number;
+  } | null>(null);
+  const [proposing, setProposing] = useState(false);
 
   const previous = shiftWeek(data.bounds, -1);
   const next = shiftWeek(data.bounds, 1);
@@ -142,6 +150,131 @@ export function WeeklyWorksheetUI({ data }: { data: WeeklyWorksheet }) {
             </p>
           ) : (
             <p>Unavailable — this week was closed without a record.</p>
+          )}
+        </section>
+      ) : null}
+
+      {data.aiEnabled && !closed && data.state === 'draft' ? (
+        <section className="week-intention" aria-label="Help me plan this week">
+          <div className="section-heading">
+            <h2>Help me plan this week</h2>
+          </div>
+          {proposal === null ? (
+            <>
+              <p className="area-empty">
+                A proposed week, selected from work already scheduled in these seven days. It cannot
+                add anything new, and nothing is saved until you apply it.
+              </p>
+              <button
+                type="button"
+                className="btn-secondary"
+                disabled={proposing || pending}
+                onClick={() => {
+                  setError(null);
+                  setNotice(null);
+                  setProposing(true);
+                  void (async () => {
+                    try {
+                      const response = await fetch('/api/plan-week', {
+                        method: 'POST',
+                        headers: { 'content-type': 'application/json' },
+                        body: JSON.stringify({
+                          startsOn: data.bounds.startsOn,
+                          endsOn: data.bounds.endsOn,
+                        }),
+                      });
+                      const body = (await response.json().catch(() => null)) as {
+                        data?: {
+                          intention?: string | null;
+                          picks?: Array<{ id: string; title: string; reason: string }>;
+                          candidates?: number;
+                        };
+                        detail?: string;
+                      } | null;
+                      if (!response.ok) {
+                        throw new Error(body?.detail ?? 'No week could be proposed.');
+                      }
+                      setProposal({
+                        intention: body?.data?.intention ?? null,
+                        picks: body?.data?.picks ?? [],
+                        candidates: body?.data?.candidates ?? 0,
+                      });
+                    } catch (caught) {
+                      setError(caught instanceof Error ? caught.message : String(caught));
+                    } finally {
+                      setProposing(false);
+                    }
+                  })();
+                }}
+              >
+                {proposing ? 'Thinking...' : 'Propose a week'}
+              </button>
+            </>
+          ) : proposal.picks.length === 0 && !proposal.intention ? (
+            <>
+              <p className="area-empty">
+                {proposal.candidates === 0
+                  ? 'Everything scheduled this week is already in the plan.'
+                  : 'No confident proposal from what is scheduled. Choose for yourself below.'}
+              </p>
+              <button type="button" className="btn-secondary" onClick={() => setProposal(null)}>
+                Dismiss
+              </button>
+            </>
+          ) : (
+            <>
+              {proposal.intention ? (
+                <p>
+                  <strong>Suggested intention:</strong> {proposal.intention}
+                </p>
+              ) : null}
+              <ul className="area-list">
+                {proposal.picks.map((pick) => (
+                  <li key={pick.id}>
+                    <span className="area-list-title">{pick.title}</span>
+                    <span className="area-list-meta">{pick.reason}</span>
+                  </li>
+                ))}
+              </ul>
+              <div className="week-intention-row">
+                <button
+                  type="button"
+                  className="btn-secondary"
+                  disabled={pending}
+                  onClick={() => setProposal(null)}
+                >
+                  Dismiss
+                </button>
+                {/* Applied one selection at a time through the same Operation
+                    the checkboxes below use. The suggested sentence is put in
+                    the box rather than saved, so it is edited before it counts
+                    as the person's own words. */}
+                <button
+                  type="button"
+                  className="btn-primary"
+                  disabled={pending || !proposal.picks.length}
+                  onClick={() =>
+                    run(async () => {
+                      const planId = await ensurePlanId();
+                      for (const pick of proposal.picks) {
+                        await setWeekSelection({
+                          planId,
+                          actionId: pick.id,
+                          selected: true,
+                        });
+                      }
+                      if (proposal.intention) setIntention(proposal.intention);
+                      setProposal(null);
+                      setNotice(
+                        `${proposal.picks.length} added to this week. The suggested sentence is in the box for you to edit or replace.`
+                      );
+                    }, 'Planner AI could not apply this plan.')
+                  }
+                >
+                  Add these to the week
+                </button>
+              </div>
+            </>
           )}
         </section>
       ) : null}

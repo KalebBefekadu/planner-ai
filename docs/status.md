@@ -38,6 +38,13 @@ Owner decision, 2026-09-20: the representative Notion pilot is removed from the 
 - "Break this down" on a dated Goal, which previously refused anything but an
   ongoing initiative. It declines a goal whose date has passed rather than
   quietly rescheduling it.
+- Suggestions for today and for the week, drawn only from work that already
+  exists. The model answers with list positions rather than identifiers, so it
+  cannot name work that is not there, and neither suggestion writes anything
+  until an explicit press applies it through the same Operations the manual
+  controls use.
+- "What has gone quiet", answered from dates rather than by a model, asked for
+  rather than shown, and explicit that it measures what was written down.
 
 The latest merged delivery work is PR #111 (`82291a9`): Today uses the accepted outcome-focused hierarchy, stays inside Planner navigation, and shows real Goal direction without fixture content.
 
@@ -81,12 +88,11 @@ including new journeys for life areas, the compacted planner, title-first Today,
 the weekly worksheet, routines counted against a frequency target, and a
 deadline that survives the work being rescheduled.
 
-Not built, and not to be read into the above: the planning intents
-(plan-my-week, choose-today, review-my-week, what-am-I-neglecting). The area
-exclusion resolver those intents depend on exists and is tested; the intents do
-not. Related-area links are deferred
+Not built, and not to be read into the above: related-area links, deferred
 deliberately -- one primary area, with the association contract isolated so
-equal membership stays adoptable.
+equal membership stays adoptable. Four Operations are withheld from agents for
+prompt budget rather than principle, which is a ceiling the assistant catalog
+has now reached rather than a decision anyone made.
 
 One dependency is refused rather than handled: an area's canonical page cannot
 be moved to Trash while the area uses it. A database trigger enforces that on

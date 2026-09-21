@@ -170,7 +170,9 @@ selected writing; routines whose frequency is a target rather than a set of
 appointments nobody made; and a deadline that is a separate fact from the day
 work is planned for, so moving one does not move the other; and Projects, which
 are work that can actually be finished and reopened; and "Break this down" on a
-dated Goal, not only on an ongoing initiative.
+dated Goal, not only on an ongoing initiative; and the planning intents --
+choose-today, plan-my-week, and what-has-gone-quiet, alongside the
+review-my-week proposals that already existed.
 
 `PL-05` is complete as part of title-first Today.
 
@@ -183,9 +185,6 @@ reads the above as more than it is:
   and `goal.schedule.v1` in the agent-parity exceptions, which now names four
   Operations withheld for budget rather than principle. The catalog cannot keep
   growing, and ENG-11 is where that has to be faced.
-- **The planning intents.** Plan-my-week, choose-today, review-my-week, and
-  what-am-I-neglecting are unbuilt. The area exclusion resolver they depend on
-  exists and is tested; these intents do not.
 - **Related-area links.** Deliberately deferred: one primary area, and the
   association contract isolated so equal membership stays adoptable.
 
