@@ -21,6 +21,8 @@ export type TodayAction = {
   status: 'open' | 'in_progress' | 'blocked';
   version: number;
   scheduledOn: string | null;
+  /** The day it has to be finished, which is not the day it is planned for. */
+  dueOn: string | null;
   goalTitle: string | null;
 };
 
@@ -132,7 +134,7 @@ export async function getTodayData(): Promise<TodayData> {
     await Promise.all([
       supabase
         .from('actions')
-        .select('id,title,description_markdown,status,version,scheduled_on,goals(title)')
+        .select('id,title,description_markdown,status,version,scheduled_on,due_on,goals(title)')
         .eq('workspace_id', workspaceId)
         .in('status', ['open', 'in_progress', 'blocked'])
         .is('archived_at', null)
@@ -206,6 +208,7 @@ export async function getTodayData(): Promise<TodayData> {
       status: action.status as TodayAction['status'],
       version: Number(action.version),
       scheduledOn: action.scheduled_on as string | null,
+      dueOn: action.due_on as string | null,
       goalTitle: goal?.title ?? null,
     };
   });
@@ -289,6 +292,10 @@ export async function editTodayAction(input: {
   title: string;
   descriptionMarkdown: string | null;
   scheduledOn: string | null;
+  /* Omitted leaves the deadline alone; null clears it. Deferring work sends no
+     deadline at all, because moving the day you work on something says nothing
+     about the day it is due. */
+  dueOn?: string | null;
 }) {
   const { supabase } = await todayClient();
   const result = await executeOperation(supabase, 'action.update.v1', input, {
@@ -344,6 +351,7 @@ export async function createTodayAction(
     status: created.status === 'open' ? 'open' : (created.status as TodayAction['status']),
     version: created.version,
     scheduledOn: created.scheduled_on ?? null,
+    dueOn: created.due_on ?? null,
     goalTitle,
   };
 

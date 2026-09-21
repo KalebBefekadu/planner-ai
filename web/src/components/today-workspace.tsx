@@ -44,6 +44,20 @@ function dateLabel(value: string | null, today: string) {
   if (!value) return 'Unscheduled';
   if (value === today) return 'Today';
   if (value < today) return 'Overdue';
+  return shortDate(value);
+}
+
+/* A deadline reads as a deadline, not as another date beside the work date.
+   "Due" is said out loud so the row cannot be misread as a reschedule, and a
+   deadline already past is named late rather than shown as a bare date. */
+function deadlineLabel(value: string | null, today: string) {
+  if (!value) return null;
+  if (value < today) return 'Was due ' + shortDate(value);
+  if (value === today) return 'Due today';
+  return 'Due ' + shortDate(value);
+}
+
+function shortDate(value: string) {
   return new Intl.DateTimeFormat('en-US', { month: 'short', day: 'numeric' }).format(
     new Date(`${value}T12:00:00Z`)
   );
@@ -84,7 +98,16 @@ export function TodayWorkspace({ data }: { data: TodayData }) {
   // resets an uncontrolled form once it settles, which threw away the edit
   // whenever the save was rejected -- the one moment the words typed matter
   // most.
-  const [editDraft, setEditDraft] = useState({ title: '', scheduledOn: '', description: '' });
+  const [editDraft, setEditDraft] = useState({
+    title: '',
+    scheduledOn: '',
+    dueOn: '',
+    description: '',
+  });
+  /* A deadline is the uncommon case, so the control is not on the form until
+     it is wanted. Work that already has one shows it straight away -- hiding
+     a date someone set would be worse than the extra control. */
+  const [showDeadline, setShowDeadline] = useState(false);
   const [error, setError] = useState<string | null>(null);
   // A conflict raised while a person is inside the edit dialog has to be
   // readable from inside the dialog. Reported at the top of the page it sits
@@ -196,8 +219,10 @@ export function TodayWorkspace({ data }: { data: TodayData }) {
     setEditDraft({
       title: action.title,
       scheduledOn: action.scheduledOn ?? '',
+      dueOn: action.dueOn ?? '',
       description: action.descriptionMarkdown ?? '',
     });
+    setShowDeadline(Boolean(action.dueOn));
   }
 
   function closeEditor() {
@@ -209,7 +234,7 @@ export function TodayWorkspace({ data }: { data: TodayData }) {
     if (!editing) return;
     setError(null);
     setEditError(null);
-    const { title, description, scheduledOn } = editDraft;
+    const { title, description, scheduledOn, dueOn } = editDraft;
     startTransition(async () => {
       try {
         const result = await editTodayAction({
@@ -218,6 +243,7 @@ export function TodayWorkspace({ data }: { data: TodayData }) {
           title,
           descriptionMarkdown: description || null,
           scheduledOn: scheduledOn || null,
+          dueOn: dueOn || null,
         });
         setActions((current) =>
           current.map((action) =>
@@ -227,6 +253,7 @@ export function TodayWorkspace({ data }: { data: TodayData }) {
                   title: result.title,
                   descriptionMarkdown: result.description_markdown ?? null,
                   scheduledOn: result.scheduled_on ?? null,
+                  dueOn: result.due_on ?? null,
                   version: result.version,
                 }
               : action
@@ -297,6 +324,7 @@ export function TodayWorkspace({ data }: { data: TodayData }) {
 
   function actionRow(action: TodayAction, focused: boolean) {
     const label = dateLabel(action.scheduledOn, data.localDate);
+    const deadline = deadlineLabel(action.dueOn, data.localDate);
     return (
       <article className="today-action-row" key={action.id}>
         <button
@@ -314,6 +342,15 @@ export function TodayWorkspace({ data }: { data: TodayData }) {
           <div>
             {action.goalTitle ? <span>{action.goalTitle}</span> : null}
             <span className={label === 'Overdue' ? 'date-overdue' : undefined}>{label}</span>
+            {deadline ? (
+              <span
+                className={
+                  action.dueOn && action.dueOn < data.localDate ? 'date-overdue' : undefined
+                }
+              >
+                {deadline}
+              </span>
+            ) : null}
             {action.status === 'blocked' ? <span>Blocked</span> : null}
           </div>
         </div>
@@ -722,7 +759,34 @@ export function TodayWorkspace({ data }: { data: TodayData }) {
                     setEditDraft((draft) => ({ ...draft, scheduledOn: event.target.value }))
                   }
                 />
+                <span className="field-note">The day you plan to work on this.</span>
               </label>
+              {showDeadline ? (
+                <label>
+                  Deadline
+                  <input
+                    className="input-field"
+                    type="date"
+                    name="dueOn"
+                    value={editDraft.dueOn}
+                    onChange={(event) =>
+                      setEditDraft((draft) => ({ ...draft, dueOn: event.target.value }))
+                    }
+                  />
+                  <span className="field-note">
+                    The day it has to be finished. Clearing this removes the deadline and leaves the
+                    scheduled day alone.
+                  </span>
+                </label>
+              ) : (
+                <button
+                  className="btn-secondary"
+                  type="button"
+                  onClick={() => setShowDeadline(true)}
+                >
+                  Add a deadline
+                </button>
+              )}
               <label>
                 Details
                 <textarea

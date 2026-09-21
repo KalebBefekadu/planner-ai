@@ -582,6 +582,8 @@ export async function updatePlanAction(input: {
   title: string;
   descriptionMarkdown: string | null;
   scheduledOn: string | null;
+  /** Omitted leaves the deadline alone; null clears it. */
+  dueOn?: string | null;
 }) {
   if (!canonicalEnabled) throw new Error('Action editing requires the canonical data model.');
   const { supabase } = await requireUser();

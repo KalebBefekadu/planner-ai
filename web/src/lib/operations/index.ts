@@ -59,6 +59,9 @@ const actionOutput = z
     description_markdown: z.string().nullable(),
     status: z.enum(['open', 'in_progress', 'blocked', 'done', 'dropped']),
     scheduled_on: date.nullable(),
+    /* The day it has to be finished, which is not the day you mean to work on
+       it. Null for most work, because most work has no deadline. */
+    due_on: date.nullable(),
     completed_at: timestamp.nullable(),
     version,
     created_at: timestamp,
@@ -714,7 +717,7 @@ export const operationDefinitions = {
     output: actionOutput,
   },
   'action.update.v1': {
-    summary: 'Edit an Action title, description, and scheduled date.',
+    summary: 'Edit an Action title, description, scheduled date, and deadline.',
     risk: 'low',
     exposure: ['ui', 'chat', 'mcp'],
     reversible: true,
@@ -726,6 +729,10 @@ export const operationDefinitions = {
         title: z.string().trim().min(3).max(1000),
         descriptionMarkdown: z.string().max(50_000).nullable(),
         scheduledOn: date.nullable(),
+        /* Optional, and the two states differ. Omitted leaves the deadline
+           alone -- what every caller written before deadlines existed means.
+           Sent as null clears it. */
+        dueOn: date.nullable().optional(),
       })
       .strict(),
     output: actionOutput,

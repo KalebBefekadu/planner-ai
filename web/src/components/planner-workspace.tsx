@@ -315,6 +315,7 @@ export function PlannerWorkspace({
             title,
             descriptionMarkdown,
             scheduledOn: date,
+            dueOn: String(formData.get('dueOn') ?? '') || null,
           });
           const currentDestination = type === 'monthly' ? item.quarterly_id : item.monthly_id;
           if (destination && destination !== currentDestination) {
@@ -895,6 +896,24 @@ export function PlannerWorkspace({
                   />
                 </label>
               )}
+              {/* An Action's deadline is a second, different date: the Goal
+                  field above already means "due", but for a task that field is
+                  the day the work is planned for. Offered only where the two
+                  can differ. */}
+              {editTarget.type === 'monthly' || editTarget.type === 'weekly' ? (
+                <label>
+                  Deadline
+                  <input
+                    className="input-field"
+                    type="date"
+                    name="dueOn"
+                    defaultValue={editTarget.item.due_on ?? ''}
+                  />
+                  <span className="field-note">
+                    Optional. The day it has to be finished, which need not be the day above.
+                  </span>
+                </label>
+              ) : null}
 
               {editTarget.type === 'yearly' || editTarget.type === 'quarterly' ? (
                 <label>

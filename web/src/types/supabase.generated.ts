@@ -211,6 +211,7 @@ export type Database = {
           created_at: string;
           description_markdown: string | null;
           drop_reason: string | null;
+          due_on: string | null;
           goal_id: string | null;
           horizon_id: string;
           id: string;
@@ -236,6 +237,7 @@ export type Database = {
           created_at?: string;
           description_markdown?: string | null;
           drop_reason?: string | null;
+          due_on?: string | null;
           goal_id?: string | null;
           horizon_id: string;
           id?: string;
@@ -261,6 +263,7 @@ export type Database = {
           created_at?: string;
           description_markdown?: string | null;
           drop_reason?: string | null;
+          due_on?: string | null;
           goal_id?: string | null;
           horizon_id?: string;
           id?: string;

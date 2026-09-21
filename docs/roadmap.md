@@ -166,8 +166,9 @@ surface; title-first Today; life areas with their canonical pages; per-area
 directions and the association between work and a part of life; the weekly
 worksheet with a durable baseline and a closed-week record; Goals that outlast
 the quarter they started in, read through Quarter and Year views; organising
-selected writing; and routines whose frequency is a target rather than a set of
-appointments nobody made.
+selected writing; routines whose frequency is a target rather than a set of
+appointments nobody made; and a deadline that is a separate fact from the day
+work is planned for, so moving one does not move the other.
 
 `PL-05` is complete as part of title-first Today.
 
@@ -183,9 +184,6 @@ reads the above as more than it is:
 - **The planning intents.** Plan-my-week, choose-today, review-my-week, and
   what-am-I-neglecting are unbuilt. The area exclusion resolver they depend on
   exists and is tested; these intents do not.
-- **A deadline distinct from the day work is planned.** `actions.scheduled_on`
-  is the day you mean to work on something. There is no due date, so "finish by
-  Friday" and "work on it Tuesday" cannot both be said about one task.
 - **Related-area links.** Deliberately deferred: one primary area, and the
   association contract isolated so equal membership stays adoptable.
 

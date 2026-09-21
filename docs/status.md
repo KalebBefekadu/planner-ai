@@ -27,6 +27,8 @@ Owner decision, 2026-09-20: the representative Notion pilot is removed from the 
   views without being cloned into each period.
 - Routines whose frequency is a target the week counts, rather than appointments
   nobody made; a second press on the same day is the same session.
+- A deadline that is a separate fact from the day work is planned for, so
+  rescheduling the work does not move what was promised.
 
 The latest merged delivery work is PR #111 (`82291a9`): Today uses the accepted outcome-focused hierarchy, stays inside Planner navigation, and shows real Goal direction without fixture content.
 
@@ -64,17 +66,17 @@ See [Production](runbooks/production.md) and [Migration reconciliation](runbooks
 
 ### The life-areas redesign is partial, by design and not by accident
 
-Verified on `claude/life-areas-redesign`: 78 pgTAP suites at 1,509 assertions,
+Verified on `claude/life-areas-redesign`: 79 pgTAP suites at 1,526 assertions,
 1,126 unit tests across 98 files, and the production-build browser suite,
 including new journeys for life areas, the compacted planner, title-first Today,
-the weekly worksheet, and routines counted against a frequency target.
+the weekly worksheet, routines counted against a frequency target, and a
+deadline that survives the work being rescheduled.
 
 Not built, and not to be read into the above: finite Projects; breaking down a
 dated Goal, which `initiative-breakdown` refuses by design; the planning intents
-(plan-my-week, choose-today, review-my-week, what-am-I-neglecting); and a
-deadline distinct from the day work is planned, since `actions.scheduled_on` is
-the only date a task carries. The area exclusion resolver those intents depend
-on exists and is tested; the intents do not. Related-area links are deferred
+(plan-my-week, choose-today, review-my-week, what-am-I-neglecting). The area
+exclusion resolver those intents depend on exists and is tested; the intents do
+not. Related-area links are deferred
 deliberately -- one primary area, with the association contract isolated so
 equal membership stays adoptable.
 
