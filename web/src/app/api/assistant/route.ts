@@ -13,6 +13,7 @@ import {
   type RequestContext,
 } from '@/lib/api/ai-route';
 import { dateInTimezone } from '@/lib/date';
+import { excludedAreaIds, withAreaExclusion } from '@/lib/areas/ai-exclusion';
 import {
   buildEvidenceCatalog,
   resolveClaims,
@@ -143,6 +144,9 @@ async function readMinimalContext(route: string, requestedSelection?: AssistantS
     const localDate = dateInTimezone(workspace.timezone as string);
     const scopes = assistantContextScopes(route);
     const selection = assistantSelectionForRoute(route, requestedSelection);
+    /* Resolved before anything is fetched, so excluded work never reaches the
+       provider rather than being dropped from what comes back. */
+    const excludedAreas = await excludedAreaIds(supabase, workspaceId);
     const [
       vision,
       goals,
@@ -168,22 +172,28 @@ async function readMinimalContext(route: string, requestedSelection?: AssistantS
             .maybeSingle()
         : Promise.resolve({ data: null }),
       scopes.has('goals')
-        ? supabase
-            .from('goals')
-            .select('id, title, status, version')
-            .eq('workspace_id', workspaceId)
-            .is('archived_at', null)
-            .is('trashed_at', null)
-            .limit(20)
+        ? withAreaExclusion(
+            supabase
+              .from('goals')
+              .select('id, title, status, version')
+              .eq('workspace_id', workspaceId)
+              .is('archived_at', null)
+              .is('trashed_at', null)
+              .limit(20),
+            excludedAreas
+          )
         : Promise.resolve({ data: [] }),
       scopes.has('actions')
-        ? supabase
-            .from('actions')
-            .select('id, title, status, scheduled_on, version')
-            .eq('workspace_id', workspaceId)
-            .is('archived_at', null)
-            .is('trashed_at', null)
-            .limit(30)
+        ? withAreaExclusion(
+            supabase
+              .from('actions')
+              .select('id, title, status, scheduled_on, version')
+              .eq('workspace_id', workspaceId)
+              .is('archived_at', null)
+              .is('trashed_at', null)
+              .limit(30),
+            excludedAreas
+          )
         : Promise.resolve({ data: [] }),
       scopes.has('todayFocus')
         ? supabase
@@ -211,14 +221,17 @@ async function readMinimalContext(route: string, requestedSelection?: AssistantS
             .limit(20)
         : Promise.resolve({ data: [] }),
       scopes.has('notes')
-        ? supabase
-            .from('notes')
-            .select('id, title, version')
-            .eq('workspace_id', workspaceId)
-            .eq('ai_excluded', false)
-            .is('archived_at', null)
-            .is('trashed_at', null)
-            .limit(20)
+        ? withAreaExclusion(
+            supabase
+              .from('notes')
+              .select('id, title, version')
+              .eq('workspace_id', workspaceId)
+              .eq('ai_excluded', false)
+              .is('archived_at', null)
+              .is('trashed_at', null)
+              .limit(20),
+            excludedAreas
+          )
         : Promise.resolve({ data: [] }),
       scopes.has('memories')
         ? supabase
@@ -247,16 +260,20 @@ async function readMinimalContext(route: string, requestedSelection?: AssistantS
             .limit(20)
         : Promise.resolve({ data: [] }),
     ]);
+    /* The page someone is looking at is excluded the same way as any other.
+       Pointing the assistant at it is not consent to send it. */
     const selectedNote = selection
-      ? await supabase
-          .from('notes')
-          .select('id,title,body_markdown,version')
-          .eq('workspace_id', workspaceId)
-          .eq('id', selection.id)
-          .eq('ai_excluded', false)
-          .is('archived_at', null)
-          .is('trashed_at', null)
-          .maybeSingle()
+      ? await withAreaExclusion(
+          supabase
+            .from('notes')
+            .select('id,title,body_markdown,version')
+            .eq('workspace_id', workspaceId)
+            .eq('id', selection.id)
+            .eq('ai_excluded', false)
+            .is('archived_at', null)
+            .is('trashed_at', null),
+          excludedAreas
+        ).maybeSingle()
       : { data: null };
     const boundedSelectedNote = boundedSelectedNoteContext(selectedNote.data);
     const noteRecords = boundedSelectedNote
