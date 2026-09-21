@@ -37,6 +37,18 @@ export const databaseOperationContracts: Readonly<Record<string, GeneratedOperat
     reversible: true,
     owningDomain: 'action_template',
   },
+  'action-template.frequency.v1': {
+    riskClass: 'low',
+    exposures: ['ui', 'chat', 'mcp'],
+    reversible: true,
+    owningDomain: 'routine_frequency',
+  },
+  'action-template.log-occurrence.v1': {
+    riskClass: 'low',
+    exposures: ['ui', 'chat', 'mcp'],
+    reversible: true,
+    owningDomain: 'routine_frequency',
+  },
   'action-template.materialize.v1': {
     riskClass: 'low',
     exposures: ['ui', 'chat', 'mcp', 'automation'],
@@ -475,6 +487,8 @@ export const databaseUndoStrategies: Readonly<Record<string, string>> = {
   'account.deletion.schedule.v1': 'inverse-operation',
   'action-template.archive.v1': 'snapshot',
   'action-template.create.v1': 'trash-create',
+  'action-template.frequency.v1': 'snapshot',
+  'action-template.log-occurrence.v1': 'trash-create',
   'action-template.materialize.v1': 'inverse-operation',
   'action-template.status.v1': 'snapshot',
   'action-template.update.v1': 'snapshot',

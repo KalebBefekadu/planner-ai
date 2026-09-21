@@ -25,6 +25,16 @@ export type WeeklyCandidate = {
   areaName: string | null;
 };
 
+export type WeeklyRoutine = {
+  templateId: string;
+  title: string;
+  target: number;
+  done: number;
+  paused: boolean;
+  /** True once every slot in this week is taken. */
+  met: boolean;
+};
+
 export type WeeklyHistoryRow = {
   planId: string;
   startsOn: string;
@@ -53,6 +63,8 @@ export type WeeklyWorksheet = {
   openDecisions: WeeklyItem[];
   /** Work scheduled in this week that has not been put in the plan. */
   candidates: WeeklyCandidate[];
+  /** Routines counted rather than scheduled, and how the week is going. */
+  routines: WeeklyRoutine[];
   /** Present only once the week is closed. Null means "not closed yet". */
   record: {
     closedAt: string;
@@ -87,40 +99,85 @@ export async function getWeeklyWorksheet(
   const today = dateInTimezone(timezone);
   const bounds = weekBounds(anyDateInWeek ?? today, weekStartsOn);
 
-  const [planResult, scheduledResult, historyResult] = await Promise.all([
-    supabase
-      .from('weekly_plans')
-      .select(
-        'id,state,intention,capacity_hours,version,planning_horizons!inner(starts_on,ends_on)'
-      )
-      .eq('workspace_id', workspaceId)
-      .eq('planning_horizons.starts_on', bounds.startsOn)
-      .maybeSingle(),
-    /* Work already scheduled in these seven days, so the worksheet can offer
+  const [planResult, scheduledResult, historyResult, routineResult, sessionResult] =
+    await Promise.all([
+      supabase
+        .from('weekly_plans')
+        .select(
+          'id,state,intention,capacity_hours,version,planning_horizons!inner(starts_on,ends_on)'
+        )
+        .eq('workspace_id', workspaceId)
+        .eq('planning_horizons.starts_on', bounds.startsOn)
+        .maybeSingle(),
+      /* Work already scheduled in these seven days, so the worksheet can offer
        it rather than asking the person to retype what they already planned. */
-    supabase
-      .from('actions')
-      .select('id,title,scheduled_on,primary_area_id,life_areas(name)')
-      .eq('workspace_id', workspaceId)
-      .gte('scheduled_on', bounds.startsOn)
-      .lte('scheduled_on', bounds.endsOn)
-      .in('status', ['open', 'in_progress', 'blocked'])
-      .is('archived_at', null)
-      .is('trashed_at', null)
-      .order('scheduled_on')
-      .limit(200),
-    supabase
-      .from('weekly_plans')
-      .select(
-        'id,state,planning_horizons!inner(starts_on,ends_on),weekly_plan_snapshots(baseline_count,completed_count,late_addition_count)'
-      )
-      .eq('workspace_id', workspaceId)
-      .order('created_at', { ascending: false })
-      .limit(26),
-  ]);
-  if (planResult.error || scheduledResult.error || historyResult.error) {
+      supabase
+        .from('actions')
+        .select('id,title,scheduled_on,primary_area_id,life_areas(name)')
+        .eq('workspace_id', workspaceId)
+        .gte('scheduled_on', bounds.startsOn)
+        .lte('scheduled_on', bounds.endsOn)
+        .in('status', ['open', 'in_progress', 'blocked'])
+        .is('archived_at', null)
+        .is('trashed_at', null)
+        .order('scheduled_on')
+        .limit(200),
+      supabase
+        .from('weekly_plans')
+        .select(
+          'id,state,planning_horizons!inner(starts_on,ends_on),weekly_plan_snapshots(baseline_count,completed_count,late_addition_count)'
+        )
+        .eq('workspace_id', workspaceId)
+        .order('created_at', { ascending: false })
+        .limit(26),
+      /* Weekly targets only. A monthly target is not a claim about this week,
+       and showing one here would invite a person to answer for a period they
+       are only part way through. */
+      supabase
+        .from('action_templates')
+        .select('id,title,status,occurrences_per_period')
+        .eq('workspace_id', workspaceId)
+        .eq('cadence', 'weekly')
+        .not('occurrences_per_period', 'is', null)
+        .is('archived_at', null)
+        .order('created_at')
+        .limit(100),
+      supabase
+        .from('actions')
+        .select('recurrence_template_id')
+        .eq('workspace_id', workspaceId)
+        .eq('occurrence_period_start', bounds.startsOn)
+        .not('occurrence_slot', 'is', null)
+        .is('trashed_at', null)
+        .limit(1000),
+    ]);
+  if (
+    planResult.error ||
+    scheduledResult.error ||
+    historyResult.error ||
+    routineResult.error ||
+    sessionResult.error
+  ) {
     throw new Error('Unable to load this week.');
   }
+
+  const sessionCounts = new Map<string, number>();
+  for (const row of sessionResult.data ?? []) {
+    const key = row.recurrence_template_id as string;
+    sessionCounts.set(key, (sessionCounts.get(key) ?? 0) + 1);
+  }
+  const routines: WeeklyRoutine[] = (routineResult.data ?? []).map((row) => {
+    const target = Number(row.occurrences_per_period);
+    const done = sessionCounts.get(row.id as string) ?? 0;
+    return {
+      templateId: row.id as string,
+      title: row.title as string,
+      target,
+      done,
+      paused: row.status !== 'active',
+      met: done >= target,
+    };
+  });
 
   const plan = planResult.data;
   let items: WeeklyItem[] = [];
@@ -224,6 +281,7 @@ export async function getWeeklyWorksheet(
     progress: weeklyProgress(items, bounds),
     openDecisions: needsDecision(items, bounds),
     candidates,
+    routines,
     record,
     history,
   };

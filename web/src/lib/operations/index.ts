@@ -118,6 +118,9 @@ const actionTemplateOutput = z
     cadence: z.enum(['weekly', 'monthly']),
     status: z.enum(['active', 'paused', 'archived']),
     nextOccurrenceOn: date,
+    /* Null is the cadence this table has always had: a dated occurrence on an
+       anchor day. A number is a target counted over the period instead. */
+    occurrencesPerPeriod: z.number().int().min(1).max(28).nullable().optional(),
     version,
     createdActionIds: z.array(id).max(100),
   })
@@ -824,6 +827,31 @@ export const operationDefinitions = {
       .strict(),
     output: actionTemplateOutput,
   },
+  'action-template.frequency.v1': {
+    summary: 'Set or clear how many times a routine is meant to happen in its period.',
+    risk: 'low',
+    exposure: ['ui', 'chat', 'mcp'],
+    reversible: true,
+    domain: 'routine_frequency',
+    input: z
+      .object({
+        id,
+        expectedVersion: version,
+        /** Null puts the routine back on a dated cadence. */
+        occurrencesPerPeriod: z.number().int().min(1).max(28).nullable(),
+      })
+      .strict(),
+    output: actionTemplateOutput,
+  },
+  'action-template.log-occurrence.v1': {
+    summary: 'Record that a frequency routine happened, on the day it happened.',
+    risk: 'low',
+    exposure: ['ui', 'chat', 'mcp'],
+    reversible: true,
+    domain: 'routine_frequency',
+    input: z.object({ id, on: date }).strict(),
+    output: actionOutput,
+  },
   'action-template.materialize.v1': {
     summary: 'Create every due ordinary Action from one recurring template, without duplicates.',
     risk: 'low',
@@ -1494,6 +1522,8 @@ export const undoableOperationIds = [
   'action-template.create.v1',
   'action-template.update.v1',
   'action-template.status.v1',
+  'action-template.frequency.v1',
+  'action-template.log-occurrence.v1',
   'action-template.materialize.v1',
   'action-template.archive.v1',
   'notification.refresh.v1',

@@ -1,5 +1,5 @@
 begin;
-select plan(41);
+select plan(43);
 
 select has_table('public', 'action_templates', 'recurring Action templates exist');
 select row_security_active('public.action_templates'), 'Action templates have RLS';
@@ -14,7 +14,18 @@ select function_privs_are(
 select is(
   (select count(*)::integer from public.operation_contracts
    where operation_id like 'action-template.%'),
-  5, 'all recurring Action Operations are registered'
+  7, 'all recurring Action Operations are registered'
+);
+-- The two frequency Operations are routed away from this handler on purpose:
+-- a target counted over a period has nothing to do with materialising dated
+-- occurrences, and sharing a handler would have meant sharing its state.
+select is(
+  public.operation_handler_for('action-template.log-occurrence.v1'), 'routine_frequency',
+  'a logged session is handled by the frequency executor'
+);
+select is(
+  public.operation_handler_for('action-template.materialize.v1'), 'action_template',
+  'and a dated occurrence is still handled by the one that always did'
 );
 
 insert into auth.users (

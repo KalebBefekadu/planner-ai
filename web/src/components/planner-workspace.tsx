@@ -7,6 +7,7 @@ import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import {
   Archive,
   CalendarPlus,
+  Check,
   ChevronLeft,
   ChevronRight,
   Layers3,
@@ -36,6 +37,8 @@ import {
   materializeActionTemplate,
   setActionTemplateStatus,
   updateActionTemplate,
+  setActionTemplateFrequency,
+  logRoutineOccurrence,
   type ActionTemplateView,
 } from '@/app/planner/templates/actions';
 import { actionFailureMessage } from '@/lib/operations/failure-message';
@@ -338,6 +341,8 @@ export function PlannerWorkspace({
     const goalId = String(formData.get('goalId') ?? '') || null;
     const cadence = String(formData.get('cadence')) as 'weekly' | 'monthly';
     const occurrenceOn = String(formData.get('occurrenceOn') ?? '');
+    const timesRaw = String(formData.get('occurrencesPerPeriod') ?? '').trim();
+    const occurrencesPerPeriod = timesRaw ? Number(timesRaw) : null;
     setError(null);
     startTransition(async () => {
       try {
@@ -351,16 +356,32 @@ export function PlannerWorkspace({
             cadence,
             nextOccurrenceOn: occurrenceOn,
           });
+          /* The target is its own Operation and its own version bump, so it
+             is applied after the edit rather than folded into it: one write
+             per decision keeps the undo record honest about which one was
+             changed. */
+          if (occurrencesPerPeriod !== editing.occurrencesPerPeriod) {
+            await setActionTemplateFrequency(editing.id, editing.version + 1, occurrencesPerPeriod);
+          }
           setNotice('Recurring Action updated.');
         } else {
-          await createActionTemplate({
+          const created = await createActionTemplate({
             title,
             descriptionMarkdown,
             goalId,
             cadence,
             firstOccurrenceOn: occurrenceOn,
           });
-          setNotice('Recurring Action created with its first dated occurrence.');
+          if (occurrencesPerPeriod !== null) {
+            await setActionTemplateFrequency(created.id, created.version, occurrencesPerPeriod);
+            setNotice(
+              `Recurring Action created, counted ${occurrencesPerPeriod}× a ${
+                cadence === 'weekly' ? 'week' : 'month'
+              }.`
+            );
+          } else {
+            setNotice('Recurring Action created with its first dated occurrence.');
+          }
         }
         setTemplateEditor(null);
       } catch (caught) {
@@ -376,6 +397,23 @@ export function PlannerWorkspace({
       try {
         await setActionTemplateStatus(template.id, template.version, status);
         setNotice(status === 'active' ? 'Recurring Action resumed.' : 'Recurring Action paused.');
+      } catch (caught) {
+        setError(messageFor(caught));
+      }
+    });
+  }
+
+  /* Recording a session is the whole interaction for a target routine: it
+     happened, today, and the week's count moves. Nothing was scheduled in
+     advance, so nothing has to be ticked off. */
+  function recordSession(template: ActionTemplateView) {
+    setError(null);
+    setNotice(null);
+    startTransition(async () => {
+      try {
+        await logRoutineOccurrence(template.id, null);
+        setNotice(`Recorded a session of ${template.title}.`);
+        router.refresh();
       } catch (caught) {
         setError(messageFor(caught));
       }
@@ -1042,29 +1080,51 @@ export function PlannerWorkspace({
                   <div className="recurrence-copy">
                     <h3>{template.title}</h3>
                     <p>
-                      {template.cadence === 'weekly' ? 'Weekly' : 'Monthly'} · Next{' '}
-                      <time dateTime={template.nextOccurrenceOn}>
-                        {new Intl.DateTimeFormat('en-US', {
-                          month: 'short',
-                          day: 'numeric',
-                          year: 'numeric',
-                          timeZone: 'UTC',
-                        }).format(new Date(`${template.nextOccurrenceOn}T12:00:00Z`))}
-                      </time>
+                      {template.occurrencesPerPeriod !== null ? (
+                        <>
+                          {template.occurrencesPerPeriod}× a{' '}
+                          {template.cadence === 'weekly' ? 'week' : 'month'} · no fixed day
+                        </>
+                      ) : (
+                        <>
+                          {template.cadence === 'weekly' ? 'Weekly' : 'Monthly'} · Next{' '}
+                          <time dateTime={template.nextOccurrenceOn}>
+                            {new Intl.DateTimeFormat('en-US', {
+                              month: 'short',
+                              day: 'numeric',
+                              year: 'numeric',
+                              timeZone: 'UTC',
+                            }).format(new Date(`${template.nextOccurrenceOn}T12:00:00Z`))}
+                          </time>
+                        </>
+                      )}
                       {template.status === 'paused' ? ' · Paused' : ''}
                     </p>
                   </div>
                   <div className="recurrence-actions">
-                    <button
-                      className="icon-button"
-                      type="button"
-                      onClick={() => createDueActions(template)}
-                      disabled={isPending || template.status === 'paused'}
-                      aria-label={`Create due Actions for ${template.title}`}
-                      title="Create due Actions"
-                    >
-                      <CalendarPlus size={16} />
-                    </button>
+                    {template.occurrencesPerPeriod !== null ? (
+                      <button
+                        className="icon-button"
+                        type="button"
+                        onClick={() => recordSession(template)}
+                        disabled={isPending || template.status === 'paused'}
+                        aria-label={`Record a session of ${template.title}`}
+                        title="Record a session"
+                      >
+                        <Check size={16} />
+                      </button>
+                    ) : (
+                      <button
+                        className="icon-button"
+                        type="button"
+                        onClick={() => createDueActions(template)}
+                        disabled={isPending || template.status === 'paused'}
+                        aria-label={`Create due Actions for ${template.title}`}
+                        title="Create due Actions"
+                      >
+                        <CalendarPlus size={16} />
+                      </button>
+                    )}
                     <button
                       className="icon-button"
                       type="button"
@@ -1157,6 +1217,22 @@ export function PlannerWorkspace({
                     <option value="weekly">Weekly</option>
                     <option value="monthly">Monthly</option>
                   </select>
+                </label>
+                <label>
+                  Times per period
+                  <input
+                    className="input-field"
+                    type="number"
+                    name="occurrencesPerPeriod"
+                    min={1}
+                    max={28}
+                    placeholder="A fixed day"
+                    defaultValue={
+                      templateEditor === 'new' || templateEditor.occurrencesPerPeriod === null
+                        ? ''
+                        : String(templateEditor.occurrencesPerPeriod)
+                    }
+                  />
                 </label>
                 <label>
                   {templateEditor === 'new' ? 'First occurrence' : 'Next occurrence'}

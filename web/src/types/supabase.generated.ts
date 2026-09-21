@@ -147,6 +147,7 @@ export type Database = {
           id: string;
           monthly_anchor_day: number | null;
           next_occurrence_on: string;
+          occurrences_per_period: number | null;
           status: string;
           title: string;
           updated_at: string;
@@ -162,6 +163,7 @@ export type Database = {
           id?: string;
           monthly_anchor_day?: number | null;
           next_occurrence_on: string;
+          occurrences_per_period?: number | null;
           status?: string;
           title: string;
           updated_at?: string;
@@ -177,6 +179,7 @@ export type Database = {
           id?: string;
           monthly_anchor_day?: number | null;
           next_occurrence_on?: string;
+          occurrences_per_period?: number | null;
           status?: string;
           title?: string;
           updated_at?: string;
@@ -211,6 +214,8 @@ export type Database = {
           goal_id: string | null;
           horizon_id: string;
           id: string;
+          occurrence_period_start: string | null;
+          occurrence_slot: number | null;
           parent_action_id: string | null;
           primary_area_id: string | null;
           purge_after: string | null;
@@ -234,6 +239,8 @@ export type Database = {
           goal_id?: string | null;
           horizon_id: string;
           id?: string;
+          occurrence_period_start?: string | null;
+          occurrence_slot?: number | null;
           parent_action_id?: string | null;
           primary_area_id?: string | null;
           purge_after?: string | null;
@@ -257,6 +264,8 @@ export type Database = {
           goal_id?: string | null;
           horizon_id?: string;
           id?: string;
+          occurrence_period_start?: string | null;
+          occurrence_slot?: number | null;
           parent_action_id?: string | null;
           primary_area_id?: string | null;
           purge_after?: string | null;
@@ -3566,6 +3575,15 @@ export type Database = {
         };
         Returns: Json;
       };
+      execute_routine_frequency_operation: {
+        Args: {
+          p_idempotency_key: string;
+          p_input: Json;
+          p_operation_id: string;
+          p_surface?: string;
+        };
+        Returns: Json;
+      };
       execute_trash_move_undo: {
         Args: {
           p_idempotency_key: string;
@@ -3903,6 +3921,10 @@ export type Database = {
       revoke_mcp_oauth_grant: {
         Args: { p_oauth_client_id: string };
         Returns: undefined;
+      };
+      routine_period_start: {
+        Args: { p_cadence: string; p_on: string; p_workspace_id: string };
+        Returns: string;
       };
       search_conversations: {
         Args: {

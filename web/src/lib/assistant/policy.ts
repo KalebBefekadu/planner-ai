@@ -106,7 +106,12 @@ export function assistantOperationCatalog() {
         id,
         {
           summary: definition.summary,
-          risk: definition.risk,
+          /* Stated only when it is not the common case. Risk decides whether a
+             proposal needs approval, and that decision is made on the server
+             from the same table -- repeating "low" sixty times buys the model
+             nothing and spends a prompt budget that a new Operation has twice
+             now been the thing to exceed. */
+          ...(definition.risk === 'low' ? {} : { risk: definition.risk }),
           input: compactJsonSchema(z.toJSONSchema(definition.input)),
         },
       ])
@@ -204,6 +209,7 @@ export function buildAssistantSystemPrompt(input: {
     `UNTRUSTED_PRODUCT_CONTEXT_JSON: ${serializeUntrustedAiData('workspace_record', productContext)}`,
     `UNTRUSTED_EVIDENCE_CATALOG_JSON: ${serializeUntrustedAiData('workspace_record', evidence)}`,
     `READ_OPERATION_CATALOG: ${JSON.stringify(input.canonical ? assistantReadOperationCatalog() : {})}`,
+    '- An OPERATION_CATALOG entry without a risk is low risk.',
     `OPERATION_CATALOG: ${JSON.stringify(input.canonical ? assistantOperationCatalog() : {})}`,
   ].join('\n');
 }

@@ -9240,3 +9240,9 @@ button:disabled {
   flex-wrap: wrap;
   gap: 8px;
 }
+
+.week-routines {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}

@@ -249,6 +249,49 @@ item.
 
 ---
 
+## Amendment, 20 September 2026 — life areas are the third structure
+
+This document described a spine made of one object model, one search, one link
+graph. It did not describe a structure someone can _see_ that crosses both
+pillars, and the owner's actual workflow needs one: a part of life holds its
+purpose, its work and its writing together, and none of those three belongs to
+one pillar.
+
+**Accepted:** a life area is a first-class, editable record with subareas, its
+own optional Vision, and exactly one canonical Note as its page. It is not a
+new pillar and not a second tree. It is one tree, listed in both pillars'
+sidebars, and the area page shows Overview, Plan and Notes over the same
+records rather than three things to keep in step.
+
+Three consequences worth naming, because each changed something this document
+had already accepted:
+
+- **`visions` no longer means "the one per workspace".** The unique index
+  became two: one overall Vision where `area_id is null`, and one per area.
+  `vision.upsert.v1` now names the overall one explicitly rather than meaning
+  it by accident, so an older client cannot reach an area's direction.
+- **The rail resolves `/areas` to Planner.** The tree is genuinely shared, but
+  a path resolves to exactly one pillar, and the area page leads with direction
+  and work. Opening an area from Notes therefore moves the rail. That is a
+  known seam, written down rather than discovered.
+- **"This week" is its own route.** `/planner/week` is the worksheet;
+  `/planner` keeps its filters and is named "Goals & horizons", which is what
+  it always was. One destination, one sidebar entry.
+
+**Not accepted, and deliberately deferred:** equal multi-area membership. An
+item has one primary area and the association contract is isolated so that
+decision can be revisited without reworking the tree or its screens. Related-
+area links are not built, because there is no surface for them yet and a
+relationship table with no UI is a guess about the shape of one.
+
+**Still open, and the owner's to answer:** whether Today should become the
+landing page. The redesign proposal recommends it; nothing here has changed
+`/`, which still renders Today anyway — so the question is really whether
+Knowledge stops being called the front door, and that is a decision about what
+this product is for rather than one an implementation should take on its own.
+
+---
+
 ## Explicitly out of this product-shape program
 
 Named so they stop being reconsidered every few weeks.

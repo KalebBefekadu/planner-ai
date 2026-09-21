@@ -18,6 +18,15 @@ Owner decision, 2026-09-20: the representative Notion pilot is removed from the 
 - Governed assistant behavior, durable Conversations and Memory, AI Exclusion, schema-constrained GenUI, and scoped MCP foundations.
 - One Preview-inspired authenticated shell across Workspace and Planner, including responsive navigation and accessible interaction states.
 - Production-build browser coverage for canonical desktop and mobile journeys, plus unit, database, type, lint, formatting, build, and dependency-audit gates.
+- Editable life areas with subareas, one canonical Note page each, per-area
+  directions, inherited archive and AI exclusion, and an association between a
+  part of life and the Goals, Actions and Notes filed under it.
+- A weekly worksheet with a frozen baseline and a closed-week record, so
+  "planned tasks completed" has a denominator that later edits cannot move.
+- Goals that outlast the quarter they started in, read through Quarter and Year
+  views without being cloned into each period.
+- Routines whose frequency is a target the week counts, rather than appointments
+  nobody made; a second press on the same day is the same session.
 
 The latest merged delivery work is PR #111 (`82291a9`): Today uses the accepted outcome-focused hierarchy, stays inside Planner navigation, and shows real Goal direction without fixture content.
 
@@ -52,6 +61,28 @@ Still open: these journeys are hand-verified rather than run as a suite against 
 See [Production](runbooks/production.md) and [Migration reconciliation](runbooks/migration-reconciliation.md) for operational evidence and procedures.
 
 ## Open Delivery Gaps
+
+### The life-areas redesign is partial, by design and not by accident
+
+Verified on `claude/life-areas-redesign`: 78 pgTAP suites at 1,509 assertions,
+1,126 unit tests across 98 files, and the production-build browser suite,
+including new journeys for life areas, the compacted planner, title-first Today,
+the weekly worksheet, and routines counted against a frequency target.
+
+Not built, and not to be read into the above: finite Projects; breaking down a
+dated Goal, which `initiative-breakdown` refuses by design; the planning intents
+(plan-my-week, choose-today, review-my-week, what-am-I-neglecting); and a
+deadline distinct from the day work is planned, since `actions.scheduled_on` is
+the only date a task carries. The area exclusion resolver those intents depend
+on exists and is tested; the intents do not. Related-area links are deferred
+deliberately -- one primary area, with the association contract isolated so
+equal membership stays adoptable.
+
+One dependency is refused rather than handled: an area's canonical page cannot
+be moved to Trash while the area uses it. A database trigger enforces that on
+every path, and `area.replace-note.v1` is the way out. Notes has no trash
+control today, so there is no screen the refusal appears on yet; the message
+is written for the day one arrives.
 
 ### Personal dogfood
 

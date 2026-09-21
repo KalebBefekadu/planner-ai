@@ -154,10 +154,43 @@ open MVP workflow gate.
 
 Only one Codex implementation ticket may be active:
 
-1. implement `PL-05`: create an Action directly from Today, optionally connect it to a real Goal, schedule it for today, and commit it to focus through existing Operations;
-2. certify critical embedded-assistant Operations;
-3. close remaining Workspace and Planner Preview parity gaps;
-4. execute the approved private-release migration and recovery gates and begin seven-day dogfood.
+1. certify critical embedded-assistant Operations;
+2. close remaining Workspace and Planner Preview parity gaps;
+3. execute the approved private-release migration and recovery gates and begin seven-day dogfood.
+
+### The life-areas redesign, and where it stopped
+
+Landed on `claude/life-areas-redesign`, in dependency order, each with database
+tests and browser journeys: the contract inventory; the compacted planner
+surface; title-first Today; life areas with their canonical pages; per-area
+directions and the association between work and a part of life; the weekly
+worksheet with a durable baseline and a closed-week record; Goals that outlast
+the quarter they started in, read through Quarter and Year views; organising
+selected writing; and routines whose frequency is a target rather than a set of
+appointments nobody made.
+
+`PL-05` is complete as part of title-first Today.
+
+What the proposal asks for and this branch does **not** contain, so nobody
+reads the above as more than it is:
+
+- **Finite Projects.** No `projects` contract exists. An ongoing initiative is
+  still not a body of work that can finish, and nothing existing is silently
+  reinterpreted as one.
+- **Breaking down a dated Goal.** `initiative-breakdown` refuses a Goal by
+  design and offers steps only for an ongoing initiative. "Break this down" on
+  a quarterly outcome is unbuilt.
+- **The planning intents.** Plan-my-week, choose-today, review-my-week, and
+  what-am-I-neglecting are unbuilt. The area exclusion resolver they depend on
+  exists and is tested; these intents do not.
+- **A deadline distinct from the day work is planned.** `actions.scheduled_on`
+  is the day you mean to work on something. There is no due date, so "finish by
+  Friday" and "work on it Tuesday" cannot both be said about one task.
+- **Related-area links.** Deliberately deferred: one primary area, and the
+  association contract isolated so equal membership stays adoptable.
+
+The accepted navigation and structure changes are recorded in the amendment to
+[the product shape](product/product-shape.md).
 
 Completed convergence work through PR #111 includes the shared shell, Notes-owned tree, focused Note inspector, persistent import report, Planner-scoped Today and Action Inbox, outcome-focused Today hierarchy, and real Goal direction band.
 

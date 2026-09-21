@@ -18,6 +18,8 @@ export type ActionTemplateView = {
   cadence: 'weekly' | 'monthly';
   nextOccurrenceOn: string;
   status: 'active' | 'paused';
+  /** Null is a dated routine. A number is a target counted over the period. */
+  occurrencesPerPeriod: number | null;
   version: number;
 };
 
@@ -36,7 +38,9 @@ export async function getActionTemplates(): Promise<ActionTemplateView[] | null>
   const { supabase, workspaceId } = await requireWorkspaceId();
   const { data, error } = await supabase
     .from('action_templates')
-    .select('id,goal_id,title,description_markdown,cadence,next_occurrence_on,status,version')
+    .select(
+      'id,goal_id,title,description_markdown,cadence,next_occurrence_on,status,occurrences_per_period,version'
+    )
     .eq('workspace_id', workspaceId)
     .is('archived_at', null)
     .order('next_occurrence_on')
@@ -50,6 +54,8 @@ export async function getActionTemplates(): Promise<ActionTemplateView[] | null>
     cadence: template.cadence as 'weekly' | 'monthly',
     nextOccurrenceOn: template.next_occurrence_on as string,
     status: template.status as 'active' | 'paused',
+    occurrencesPerPeriod:
+      template.occurrences_per_period === null ? null : Number(template.occurrences_per_period),
     version: Number(template.version),
   }));
 }
@@ -129,6 +135,57 @@ export async function materializeActionTemplate(id: string, expectedVersion: num
     'action-template.materialize.v1',
     { id, expectedVersion, throughOn: dateInTimezone(workspace.timezone as string) },
     { idempotencyKey: randomUUID(), surface: 'ui' }
+  );
+  revalidatePlannerViews();
+  return result;
+}
+
+/**
+ * Turn a routine into a target, or back into a dated one.
+ *
+ * Changing the target shapes the periods counted after it. The sessions
+ * already logged keep the slots they took, so last week still reports what
+ * last week was.
+ */
+export async function setActionTemplateFrequency(
+  id: string,
+  expectedVersion: number,
+  occurrencesPerPeriod: number | null
+) {
+  if (occurrencesPerPeriod !== null && (occurrencesPerPeriod < 1 || occurrencesPerPeriod > 28)) {
+    throw new Error('Choose between 1 and 28 times per period.');
+  }
+  const { supabase } = await requireUser();
+  const result = await executeOperation(
+    supabase,
+    'action-template.frequency.v1',
+    { id, expectedVersion, occurrencesPerPeriod },
+    { idempotencyKey: randomUUID(), surface: 'ui' }
+  );
+  revalidatePlannerViews();
+  return result;
+}
+
+/** Record that a frequency routine happened, on the day it happened. */
+export async function logRoutineOccurrence(id: string, on: string | null) {
+  const { supabase, workspaceId } = await requireWorkspaceId();
+  const { data: workspace, error } = await supabase
+    .from('workspaces')
+    .select('timezone')
+    .eq('id', workspaceId)
+    .single();
+  if (error || !workspace) throw new Error('Unable to load your Workspace time settings.');
+  const day = on ?? dateInTimezone(workspace.timezone as string);
+  const result = await executeOperation(
+    supabase,
+    'action-template.log-occurrence.v1',
+    { id, on: day },
+    {
+      /* Stable per routine and day: a double-tap on a phone records one
+         session, and the second request answers with the first one. */
+      idempotencyKey: `routine-log:${id}:${day}`,
+      surface: 'ui',
+    }
   );
   revalidatePlannerViews();
   return result;

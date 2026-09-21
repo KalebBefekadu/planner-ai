@@ -13,6 +13,7 @@ import {
   type WeeklyWorksheet,
 } from '@/app/planner/week/actions';
 import { createTodayAction, setTodayActionStatus } from '@/app/today/actions';
+import { logRoutineOccurrence } from '@/app/planner/templates/actions';
 import { actionFailureMessage } from '@/lib/operations/failure-message';
 import { progressLabel, shiftWeek } from '@/lib/planning/weekly-worksheet';
 
@@ -196,6 +197,49 @@ export function WeeklyWorksheetUI({ data }: { data: WeeklyWorksheet }) {
           </p>
         ) : null}
       </section>
+
+      {data.routines.length ? (
+        <section className="week-routines" aria-label="Routines this week">
+          <div className="section-heading">
+            <h2>Routines</h2>
+          </div>
+          <p className="area-empty">
+            Counted, not scheduled. Three runs in a week is three runs, whichever days they happen
+            on.
+          </p>
+          <ul className="goal-list">
+            {data.routines.map((routine) => (
+              <li key={routine.templateId} className="goal-row">
+                <div className="goal-row-main">
+                  <span className="goal-title">{routine.title}</span>
+                  <span className="goal-meta">
+                    <span className="goal-span">
+                      {routine.done} of {routine.target} this week
+                    </span>
+                    {routine.paused ? <span className="enum-label">paused</span> : null}
+                    {routine.met ? <span className="goal-continues">Done</span> : null}
+                  </span>
+                  {!routine.met && !routine.paused && !closed ? (
+                    <button
+                      type="button"
+                      className="btn-secondary"
+                      disabled={pending}
+                      onClick={() =>
+                        run(async () => {
+                          await logRoutineOccurrence(routine.templateId, data.today);
+                          setNotice(`Recorded a session of ${routine.title}.`);
+                        }, 'Planner AI could not record this session.')
+                      }
+                    >
+                      Record today
+                    </button>
+                  ) : null}
+                </div>
+              </li>
+            ))}
+          </ul>
+        </section>
+      ) : null}
 
       <section className="week-tasks" aria-label="This week's tasks">
         <div className="section-heading">
