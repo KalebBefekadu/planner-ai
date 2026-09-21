@@ -8935,3 +8935,151 @@ button:disabled {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 }
+
+/* ---------- the weekly worksheet ---------- */
+
+.week-stepper {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.week-stepper a {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 36px;
+  border: 1px solid var(--line);
+  border-radius: var(--r-control);
+  color: var(--ink);
+}
+.week-stepper a:hover {
+  border-color: var(--brand-line);
+  background: var(--brand-soft);
+}
+.week-stepper strong {
+  font-size: var(--fs-body);
+  white-space: nowrap;
+}
+
+.week-intention,
+.week-tasks,
+.week-candidates,
+.week-commit,
+.week-close,
+.week-history,
+.week-record {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.week-intention textarea {
+  width: 100%;
+  padding: 10px 12px;
+  border: 1px solid var(--border-strong);
+  border-radius: var(--r-record);
+  background: var(--surface);
+  color: var(--ink);
+  font-family: var(--font-ui);
+  font-size: var(--fs-read);
+  line-height: var(--lh-read);
+  resize: vertical;
+}
+.week-intention-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: 12px;
+}
+.week-intention-row label {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  color: var(--ink-soft);
+  font-size: var(--fs-label);
+}
+.week-intention-row input {
+  width: 120px;
+  min-height: 44px;
+  padding: 8px 10px;
+  border: 1px solid var(--border-strong);
+  border-radius: var(--r-control);
+  background: var(--surface);
+  color: var(--ink);
+  font-size: var(--fs-body);
+}
+.week-grouping {
+  display: inline-flex;
+  gap: 4px;
+  font-size: var(--fs-label);
+}
+.week-grouping a {
+  padding: 4px 8px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  color: var(--muted);
+}
+.week-groups {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+.week-group h3 {
+  margin: 0 0 6px;
+  color: var(--muted);
+  font-size: var(--fs-label);
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+.week-dispositions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+.week-dispositions .btn-secondary {
+  padding: 6px 10px;
+  font-size: var(--fs-label);
+}
+.week-record {
+  padding: 14px;
+  border: 1px solid var(--brand-line);
+  border-radius: var(--r-frame);
+  background: var(--brand-soft);
+}
+.week-record p {
+  margin: 0;
+  font-size: var(--fs-body);
+}
+.week-commit {
+  padding-top: 14px;
+  border-top: 1px solid var(--line);
+  align-items: flex-start;
+}
+.week-commit p {
+  margin: 0;
+  color: var(--muted);
+  font-size: var(--fs-body);
+}
+/* Wide content scrolls inside its own box rather than moving the page. */
+.week-history-scroll {
+  overflow-x: auto;
+}
+.week-history-scroll table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: var(--fs-body);
+}
+.week-history-scroll th,
+.week-history-scroll td {
+  padding: 9px 12px;
+  border-bottom: 1px solid var(--line-soft);
+  text-align: left;
+  white-space: nowrap;
+}
+.week-history-scroll thead th {
+  color: var(--muted);
+  font-size: var(--fs-label);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}

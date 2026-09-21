@@ -28,6 +28,7 @@ describe('planner view revalidation', () => {
     expect([...PLANNER_VIEW_PATHS]).toEqual([
       '/',
       '/planner',
+      '/planner/week',
       '/planner/today',
       '/planner/calendar',
       '/planner/inbox',

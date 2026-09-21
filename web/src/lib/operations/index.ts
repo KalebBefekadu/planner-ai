@@ -89,6 +89,24 @@ const areaOutput = z
   })
   .passthrough();
 
+/* A plan row, plus the three counts the close writes. Snake case, because the
+   handler returns the row and the counts are read off the same object. */
+const weeklyPlanOutput = z
+  .object({
+    id,
+    workspace_id: id,
+    horizon_id: id,
+    state: z.enum(['draft', 'committed', 'reviewed']),
+    intention: z.string().nullable(),
+    capacity_hours: z.union([z.number(), z.string()]).nullable(),
+    committed_at: timestamp.nullable(),
+    reviewed_at: timestamp.nullable(),
+    version,
+    created_at: timestamp,
+    updated_at: timestamp,
+  })
+  .passthrough();
+
 const actionTemplateOutput = z
   .object({
     id,
@@ -468,6 +486,72 @@ export const operationDefinitions = {
     domain: 'life_area',
     input: z.object({ areaId: id, bodyMarkdown: z.string().min(3).max(50_000) }).strict(),
     output: visionOutput,
+  },
+  'week.plan.v1': {
+    summary: 'Open or revise the plan for one week.',
+    risk: 'low',
+    exposure: ['ui', 'chat', 'mcp'],
+    reversible: true,
+    domain: 'weekly_plan',
+    input: z
+      .object({
+        startsOn: date,
+        endsOn: date,
+        intention: z.string().max(2_000).nullable(),
+        /* Optional, and unknown stays unknown. Nothing reasons from a capacity
+           nobody stated. */
+        capacityHours: z.number().min(0).max(168).nullable(),
+      })
+      .strict(),
+    output: weeklyPlanOutput,
+  },
+  'week.select.v1': {
+    summary: 'Put a task in this week, or take one back out.',
+    risk: 'low',
+    exposure: ['ui', 'chat', 'mcp'],
+    reversible: true,
+    domain: 'weekly_plan',
+    input: z.object({ planId: id, actionId: id, selected: z.boolean() }).strict(),
+    output: weeklyPlanOutput,
+  },
+  'week.commit.v1': {
+    summary: 'Freeze this week’s baseline.',
+    risk: 'medium',
+    /* UI only: committing is the moment a person decides what the week is for,
+       and an agent deciding it for them defeats the measurement. */
+    exposure: ['ui'],
+    reversible: true,
+    domain: 'weekly_plan',
+    input: z.object({ planId: id, expectedVersion: version }).strict(),
+    output: weeklyPlanOutput,
+  },
+  'week.disposition.v1': {
+    summary: 'Record what was decided about work that did not finish.',
+    risk: 'low',
+    exposure: ['ui', 'chat', 'mcp'],
+    reversible: true,
+    domain: 'weekly_plan',
+    input: z
+      .object({
+        planId: id,
+        actionId: id,
+        disposition: z.enum(['kept', 'moved', 'paused', 'dropped']),
+        note: z.string().max(2_000).nullable(),
+      })
+      .strict(),
+    output: weeklyPlanOutput,
+  },
+  'week.close.v1': {
+    summary: 'Close the week and write its record.',
+    risk: 'medium',
+    exposure: ['ui'],
+    /* Not reversible: the snapshot is the historical record, and an undo that
+       removed it would be the one mutation this whole design exists to
+       prevent. A correction is a new, visible revision. */
+    reversible: false,
+    domain: 'weekly_plan',
+    input: z.object({ planId: id, expectedVersion: version }).strict(),
+    output: weeklyPlanOutput,
   },
   'vision.upsert.v1': {
     summary: 'Create or revise the overall life Vision.',
@@ -1336,6 +1420,10 @@ export const operationDefinitions = {
 } as const;
 
 export const undoableOperationIds = [
+  'week.plan.v1',
+  'week.select.v1',
+  'week.commit.v1',
+  'week.disposition.v1',
   'area.assign.v1',
   'area.vision.v1',
   'area.create.v1',
@@ -1511,6 +1599,33 @@ function stableFailure(message: string) {
       'note_already_canonical',
       'That page is already another life area’s page. Choose a different one.'
     );
+  }
+  if (message.includes('baseline_item_needs_disposition')) {
+    return new OperationFailure(
+      'baseline_item_needs_disposition',
+      'This was part of what you committed to this week. Say what happened to it — kept, moved, paused or dropped — rather than removing it.'
+    );
+  }
+  if (message.includes('weekly_plan_closed')) {
+    return new OperationFailure(
+      'weekly_plan_closed',
+      'This week is closed. Its record does not change; plan the current week instead.'
+    );
+  }
+  if (message.includes('weekly_plan_not_committed')) {
+    return new OperationFailure(
+      'weekly_plan_not_committed',
+      'Commit this week before closing it, so there is something to measure against.'
+    );
+  }
+  if (message.includes('weekly_plan_already_committed')) {
+    return new OperationFailure(
+      'weekly_plan_already_committed',
+      'This week is already committed. Its baseline is frozen; new work is a late addition.'
+    );
+  }
+  if (message.includes('weekly_plan_not_found') || message.includes('weekly_plan_item_not_found')) {
+    return new OperationFailure('weekly_plan_not_found', 'This week’s plan no longer exists.');
   }
   if (message.includes('area_not_found')) {
     return new OperationFailure('area_not_found', 'That life area no longer exists.');

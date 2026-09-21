@@ -113,7 +113,12 @@ export function experienceNavigationForPath(
           label: 'Plan',
           items: [
             { label: 'Today', href: '/planner/today', match: 'exact' },
-            { label: 'This week', href: '/planner', match: 'exact' },
+            /* The worksheet is what "this week" means now. /planner keeps its
+               own entry under Align, where a filtered view of the whole plan
+               belongs. */
+            ...(canonical
+              ? [{ label: 'This week', href: '/planner/week', match: 'prefix' as const }]
+              : [{ label: 'This week', href: '/planner', match: 'exact' as const }]),
             ...(canonical
               ? [
                   { label: 'Calendar', href: '/planner/calendar', match: 'prefix' as const },
@@ -130,11 +135,13 @@ export function experienceNavigationForPath(
                   { label: 'Weekly review', href: '/review', match: 'prefix' as const },
                   {
                     label: 'Goals & horizons',
-                    // /goals is a permanent redirect to /planner, so linking to it
-                    // landed on the page "This week" is marked as. The plan
-                    // across every period is what this entry means, and the
-                    // planner already keeps that in the address.
-                    href: '/planner?period=all',
+                    /* /goals is a permanent redirect to /planner, so linking
+                       to it landed on the page "This week" used to be marked
+                       as. "This week" is now the worksheet at /planner/week,
+                       which leaves /planner to mean what this entry says: the
+                       plan across horizons, with its own filters. One
+                       destination, one entry. */
+                    href: '/planner',
                     match: 'exact' as const,
                   },
                 ]
@@ -286,12 +293,14 @@ export function experienceNavItems(navigation: ExperienceNavigation) {
 export function experienceCommands(canonical: boolean): ExperienceCommand[] {
   return [
     { label: 'Today', detail: 'Home', href: '/' },
-    { label: 'This week', detail: 'Planner', href: '/planner' },
+    ...(canonical
+      ? [{ label: 'This week', detail: 'Planner', href: '/planner/week' }]
+      : [{ label: 'This week', detail: 'Planner', href: '/planner' }]),
     ...(canonical
       ? [
           { label: 'Calendar', detail: 'Planner', href: '/planner/calendar' },
           { label: 'Weekly review', detail: 'Planner', href: '/review' },
-          { label: 'Goals & horizons', detail: 'Planner', href: '/planner?period=all' },
+          { label: 'Goals & horizons', detail: 'Planner', href: '/planner' },
           { label: 'Life areas', detail: 'Planner', href: '/areas' },
           { label: 'Notes', detail: 'Workspace', href: '/notes' },
           { label: 'Conversations', detail: 'Workspace', href: '/conversations' },

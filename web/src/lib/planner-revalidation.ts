@@ -13,6 +13,7 @@ import { revalidatePath } from 'next/cache';
 export const PLANNER_VIEW_PATHS = [
   '/',
   '/planner',
+  '/planner/week',
   '/planner/today',
   '/planner/calendar',
   '/planner/inbox',

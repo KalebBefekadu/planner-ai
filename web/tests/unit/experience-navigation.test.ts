@@ -204,24 +204,36 @@ describe('settings navigation', () => {
   });
 
   it('marks the destination that was actually chosen, not the one sharing its path', () => {
-    /* "This week" is /planner and "Goals & horizons" is /planner with every
-       period. Matching on pathname alone marked both, so the sidebar claimed
-       you were somewhere you had not clicked. */
-    const items = experienceNavItems(experienceNavigationForPath('/planner', true));
-    const thisWeek = items.find((item) => item.label === 'This week')!;
-    const goals = items.find((item) => item.label === 'Goals & horizons')!;
-    expect(goals.href).toBe('/planner?period=all');
+    /* Two entries can lead to one path and differ only by what they ask it to
+       show. The planner no longer has such a pair -- "This week" is its own
+       route now -- but the rule this function exists for still has to hold, so
+       it is exercised on a list written here rather than on whichever entries
+       the sidebar happens to carry this month. */
+    const items = [
+      { label: 'Plain', href: '/planner', match: 'exact' as const },
+      { label: 'Filtered', href: '/planner?period=all', match: 'exact' as const },
+    ];
 
-    // The plain address belongs to This week.
-    expect(activeExperienceNavHref('/planner', '', items)).toBe(thisWeek.href);
+    // The plain address belongs to the entry that names no query.
+    expect(activeExperienceNavHref('/planner', '', items)).toBe('/planner');
 
     // The one whose query is satisfied wins over the one naming no query.
-    expect(activeExperienceNavHref('/planner', 'period=all', items)).toBe(goals.href);
+    expect(activeExperienceNavHref('/planner', 'period=all', items)).toBe('/planner?period=all');
 
     // A query neither entry names leaves the plain address current.
-    expect(activeExperienceNavHref('/planner', 'horizon=year', items)).toBe(thisWeek.href);
+    expect(activeExperienceNavHref('/planner', 'horizon=year', items)).toBe('/planner');
 
     // A different page marks neither.
     expect(activeExperienceNavHref('/notes', 'period=all', items)).toBe(null);
+  });
+
+  it('gives "this week" a route of its own rather than a filter on the plan', () => {
+    const items = experienceNavItems(experienceNavigationForPath('/planner/week', true));
+    const thisWeek = items.find((item) => item.label === 'This week')!;
+    const goals = items.find((item) => item.label === 'Goals & horizons')!;
+    expect(thisWeek.href).toBe('/planner/week');
+    expect(goals.href).toBe('/planner');
+    expect(activeExperienceNavHref('/planner/week', '', items)).toBe('/planner/week');
+    expect(activeExperienceNavHref('/planner', '', items)).toBe('/planner');
   });
 });

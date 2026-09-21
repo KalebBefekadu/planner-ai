@@ -44,6 +44,10 @@ const HUMAN_ONLY: Partial<Record<OperationId, string>> = {
   'review.complete-period.v1': 'A review is the user reflecting; an agent cannot do it for them.',
   'workspace.preferences.v1': 'Preferences describe how the user wants to be treated.',
   'workspace.onboarding-complete.v1': 'Onboarding completes when the person says it has.',
+  'week.commit.v1':
+    'Committing is the moment a person decides what the week is for; an agent that decides it chooses the number the week will later be measured by.',
+  'week.close.v1':
+    'Closing writes the historical record of a week, and a record an agent can write unattended is a record nobody can trust afterwards.',
   'area.replace-note.v1':
     'Repointing a life area at a different page detaches writing from the area it belonged to, and the person needs to be looking at both pages to know that is what they want.',
   'note.appearance.v1':

@@ -2701,6 +2701,172 @@ export type Database = {
           },
         ];
       };
+      weekly_plan_items: {
+        Row: {
+          action_id: string;
+          created_at: string;
+          disposition: string | null;
+          disposition_note: string | null;
+          id: string;
+          in_baseline: boolean;
+          plan_id: string;
+          selected_at: string;
+          sort_key: number;
+          workspace_id: string;
+        };
+        Insert: {
+          action_id: string;
+          created_at?: string;
+          disposition?: string | null;
+          disposition_note?: string | null;
+          id?: string;
+          in_baseline?: boolean;
+          plan_id: string;
+          selected_at?: string;
+          sort_key?: number;
+          workspace_id: string;
+        };
+        Update: {
+          action_id?: string;
+          created_at?: string;
+          disposition?: string | null;
+          disposition_note?: string | null;
+          id?: string;
+          in_baseline?: boolean;
+          plan_id?: string;
+          selected_at?: string;
+          sort_key?: number;
+          workspace_id?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: 'weekly_plan_items_action_id_workspace_id_fkey';
+            columns: ['action_id', 'workspace_id'];
+            isOneToOne: false;
+            referencedRelation: 'actions';
+            referencedColumns: ['id', 'workspace_id'];
+          },
+          {
+            foreignKeyName: 'weekly_plan_items_plan_id_workspace_id_fkey';
+            columns: ['plan_id', 'workspace_id'];
+            isOneToOne: false;
+            referencedRelation: 'weekly_plans';
+            referencedColumns: ['id', 'workspace_id'];
+          },
+          {
+            foreignKeyName: 'weekly_plan_items_workspace_id_fkey';
+            columns: ['workspace_id'];
+            isOneToOne: false;
+            referencedRelation: 'workspaces';
+            referencedColumns: ['id'];
+          },
+        ];
+      };
+      weekly_plan_snapshots: {
+        Row: {
+          baseline_count: number;
+          closed_at: string;
+          completed_count: number;
+          late_addition_count: number;
+          plan_id: string;
+          schema_version: number;
+          snapshot_json: Json;
+          workspace_id: string;
+        };
+        Insert: {
+          baseline_count: number;
+          closed_at?: string;
+          completed_count: number;
+          late_addition_count: number;
+          plan_id: string;
+          schema_version?: number;
+          snapshot_json: Json;
+          workspace_id: string;
+        };
+        Update: {
+          baseline_count?: number;
+          closed_at?: string;
+          completed_count?: number;
+          late_addition_count?: number;
+          plan_id?: string;
+          schema_version?: number;
+          snapshot_json?: Json;
+          workspace_id?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: 'weekly_plan_snapshots_plan_id_workspace_id_fkey';
+            columns: ['plan_id', 'workspace_id'];
+            isOneToOne: false;
+            referencedRelation: 'weekly_plans';
+            referencedColumns: ['id', 'workspace_id'];
+          },
+          {
+            foreignKeyName: 'weekly_plan_snapshots_workspace_id_fkey';
+            columns: ['workspace_id'];
+            isOneToOne: false;
+            referencedRelation: 'workspaces';
+            referencedColumns: ['id'];
+          },
+        ];
+      };
+      weekly_plans: {
+        Row: {
+          capacity_hours: number | null;
+          committed_at: string | null;
+          created_at: string;
+          horizon_id: string;
+          id: string;
+          intention: string | null;
+          reviewed_at: string | null;
+          state: string;
+          updated_at: string;
+          version: number;
+          workspace_id: string;
+        };
+        Insert: {
+          capacity_hours?: number | null;
+          committed_at?: string | null;
+          created_at?: string;
+          horizon_id: string;
+          id?: string;
+          intention?: string | null;
+          reviewed_at?: string | null;
+          state?: string;
+          updated_at?: string;
+          version?: number;
+          workspace_id: string;
+        };
+        Update: {
+          capacity_hours?: number | null;
+          committed_at?: string | null;
+          created_at?: string;
+          horizon_id?: string;
+          id?: string;
+          intention?: string | null;
+          reviewed_at?: string | null;
+          state?: string;
+          updated_at?: string;
+          version?: number;
+          workspace_id?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: 'weekly_plans_horizon_id_workspace_id_fkey';
+            columns: ['horizon_id', 'workspace_id'];
+            isOneToOne: false;
+            referencedRelation: 'planning_horizons';
+            referencedColumns: ['id', 'workspace_id'];
+          },
+          {
+            foreignKeyName: 'weekly_plans_workspace_id_fkey';
+            columns: ['workspace_id'];
+            isOneToOne: false;
+            referencedRelation: 'workspaces';
+            referencedColumns: ['id'];
+          },
+        ];
+      };
       workspaces: {
         Row: {
           ai_enabled: boolean;
@@ -3429,6 +3595,15 @@ export type Database = {
           p_input: Json;
           p_operation_id: string;
           p_surface: string;
+        };
+        Returns: Json;
+      };
+      execute_weekly_plan_operation: {
+        Args: {
+          p_idempotency_key: string;
+          p_input: Json;
+          p_operation_id: string;
+          p_surface?: string;
         };
         Returns: Json;
       };
