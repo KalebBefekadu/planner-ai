@@ -31,6 +31,7 @@ describe('experience navigation', () => {
       'Action inbox',
       'Weekly review',
       'Goals & horizons',
+      'Whole plan',
       'Vision',
       'Life areas',
     ]);
@@ -230,10 +231,24 @@ describe('settings navigation', () => {
   it('gives "this week" a route of its own rather than a filter on the plan', () => {
     const items = experienceNavItems(experienceNavigationForPath('/planner/week', true));
     const thisWeek = items.find((item) => item.label === 'This week')!;
-    const goals = items.find((item) => item.label === 'Goals & horizons')!;
     expect(thisWeek.href).toBe('/planner/week');
-    expect(goals.href).toBe('/planner');
     expect(activeExperienceNavHref('/planner/week', '', items)).toBe('/planner/week');
-    expect(activeExperienceNavHref('/planner', '', items)).toBe('/planner');
+  });
+
+  /* Every entry named a destination another entry already owned while /goals
+     was a redirect to /planner, so the sidebar marked a page nobody had
+     clicked. Three questions, three addresses. */
+  it('gives each planner question one destination of its own', () => {
+    const items = experienceNavItems(experienceNavigationForPath('/goals', true));
+    const hrefs = new Map(items.map((item) => [item.label, item.href]));
+    expect(hrefs.get('This week')).toBe('/planner/week');
+    expect(hrefs.get('Goals & horizons')).toBe('/goals');
+    expect(hrefs.get('Whole plan')).toBe('/planner?period=all');
+    expect(new Set(hrefs.values()).size).toBe(hrefs.size);
+
+    expect(activeExperienceNavHref('/goals', '', items)).toBe('/goals');
+    expect(activeExperienceNavHref('/goals', 'view=year', items)).toBe('/goals');
+    expect(activeExperienceNavHref('/planner', 'period=all', items)).toBe('/planner?period=all');
+    expect(activeExperienceNavHref('/planner/week', '', items)).toBe('/planner/week');
   });
 });

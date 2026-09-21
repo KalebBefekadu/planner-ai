@@ -25,8 +25,11 @@ const goalOutput = z
   .object({
     id,
     workspace_id: id,
-    vision_id: id,
-    horizon_id: id,
+    /* Both nullable since a Goal carries its own dates. A Goal written before
+       that still has its horizon, and reading one back must not fail. */
+    vision_id: id.nullable(),
+    horizon_id: id.nullable(),
+    starts_on: date.nullable(),
     parent_goal_id: id.nullable(),
     primary_area_id: id.nullable(),
     title: z.string(),
@@ -586,6 +589,49 @@ export const operationDefinitions = {
          * caller keeps working and keeps meaning 'outcome'.
          */
         kind: z.enum(['outcome', 'initiative']).optional(),
+      })
+      .strict(),
+    output: goalOutput,
+  },
+  'goal.create.v2': {
+    summary: 'Create a Goal that carries its own dates rather than a period.',
+    risk: 'low',
+    /* UI only until the assistant has a goal-planning intent to use it for.
+       Every chat-exposed Operation puts its schema in the system prompt, and
+       that prompt is held under a byte budget these two exceeded. */
+    exposure: ['ui'],
+    reversible: true,
+    domain: 'goal_scope',
+    input: z
+      .object({
+        title: z.string().trim().min(3).max(1_000),
+        /**
+         * Both optional and both nullable. A Goal with no dates is
+         * unscheduled, which is a real state -- something you mean to do and
+         * have not decided when -- rather than a missing field. An initiative
+         * must have neither.
+         */
+        startsOn: date.nullable().optional(),
+        targetOn: date.nullable().optional(),
+        areaId: id.nullable().optional(),
+        parentGoalId: id.nullable().optional(),
+        kind: z.enum(['outcome', 'initiative']).optional(),
+      })
+      .strict(),
+    output: goalOutput,
+  },
+  'goal.schedule.v1': {
+    summary: 'Set or clear the dates a Goal runs between.',
+    risk: 'low',
+    exposure: ['ui'],
+    reversible: true,
+    domain: 'goal_scope',
+    input: z
+      .object({
+        id,
+        expectedVersion: version,
+        startsOn: date.nullable(),
+        targetOn: date.nullable(),
       })
       .strict(),
     output: goalOutput,
@@ -1435,6 +1481,8 @@ export const undoableOperationIds = [
   'area.ai-exclusion.v1',
   'vision.upsert.v1',
   'goal.create.v1',
+  'goal.create.v2',
+  'goal.schedule.v1',
   'goal.update.v1',
   'goal.status.v1',
   'goal.archive.v1',

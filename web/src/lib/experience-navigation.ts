@@ -135,13 +135,20 @@ export function experienceNavigationForPath(
                   { label: 'Weekly review', href: '/review', match: 'prefix' as const },
                   {
                     label: 'Goals & horizons',
-                    /* /goals is a permanent redirect to /planner, so linking
-                       to it landed on the page "This week" used to be marked
-                       as. "This week" is now the worksheet at /planner/week,
-                       which leaves /planner to mean what this entry says: the
-                       plan across horizons, with its own filters. One
-                       destination, one entry. */
-                    href: '/planner',
+                    /* /goals was a permanent redirect to /planner, so this
+                       entry used to land on the page another entry was marked
+                       as. It is a real view now: the Goals running in a
+                       quarter or a year, including the ones that started
+                       before it and continue after. */
+                    href: '/goals',
+                    match: 'prefix' as const,
+                  },
+                  {
+                    /* The whole plan, every period at once. It is a different
+                       question from "what is running now", and it kept the
+                       address it has always had. */
+                    label: 'Whole plan',
+                    href: '/planner?period=all',
                     match: 'exact' as const,
                   },
                 ]

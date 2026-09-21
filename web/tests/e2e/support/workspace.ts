@@ -127,7 +127,12 @@ async function createLocalUser(admin: SupabaseClient, email: string) {
  */
 export async function goTo(page: Page, target: string) {
   await page.goto(target);
-  await expect(page).toHaveURL(new RegExp(`${target.replace(/\//g, '\\/')}(?:\\?|$)`));
+  /* Escape every regex metacharacter, not only the slash. A target carrying a
+     query string -- `/goals?view=year` -- used to compile to a pattern where
+     the `?` made the previous character optional and `&` meant nothing, so the
+     assertion could never match the address it had just navigated to. */
+  const pattern = target.replace(/[.*+?^${}()|[\]\\/]/g, '\\$&');
+  await expect(page).toHaveURL(new RegExp(`${pattern}(?:[?#]|$)`));
   await waitForHydration(page);
 }
 

@@ -200,17 +200,24 @@ test('the sidebar marks the planner destination that was chosen', async ({
   await goTo(page, '/planner');
 
   const sidebar = page.getByRole('navigation', { name: 'Planner' });
-  const thisWeek = sidebar.getByRole('link', { name: 'This week', exact: true });
-  const goals = sidebar.getByRole('link', { name: 'Goals & horizons', exact: true });
 
-  await expect(thisWeek).toHaveAttribute('aria-current', 'page');
-  await expect(goals).not.toHaveAttribute('aria-current', 'page');
-
-  /* Goals & horizons used to point at /goals, a permanent redirect to
-     /planner, so choosing it landed on the page This week is marked as and
-     the sidebar claimed you were somewhere you had not clicked. */
-  await goals.click();
+  /* Three entries used to name two destinations: /goals was a permanent
+     redirect to /planner and "This week" was a filter on the same page, so
+     the sidebar marked a page nobody had clicked. Each one is its own now. */
+  await sidebar.getByRole('link', { name: 'Whole plan', exact: true }).click();
   await expect(page).toHaveURL(/\/planner\?period=all/);
+  await expect(sidebar.getByRole('link', { name: 'Whole plan', exact: true })).toHaveAttribute(
+    'aria-current',
+    'page'
+  );
+  await expect(
+    sidebar.getByRole('link', { name: 'Goals & horizons', exact: true })
+  ).not.toHaveAttribute('aria-current', 'page');
+  // And the page it lands on is actually showing every period.
+  await expect(page.getByText('Every period on record')).toBeVisible();
+
+  await sidebar.getByRole('link', { name: 'Goals & horizons', exact: true }).click();
+  await expect(page).toHaveURL(/\/goals/);
   await expect(
     sidebar.getByRole('link', { name: 'Goals & horizons', exact: true })
   ).toHaveAttribute('aria-current', 'page');
@@ -219,8 +226,12 @@ test('the sidebar marks the planner destination that was chosen', async ({
     'page'
   );
 
-  // And the page it lands on is actually showing every period.
-  await expect(page.getByText('Every period on record')).toBeVisible();
+  await sidebar.getByRole('link', { name: 'This week', exact: true }).click();
+  await expect(page).toHaveURL(/\/planner\/week/);
+  await expect(sidebar.getByRole('link', { name: 'This week', exact: true })).toHaveAttribute(
+    'aria-current',
+    'page'
+  );
 });
 
 test('a written vision is something to read, and still something to change', async ({

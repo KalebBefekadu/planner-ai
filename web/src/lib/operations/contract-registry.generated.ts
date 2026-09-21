@@ -211,6 +211,18 @@ export const databaseOperationContracts: Readonly<Record<string, GeneratedOperat
     reversible: true,
     owningDomain: 'planner',
   },
+  'goal.create.v2': {
+    riskClass: 'low',
+    exposures: ['ui'],
+    reversible: true,
+    owningDomain: 'goal_scope',
+  },
+  'goal.schedule.v1': {
+    riskClass: 'low',
+    exposures: ['ui'],
+    reversible: true,
+    owningDomain: 'goal_scope',
+  },
   'goal.status.v1': {
     riskClass: 'low',
     exposures: ['ui', 'chat', 'mcp'],
@@ -490,6 +502,8 @@ export const databaseUndoStrategies: Readonly<Record<string, string>> = {
   'daily-focus.set.v1': 'snapshot',
   'goal.archive.v1': 'snapshot',
   'goal.create.v1': 'trash-create',
+  'goal.create.v2': 'trash-create',
+  'goal.schedule.v1': 'snapshot',
   'goal.status.v1': 'snapshot',
   'goal.update.v1': 'snapshot',
   'memory.create.v1': 'trash-create',

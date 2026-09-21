@@ -9083,3 +9083,116 @@ button:disabled {
   text-transform: uppercase;
   letter-spacing: 0.04em;
 }
+
+/* ---------- goals across horizons ---------- */
+
+.goals-page {
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+}
+.goals-heading {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 12px;
+}
+.goals-filters {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+}
+.goals-section {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.goals-section details summary {
+  display: flex;
+  align-items: center;
+  min-height: 32px;
+  color: var(--muted);
+  cursor: pointer;
+  font-size: var(--fs-label);
+  font-weight: 700;
+}
+.goal-detail-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: 12px;
+  margin-top: 10px;
+}
+.goal-detail-row label {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  color: var(--ink-soft);
+  font-size: var(--fs-label);
+}
+.goal-detail-row input,
+.goal-detail-row select {
+  min-height: 44px;
+  padding: 8px 10px;
+  border: 1px solid var(--border-strong);
+  border-radius: var(--r-control);
+  background: var(--surface);
+  color: var(--ink);
+  font-size: var(--fs-body);
+}
+.goal-list,
+.goal-children {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+/* The nesting is the only thing indentation says here, so it is small enough
+   to survive a phone without a horizontal scrollbar. */
+.goal-children {
+  margin-top: 8px;
+  padding-left: 14px;
+  border-left: 1px solid var(--line);
+}
+.goal-row {
+  padding: 10px 12px;
+  border: 1px solid var(--line);
+  border-radius: var(--r-record);
+  background: var(--surface);
+}
+.goal-row-main {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+.goal-title {
+  font-size: var(--fs-body);
+  font-weight: 600;
+  /* A goal is a sentence people write in their own words; it wraps rather than
+     setting the width of the page it sits on. */
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+.goal-meta {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  color: var(--muted);
+  font-size: var(--fs-label);
+}
+.goal-span {
+  white-space: nowrap;
+}
+.goal-continues {
+  padding: 2px 8px;
+  border: 1px solid var(--brand-line);
+  border-radius: 999px;
+  background: var(--brand-soft);
+  color: var(--ink-soft);
+}

@@ -1043,12 +1043,13 @@ export type Database = {
           definition_of_done: string | null;
           description_markdown: string | null;
           due_on: string | null;
-          horizon_id: string;
+          horizon_id: string | null;
           id: string;
           kind: string;
           parent_goal_id: string | null;
           primary_area_id: string | null;
           purge_after: string | null;
+          starts_on: string | null;
           status: string;
           target_value: number | null;
           title: string;
@@ -1056,7 +1057,7 @@ export type Database = {
           unit: string | null;
           updated_at: string;
           version: number;
-          vision_id: string;
+          vision_id: string | null;
           workspace_id: string;
         };
         Insert: {
@@ -1067,12 +1068,13 @@ export type Database = {
           definition_of_done?: string | null;
           description_markdown?: string | null;
           due_on?: string | null;
-          horizon_id: string;
+          horizon_id?: string | null;
           id?: string;
           kind?: string;
           parent_goal_id?: string | null;
           primary_area_id?: string | null;
           purge_after?: string | null;
+          starts_on?: string | null;
           status?: string;
           target_value?: number | null;
           title: string;
@@ -1080,7 +1082,7 @@ export type Database = {
           unit?: string | null;
           updated_at?: string;
           version?: number;
-          vision_id: string;
+          vision_id?: string | null;
           workspace_id: string;
         };
         Update: {
@@ -1091,12 +1093,13 @@ export type Database = {
           definition_of_done?: string | null;
           description_markdown?: string | null;
           due_on?: string | null;
-          horizon_id?: string;
+          horizon_id?: string | null;
           id?: string;
           kind?: string;
           parent_goal_id?: string | null;
           primary_area_id?: string | null;
           purge_after?: string | null;
+          starts_on?: string | null;
           status?: string;
           target_value?: number | null;
           title?: string;
@@ -1104,7 +1107,7 @@ export type Database = {
           unit?: string | null;
           updated_at?: string;
           version?: number;
-          vision_id?: string;
+          vision_id?: string | null;
           workspace_id?: string;
         };
         Relationships: [
@@ -3176,6 +3179,15 @@ export type Database = {
         };
         Returns: Json;
       };
+      execute_goal_scope_operation: {
+        Args: {
+          p_idempotency_key: string;
+          p_input: Json;
+          p_operation_id: string;
+          p_surface?: string;
+        };
+        Returns: Json;
+      };
       execute_guided_onboarding_operation: {
         Args: {
           p_idempotency_key: string;
@@ -3645,6 +3657,40 @@ export type Database = {
       generate_workspace_notifications: {
         Args: { p_workspace_id: string };
         Returns: number;
+      };
+      goals_in_period: {
+        Args: { p_ends_on: string; p_starts_on: string; p_workspace_id: string };
+        Returns: {
+          achieved_at: string | null;
+          archived_at: string | null;
+          created_at: string;
+          current_value: number | null;
+          definition_of_done: string | null;
+          description_markdown: string | null;
+          due_on: string | null;
+          horizon_id: string | null;
+          id: string;
+          kind: string;
+          parent_goal_id: string | null;
+          primary_area_id: string | null;
+          purge_after: string | null;
+          starts_on: string | null;
+          status: string;
+          target_value: number | null;
+          title: string;
+          trashed_at: string | null;
+          unit: string | null;
+          updated_at: string;
+          version: number;
+          vision_id: string | null;
+          workspace_id: string;
+        }[];
+        SetofOptions: {
+          from: '*';
+          to: 'goals';
+          isOneToOne: false;
+          isSetofReturn: true;
+        };
       };
       manage_conversation: {
         Args: { p_action: string; p_conversation_id: string; p_title?: string };

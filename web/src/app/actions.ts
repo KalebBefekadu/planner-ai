@@ -88,7 +88,12 @@ type CanonicalGoal = {
   created_at: string;
   updated_at: string;
   archived_at: string | null;
-  planning_horizons: { kind: 'year' | 'quarter'; starts_on: string | null; ends_on: string | null };
+  starts_on: string | null;
+  planning_horizons: {
+    kind: 'year' | 'quarter';
+    starts_on: string | null;
+    ends_on: string | null;
+  } | null;
 };
 type CanonicalAction = {
   id: string;
@@ -208,7 +213,11 @@ export async function getGoalsHierarchy(): Promise<GoalsData | null> {
       selectAll((from, to) =>
         supabase
           .from('goals')
-          .select('*, planning_horizons!inner(kind,starts_on,ends_on)')
+          /* Left, not inner. A Goal created with its own dates has no horizon,
+             and an inner join dropped it from the plan silently -- the one
+             failure a hierarchy cannot show, because a missing parent takes
+             its children with it. */
+          .select('*, planning_horizons(kind,starts_on,ends_on)')
           .eq('workspace_id', workspaceId)
           .is('archived_at', null)
           .is('trashed_at', null)
@@ -249,8 +258,11 @@ export async function getGoalsHierarchy(): Promise<GoalsData | null> {
       created_at: goal.created_at,
       updated_at: goal.updated_at,
       deleted_at: goal.archived_at,
-      horizon_starts_on: goal.planning_horizons.starts_on ?? null,
-      horizon_ends_on: goal.planning_horizons.ends_on ?? null,
+      /* The Goal's own dates first, and the horizon it was filed under only
+         when it has none. Both mean the same thing to the reader: when this
+         runs. */
+      horizon_starts_on: goal.starts_on ?? goal.planning_horizons?.starts_on ?? null,
+      horizon_ends_on: goal.due_on ?? goal.planning_horizons?.ends_on ?? null,
     });
     // parent_action_id now means "sits under", at any depth, so the monthly
     // rollup has to be walked to rather than read off the column. Reading it
@@ -282,8 +294,24 @@ export async function getGoalsHierarchy(): Promise<GoalsData | null> {
     });
     return {
       vision,
-      yearly: goals.filter((goal) => goal.planning_horizons.kind === 'year').map(mapGoal),
-      quarterly: goals.filter((goal) => goal.planning_horizons.kind === 'quarter').map(mapGoal),
+      /* A Goal with no horizon has no horizon kind, and the planner's two
+         levels are really "nothing above it" and "something above it". That
+         is what the horizon kind always stood for, so a dated Goal is placed
+         by its shape rather than dropped for lacking a column. */
+      yearly: goals
+        .filter((goal) =>
+          goal.planning_horizons
+            ? goal.planning_horizons.kind === 'year'
+            : goal.parent_goal_id === null
+        )
+        .map(mapGoal),
+      quarterly: goals
+        .filter((goal) =>
+          goal.planning_horizons
+            ? goal.planning_horizons.kind === 'quarter'
+            : goal.parent_goal_id !== null
+        )
+        .map(mapGoal),
       monthly: actions.filter((action) => action.planning_horizons.kind === 'month').map(mapAction),
       weekly: actions.filter((action) => action.planning_horizons.kind === 'week').map(mapAction),
       localDate,
