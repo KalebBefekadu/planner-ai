@@ -35,6 +35,9 @@ Owner decision, 2026-09-20: the representative Notion pilot is removed from the 
 - The full Workspace export now carries life areas, projects, weekly plans and
   their baselines. It carried none of them before, so a restore would have
   returned the work without the parts of life it was filed under.
+- "Break this down" on a dated Goal, which previously refused anything but an
+  ongoing initiative. It declines a goal whose date has passed rather than
+  quietly rescheduling it.
 
 The latest merged delivery work is PR #111 (`82291a9`): Today uses the accepted outcome-focused hierarchy, stays inside Planner navigation, and shows real Goal direction without fixture content.
 
@@ -78,8 +81,7 @@ including new journeys for life areas, the compacted planner, title-first Today,
 the weekly worksheet, routines counted against a frequency target, and a
 deadline that survives the work being rescheduled.
 
-Not built, and not to be read into the above: breaking down a
-dated Goal, which `initiative-breakdown` refuses by design; the planning intents
+Not built, and not to be read into the above: the planning intents
 (plan-my-week, choose-today, review-my-week, what-am-I-neglecting). The area
 exclusion resolver those intents depend on exists and is tested; the intents do
 not. Related-area links are deferred

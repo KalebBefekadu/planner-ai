@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
   breakdownCaptureText,
+  breakdownRefusal,
   breakdownToAnalysis,
   buildBreakdownMessages,
   MAX_BREAKDOWN_TASKS,
@@ -86,6 +87,49 @@ describe('turning titles into something writable', () => {
   });
 });
 
+/* Both refusals exist so that asking for help never quietly makes a decision
+   the person did not make. */
+describe('when a breakdown is refused', () => {
+  const today = '2026-09-21';
+
+  it('will not plan this week toward a date that has already passed', () => {
+    const refusal = breakdownRefusal({
+      kind: 'outcome',
+      dueOn: '2026-08-01',
+      status: 'active',
+      today,
+    });
+    expect(refusal?.code).toBe('goal_deadline_passed');
+    // The message says what to do about it rather than only that it failed.
+    expect(refusal?.detail).toContain('Give it a new date first');
+  });
+
+  it('offers a breakdown for a goal whose date is still ahead', () => {
+    expect(
+      breakdownRefusal({ kind: 'outcome', dueOn: '2026-12-01', status: 'active', today })
+    ).toBe(null);
+    expect(breakdownRefusal({ kind: 'outcome', dueOn: today, status: 'active', today })).toBe(null);
+  });
+
+  /* An initiative never ends, so it has no date to have passed. Applying the
+     deadline rule to one would refuse every initiative that ever had a date
+     written on it by mistake. */
+  it('does not apply the deadline rule to an ongoing initiative', () => {
+    expect(
+      breakdownRefusal({ kind: 'initiative', dueOn: '2026-08-01', status: 'active', today })
+    ).toBe(null);
+  });
+
+  it('will not propose next steps for a goal that is already closed', () => {
+    expect(
+      breakdownRefusal({ kind: 'outcome', dueOn: null, status: 'achieved', today })?.code
+    ).toBe('goal_not_active');
+    expect(
+      breakdownRefusal({ kind: 'initiative', dueOn: null, status: 'abandoned', today })?.code
+    ).toBe('goal_not_active');
+  });
+});
+
 describe('what is sent and what is recorded', () => {
   it('records the ask as a Capture, with the criterion when there is one', () => {
     expect(
@@ -99,6 +143,46 @@ describe('what is sent and what is recorded', () => {
     expect(breakdownCaptureText({ title: 'Planner AI', definitionOfDone: null })).toBe(
       'Break "Planner AI" down into the first few tasks.'
     );
+  });
+
+  it('carries the wanted-by date into the Capture when a goal has one', () => {
+    expect(
+      breakdownCaptureText({
+        title: 'Ship the private beta',
+        definitionOfDone: 'Ten invited people using it.',
+        dueOn: '2026-12-01',
+      })
+    ).toBe(
+      'Break "Ship the private beta" down into the first few tasks.\nWhat good looks like: Ten invited people using it.\nWanted by 2026-12-01.'
+    );
+  });
+
+  /* An initiative asks what to do next; an outcome asks what it would take.
+     The prompt has to say which one it is, or the model answers the wrong
+     question and the tasks read as busywork against a date. */
+  it('asks about an outcome as an outcome, not as an ongoing concern', () => {
+    const [system, user] = buildBreakdownMessages({
+      title: 'Ship the private beta',
+      definitionOfDone: null,
+      kind: 'outcome',
+      dueOn: '2026-12-01',
+    });
+    expect(system.content).toContain('outcome');
+    expect(system.content).not.toContain('ongoing initiative');
+    // The date is context for how much fits, not a task to restate.
+    expect(system.content).toContain('Do not propose a task whose only content is the deadline');
+    expect(user.content).toContain('2026-12-01');
+    expect(user.content).toContain('outcome');
+  });
+
+  it('still asks about an initiative as an initiative when no kind is given', () => {
+    const [system, user] = buildBreakdownMessages({
+      title: 'Stay healthy',
+      definitionOfDone: null,
+    });
+    expect(system.content).toContain('ongoing initiative');
+    // An initiative has no deadline, so nothing about one is sent.
+    expect(user.content).not.toContain('wantedBy');
   });
 
   it('marks the initiative as untrusted data and rules out waiting tasks', () => {

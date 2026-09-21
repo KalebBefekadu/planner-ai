@@ -12,6 +12,8 @@ import {
 } from '@/lib/api/ai-route';
 import {
   breakdownCaptureText,
+  breakdownRefusal,
+  type BreakdownKind,
   breakdownToAnalysis,
   buildBreakdownMessages,
   validateBreakdown,
@@ -31,7 +33,7 @@ import { completeAiJob, failAiJob, startAiJob } from '@/lib/ai/job-status';
 import { createClient } from '@/lib/supabase/server';
 
 const MAX_JSON_BYTES = 2_000;
-const PROMPT_VERSION = 'initiative-breakdown-v1';
+const PROMPT_VERSION = 'goal-breakdown-v2';
 // A handful of short titles. Nothing here should fund prose.
 const MAX_BREAKDOWN_COMPLETION_TOKENS = 500;
 const inputSchema = z.object({ goalId: z.uuid() }).strict();
@@ -81,20 +83,24 @@ export async function POST(request: Request) {
 
     const { data: goal, error: goalError } = await supabase
       .from('goals')
-      .select('id,title,kind,definition_of_done')
+      .select('id,title,kind,definition_of_done,due_on,status')
       .eq('id', goalId)
       .eq('workspace_id', workspace.id)
       .is('archived_at', null)
       .is('trashed_at', null)
       .single();
-    if (goalError || !goal) throw new ApiProblem(404, 'goal_not_found', 'Initiative not found.');
-    if (goal.kind !== 'initiative') {
-      throw new ApiProblem(
-        409,
-        'not_an_initiative',
-        'A breakdown is offered for an ongoing initiative, not a dated Goal.'
-      );
-    }
+    if (goalError || !goal) throw new ApiProblem(404, 'goal_not_found', 'That goal was not found.');
+    const kind: BreakdownKind = goal.kind === 'initiative' ? 'initiative' : 'outcome';
+    const dueOn = (goal.due_on as string | null) ?? null;
+    const today = dateInTimezone(String(workspace.timezone));
+
+    const refusal = breakdownRefusal({
+      kind,
+      dueOn,
+      status: String(goal.status),
+      today,
+    });
+    if (refusal) throw new ApiProblem(409, refusal.code, refusal.detail);
 
     // The Capture is not bookkeeping. A batched ai_proposal requires one, and
     // "break this down" is a thought the owner had -- recording it gives the
@@ -106,6 +112,7 @@ export async function POST(request: Request) {
         rawText: breakdownCaptureText({
           title: String(goal.title),
           definitionOfDone: (goal.definition_of_done as string | null) ?? null,
+          dueOn,
         }),
         source: 'typed',
       },
@@ -118,6 +125,9 @@ export async function POST(request: Request) {
     jobId = await startAiJob(
       supabase,
       {
+        /* Still the old name: this is a stored value with rows already
+           written against it, and renaming it would need a migration that
+           rewrites history for no gain in what anyone can see. */
         operation: 'initiative_breakdown',
         requestId: context.requestId,
         sourceCaptureId: captureId,
@@ -132,6 +142,8 @@ export async function POST(request: Request) {
       messages: buildBreakdownMessages({
         title: String(goal.title),
         definitionOfDone: (goal.definition_of_done as string | null) ?? null,
+        kind,
+        dueOn,
       }),
     });
     providerIdentity = result;
@@ -148,11 +160,7 @@ export async function POST(request: Request) {
     // The week the owner is actually in, in their own timezone and with their
     // own week start. A breakdown that lands in the wrong seven days is not a
     // cosmetic error: it decides which week has to resolve the work.
-    const { startsOn, endsOn } = periodBounds(
-      'week',
-      dateInTimezone(String(workspace.timezone)),
-      Number(workspace.week_starts_on)
-    );
+    const { startsOn, endsOn } = periodBounds('week', today, Number(workspace.week_starts_on));
     const analysis = breakdownToAnalysis(tasks, { goalId, startsOn, endsOn });
 
     const { data: batchId, error: persistenceError } = await supabase.rpc(

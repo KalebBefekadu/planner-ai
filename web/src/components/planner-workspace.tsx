@@ -193,7 +193,7 @@ export function PlannerWorkspace({
     setNotice(null);
     startTransition(async () => {
       try {
-        const response = await fetch('/api/initiative-breakdown', {
+        const response = await fetch('/api/goal-breakdown', {
           method: 'POST',
           headers: { 'content-type': 'application/json' },
           body: JSON.stringify({ goalId: item.id }),
@@ -605,14 +605,18 @@ export function PlannerWorkspace({
               </button>
             </span>
           ) : null}
-          {initialData?.aiEnabled && item.kind === 'initiative' ? (
+          {/* Offered on any goal, not only an ongoing initiative. An outcome
+              with a date is the thing people most want broken down, and the
+              wording differs because the question does: an initiative asks
+              what to do next, an outcome asks what it would take. */}
+          {initialData?.aiEnabled && (type === 'yearly' || type === 'quarterly') ? (
             <button
               className="text-button"
               type="button"
               onClick={() => suggestBreakdown(item)}
               disabled={isPending}
             >
-              Suggest tasks
+              {item.kind === 'initiative' ? 'Suggest tasks' : 'Break this down'}
             </button>
           ) : null}
           {childType ? (

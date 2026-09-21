@@ -169,7 +169,8 @@ the quarter they started in, read through Quarter and Year views; organising
 selected writing; routines whose frequency is a target rather than a set of
 appointments nobody made; and a deadline that is a separate fact from the day
 work is planned for, so moving one does not move the other; and Projects, which
-are work that can actually be finished and reopened.
+are work that can actually be finished and reopened; and "Break this down" on a
+dated Goal, not only on an ongoing initiative.
 
 `PL-05` is complete as part of title-first Today.
 
@@ -182,9 +183,6 @@ reads the above as more than it is:
   and `goal.schedule.v1` in the agent-parity exceptions, which now names four
   Operations withheld for budget rather than principle. The catalog cannot keep
   growing, and ENG-11 is where that has to be faced.
-- **Breaking down a dated Goal.** `initiative-breakdown` refuses a Goal by
-  design and offers steps only for an ongoing initiative. "Break this down" on
-  a quarterly outcome is unbuilt.
 - **The planning intents.** Plan-my-week, choose-today, review-my-week, and
   what-am-I-neglecting are unbuilt. The area exclusion resolver they depend on
   exists and is tested; these intents do not.
