@@ -4,7 +4,8 @@ import { useState, useTransition } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { ChevronLeft, ChevronRight, Plus } from 'lucide-react';
-import { createGoal, scheduleGoal, type GoalsView } from '@/app/goals/actions';
+import { createGoal, getQuietGoals, scheduleGoal, type GoalsView } from '@/app/goals/actions';
+import type { QuietGoal } from '@/lib/planner/quiet-goals';
 import { actionFailureMessage } from '@/lib/operations/failure-message';
 import { spanNote, type PeriodGoal } from '@/lib/planning/goal-periods';
 
@@ -38,6 +39,9 @@ export function GoalsHorizonUI({ data }: { data: GoalsView }) {
   const [targetOn, setTargetOn] = useState('');
   const [parentGoalId, setParentGoalId] = useState('');
   const [details, setDetails] = useState(false);
+  /* Null until asked for. The page does not open with a list of what you have
+     not done, and nothing is fetched to build one. */
+  const [quiet, setQuiet] = useState<QuietGoal[] | null>(null);
   /* Which unscheduled Goal is being given dates. One at a time: the form is
      the decision, and two open at once invites saving the wrong one. */
   const [scheduling, setScheduling] = useState<string | null>(null);
@@ -337,6 +341,66 @@ export function GoalsHorizonUI({ data }: { data: GoalsView }) {
           </ul>
         </section>
       ) : null}
+
+      <section className="goals-section" aria-label="Quiet goals">
+        <div className="section-heading">
+          <h2>What has gone quiet</h2>
+        </div>
+        {quiet === null ? (
+          <>
+            <p className="area-empty">
+              Goals with no work recorded against them lately. Asked for rather than shown, because
+              a list of what you have not done is not a useful thing to open a page with.
+            </p>
+            <button
+              className="btn-secondary"
+              type="button"
+              disabled={pending}
+              onClick={() => {
+                setError(null);
+                startTransition(async () => {
+                  try {
+                    const result = await getQuietGoals();
+                    setQuiet(result.goals);
+                  } catch (caught) {
+                    setError(actionFailureMessage(caught, 'Planner AI could not read your goals.'));
+                  }
+                });
+              }}
+            >
+              Check
+            </button>
+          </>
+        ) : quiet.length === 0 ? (
+          <p className="area-empty">
+            Every active goal has had work recorded against it, or has work already scheduled.
+          </p>
+        ) : (
+          <>
+            {/* The honest caveat, said once and in plain words. Work done and
+                never written down looks exactly like work not done, and this
+                list cannot tell them apart. */}
+            <p className="area-empty">
+              This is what has been written down, not what has happened. Work you did without
+              recording it looks the same here as work you did not do.
+            </p>
+            <ul className="goal-list">
+              {quiet.map((goal) => (
+                <li key={goal.id} className="goal-row">
+                  <div className="goal-row-main">
+                    <span className="goal-title">{goal.title}</span>
+                    <span className="goal-meta">
+                      {goal.quietForDays === null
+                        ? 'No work recorded yet'
+                        : `No work recorded in ${goal.quietForDays} days`}
+                    </span>
+                  </div>
+                </li>
+              ))}
+            </ul>
+          </>
+        )}
+      </section>
 
       {groups.initiatives.length ? (
         <section className="goals-section" aria-label="Ongoing initiatives">
