@@ -55,6 +55,11 @@ Owner decision, 2026-09-20: the representative Notion pilot is removed from the 
   bought nothing and broke the stated north star silently.
 - An export whose completeness is derived from the schema rather than from a
   hand-written list, and which now carries the owner's preferences.
+- Account deletion proved rather than assumed. Deleting an account deletes one
+  row and everything else goes by cascade, so the cascade graph is the whole of
+  the guarantee; 50 of 55 tables are reachable from a workspace or a user, and
+  the five that are not are named with their reasons. A table added without
+  that path would have kept its rows after someone asked to be forgotten.
 
 The latest merged delivery work is PR #111 (`82291a9`): Today uses the accepted outcome-focused hierarchy, stays inside Planner navigation, and shows real Goal direction without fixture content.
 
@@ -92,7 +97,7 @@ See [Production](runbooks/production.md) and [Migration reconciliation](runbooks
 
 ### The life-areas redesign is partial, by design and not by accident
 
-Verified on `claude/life-areas-redesign`: 80 pgTAP suites at 1,553 assertions,
+Verified on `claude/life-areas-redesign`: 81 pgTAP suites at 1,558 assertions,
 1,169 unit tests across 101 files, and the browser suite across 36 specs.
 
 A note on reading a local browser run: at the default four workers it is not
