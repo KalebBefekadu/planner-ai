@@ -71,6 +71,32 @@ const actionOutput = z
   })
   .passthrough();
 
+/* A project row as the handler returns it. Snake case for the same reason
+   every other row output here is: it is the row. */
+const projectOutput = z
+  .object({
+    id,
+    workspace_id: id,
+    primary_area_id: id.nullable(),
+    goal_id: id.nullable(),
+    note_id: id.nullable(),
+    title: z.string(),
+    description_markdown: z.string().nullable(),
+    /* Never null. A project that cannot say what finishing means is an
+       ongoing initiative, and the database refuses to store it as a project. */
+    finish_condition: z.string(),
+    status: z.enum(['active', 'paused', 'completed', 'abandoned']),
+    starts_on: date.nullable(),
+    target_on: date.nullable(),
+    completed_at: timestamp.nullable(),
+    version,
+    created_at: timestamp,
+    updated_at: timestamp,
+    archived_at: timestamp.nullable(),
+    trashed_at: timestamp.nullable(),
+  })
+  .passthrough();
+
 /* Every area Operation returns the area row plus the three things about its
    page a caller would otherwise have to fetch separately: its title, its
    version for the next edit, and whether this call is what created it. */
@@ -375,6 +401,81 @@ const areaColor = z
   .nullable();
 
 export const operationDefinitions = {
+  'project.create.v1': {
+    summary: 'Start a finite body of work that says what finishing it means.',
+    risk: 'low',
+    /* UI only, deliberately. No assistant intent creates or edits a project
+       yet, and the chat catalog is already at the provider prompt budget --
+       advertising a capability nothing uses would spend that budget on
+       nothing and shrink the schemas every other Operation gets to show.
+       Widen this when an intent actually needs it. */
+    exposure: ['ui'],
+    reversible: true,
+    domain: 'project',
+    input: z
+      .object({
+        title: z.string().trim().min(1).max(200),
+        /* Required, and the reason this is not a Goal. */
+        finishCondition: z.string().trim().min(1).max(1_000),
+        descriptionMarkdown: z.string().max(50_000).nullable().optional(),
+        areaId: id.nullable().optional(),
+        goalId: id.nullable().optional(),
+        noteId: id.nullable().optional(),
+        startsOn: date.nullable().optional(),
+        targetOn: date.nullable().optional(),
+      })
+      .strict(),
+    output: projectOutput,
+  },
+  'project.update.v1': {
+    summary: 'Edit a project, including what would count as finishing it.',
+    risk: 'low',
+    /* UI only, deliberately. No assistant intent creates or edits a project
+       yet, and the chat catalog is already at the provider prompt budget --
+       advertising a capability nothing uses would spend that budget on
+       nothing and shrink the schemas every other Operation gets to show.
+       Widen this when an intent actually needs it. */
+    exposure: ['ui'],
+    reversible: true,
+    domain: 'project',
+    input: z
+      .object({
+        id,
+        expectedVersion: version,
+        title: z.string().trim().min(1).max(200),
+        finishCondition: z.string().trim().min(1).max(1_000),
+        descriptionMarkdown: z.string().max(50_000).nullable().optional(),
+        areaId: id.nullable().optional(),
+        goalId: id.nullable().optional(),
+        noteId: id.nullable().optional(),
+        startsOn: date.nullable().optional(),
+        targetOn: date.nullable().optional(),
+      })
+      .strict(),
+    output: projectOutput,
+  },
+  'project.status.v1': {
+    summary: 'Complete, reopen, pause, or abandon a project.',
+    risk: 'low',
+    /* UI only, deliberately. No assistant intent creates or edits a project
+       yet, and the chat catalog is already at the provider prompt budget --
+       advertising a capability nothing uses would spend that budget on
+       nothing and shrink the schemas every other Operation gets to show.
+       Widen this when an intent actually needs it. */
+    exposure: ['ui'],
+    reversible: true,
+    domain: 'project',
+    input: z
+      .object({
+        id,
+        expectedVersion: version,
+        /* Moving off 'completed' clears the completion time, so reopening
+           leaves no date claiming the work was ever finished. */
+        status: z.enum(['active', 'paused', 'completed', 'abandoned']),
+      })
+      .strict(),
+    output: projectOutput,
+  },
   'area.create.v1': {
     summary: 'Create a life area and connect its canonical page.',
     risk: 'low',
@@ -1507,6 +1608,9 @@ export const undoableOperationIds = [
   'week.disposition.v1',
   'area.assign.v1',
   'area.vision.v1',
+  'project.create.v1',
+  'project.update.v1',
+  'project.status.v1',
   'area.create.v1',
   'area.update.v1',
   'area.move.v1',

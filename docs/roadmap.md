@@ -168,16 +168,20 @@ worksheet with a durable baseline and a closed-week record; Goals that outlast
 the quarter they started in, read through Quarter and Year views; organising
 selected writing; routines whose frequency is a target rather than a set of
 appointments nobody made; and a deadline that is a separate fact from the day
-work is planned for, so moving one does not move the other.
+work is planned for, so moving one does not move the other; and Projects, which
+are work that can actually be finished and reopened.
 
 `PL-05` is complete as part of title-first Today.
 
 What the proposal asks for and this branch does **not** contain, so nobody
 reads the above as more than it is:
 
-- **Finite Projects.** No `projects` contract exists. An ongoing initiative is
-  still not a body of work that can finish, and nothing existing is silently
-  reinterpreted as one.
+- **Assistant access to Projects.** The three project Operations are UI-only.
+  Adding them to the chat catalog put it 1,382 bytes past its 24KB prompt
+  budget, and no intent writes a project yet. Recorded with `goal.create.v2`
+  and `goal.schedule.v1` in the agent-parity exceptions, which now names four
+  Operations withheld for budget rather than principle. The catalog cannot keep
+  growing, and ENG-11 is where that has to be faced.
 - **Breaking down a dated Goal.** `initiative-breakdown` refuses a Goal by
   design and offers steps only for an ongoing initiative. "Break this down" on
   a quarterly outcome is unbuilt.

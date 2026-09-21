@@ -9,6 +9,15 @@ export const exportTables = [
   ['planning_horizons', '*'],
   ['visions', '*'],
   ['goals', '*'],
+  /* The life-areas redesign's own tables. Without these a restore brings back
+     the work but not the parts of life it was filed under, the weeks that were
+     committed to, or the projects that were finished -- which is most of what
+     the redesign added. */
+  ['life_areas', '*'],
+  ['projects', '*'],
+  ['weekly_plans', '*'],
+  ['weekly_plan_items', '*'],
+  ['weekly_plan_snapshots', '*'],
   ['action_templates', '*'],
   ['actions', '*'],
   ['notifications', '*'],

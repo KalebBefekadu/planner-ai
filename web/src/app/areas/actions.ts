@@ -35,6 +35,18 @@ export type AreaGoalItem = {
   areaId: string | null;
 };
 
+/* A project as this page needs it. `finishCondition` is carried because the
+   list is where a person checks whether the thing can actually end. */
+export type AreaProjectItem = {
+  id: string;
+  title: string;
+  finishCondition: string;
+  status: 'active' | 'paused' | 'completed' | 'abandoned';
+  startsOn: string | null;
+  targetOn: string | null;
+  version: number;
+};
+
 export type AreaNoteItem = {
   id: string;
   title: string;
@@ -55,6 +67,7 @@ export type AreaPageData = {
   inheritedVision: { areaId: string; areaName: string; bodyMarkdown: string } | null;
   canonicalNote: { id: string; title: string; bodyMarkdown: string; version: number } | null;
   goals: AreaGoalItem[];
+  projects: AreaProjectItem[];
   openWork: AreaWorkItem[];
   notes: AreaNoteItem[];
   /** True when the list was cut short, so the page can say so honestly. */
@@ -117,57 +130,68 @@ export async function getAreaPage(areaId: string, scope: AreaScope): Promise<Are
   const ancestry = areaAncestry(rows, areaId);
   const scopeIds = areaScopeIds(rows, areaId, scope);
 
-  const [visionResult, noteResult, goalsResult, workResult, notesResult] = await Promise.all([
-    supabase
-      .from('visions')
-      .select('id,body_markdown,version,area_id')
-      .eq('workspace_id', workspaceId)
-      .in(
-        'area_id',
-        ancestry.map((row) => row.id)
-      )
-      .is('archived_at', null)
-      .is('trashed_at', null),
-    supabase
-      .from('notes')
-      .select('id,title,body_markdown,version')
-      .eq('workspace_id', workspaceId)
-      .eq('id', area.canonicalNoteId)
-      .is('trashed_at', null)
-      .maybeSingle(),
-    supabase
-      .from('goals')
-      .select('id,title,status,kind,due_on,version,primary_area_id')
-      .eq('workspace_id', workspaceId)
-      .in('primary_area_id', scopeIds)
-      .is('archived_at', null)
-      .is('trashed_at', null)
-      .order('due_on', { ascending: true, nullsFirst: false })
-      .limit(WORK_PAGE_SIZE + 1),
-    supabase
-      .from('actions')
-      .select('id,title,status,version,scheduled_on,primary_area_id')
-      .eq('workspace_id', workspaceId)
-      .in('primary_area_id', scopeIds)
-      .in('status', ['open', 'in_progress', 'blocked'])
-      .is('archived_at', null)
-      .is('trashed_at', null)
-      .order('scheduled_on', { ascending: true, nullsFirst: false })
-      .limit(WORK_PAGE_SIZE + 1),
-    supabase
-      .from('notes')
-      .select('id,title,updated_at')
-      .eq('workspace_id', workspaceId)
-      .in('primary_area_id', scopeIds)
-      .is('archived_at', null)
-      .is('trashed_at', null)
-      .order('updated_at', { ascending: false })
-      .limit(NOTE_PAGE_SIZE + 1),
-  ]);
+  const [visionResult, noteResult, goalsResult, projectsResult, workResult, notesResult] =
+    await Promise.all([
+      supabase
+        .from('visions')
+        .select('id,body_markdown,version,area_id')
+        .eq('workspace_id', workspaceId)
+        .in(
+          'area_id',
+          ancestry.map((row) => row.id)
+        )
+        .is('archived_at', null)
+        .is('trashed_at', null),
+      supabase
+        .from('notes')
+        .select('id,title,body_markdown,version')
+        .eq('workspace_id', workspaceId)
+        .eq('id', area.canonicalNoteId)
+        .is('trashed_at', null)
+        .maybeSingle(),
+      supabase
+        .from('goals')
+        .select('id,title,status,kind,due_on,version,primary_area_id')
+        .eq('workspace_id', workspaceId)
+        .in('primary_area_id', scopeIds)
+        .is('archived_at', null)
+        .is('trashed_at', null)
+        .order('due_on', { ascending: true, nullsFirst: false })
+        .limit(WORK_PAGE_SIZE + 1),
+      supabase
+        .from('projects')
+        .select('id,title,finish_condition,status,starts_on,target_on,version')
+        .eq('workspace_id', workspaceId)
+        .in('primary_area_id', scopeIds)
+        .is('archived_at', null)
+        .is('trashed_at', null)
+        .order('target_on', { ascending: true, nullsFirst: false })
+        .limit(WORK_PAGE_SIZE + 1),
+      supabase
+        .from('actions')
+        .select('id,title,status,version,scheduled_on,primary_area_id')
+        .eq('workspace_id', workspaceId)
+        .in('primary_area_id', scopeIds)
+        .in('status', ['open', 'in_progress', 'blocked'])
+        .is('archived_at', null)
+        .is('trashed_at', null)
+        .order('scheduled_on', { ascending: true, nullsFirst: false })
+        .limit(WORK_PAGE_SIZE + 1),
+      supabase
+        .from('notes')
+        .select('id,title,updated_at')
+        .eq('workspace_id', workspaceId)
+        .in('primary_area_id', scopeIds)
+        .is('archived_at', null)
+        .is('trashed_at', null)
+        .order('updated_at', { ascending: false })
+        .limit(NOTE_PAGE_SIZE + 1),
+    ]);
 
   if (
     visionResult.error ||
     goalsResult.error ||
+    projectsResult.error ||
     workResult.error ||
     notesResult.error ||
     noteResult.error
@@ -194,6 +218,15 @@ export async function getAreaPage(areaId: string, scope: AreaScope): Promise<Are
     dueOn: (row.due_on as string | null) ?? null,
     version: Number(row.version),
     areaId: (row.primary_area_id as string | null) ?? null,
+  }));
+  const projects = (projectsResult.data ?? []).slice(0, WORK_PAGE_SIZE).map((row) => ({
+    id: row.id as string,
+    title: row.title as string,
+    finishCondition: row.finish_condition as string,
+    status: row.status as AreaProjectItem['status'],
+    startsOn: (row.starts_on as string | null) ?? null,
+    targetOn: (row.target_on as string | null) ?? null,
+    version: Number(row.version),
   }));
   const openWork = (workResult.data ?? []).slice(0, WORK_PAGE_SIZE).map((row) => ({
     id: row.id as string,
@@ -241,6 +274,7 @@ export async function getAreaPage(areaId: string, scope: AreaScope): Promise<Are
         }
       : null,
     goals,
+    projects,
     openWork,
     notes,
     moreWork: (workResult.data ?? []).length > WORK_PAGE_SIZE,
@@ -356,6 +390,51 @@ export async function replaceAreaPage(input: {
   });
   revalidateAreas(input.id);
   return { version: result.version, canonicalNoteId: result.canonical_note_id };
+}
+
+/* Starting a project is filing it where you are: the area is the one on the
+   page. The finish condition is required by the contract rather than by this
+   form, so the refusal reads the same wherever a project is created from. */
+export async function createAreaProject(input: {
+  areaId: string;
+  title: string;
+  finishCondition: string;
+  targetOn: string | null;
+}) {
+  const { supabase } = await requireOwnedWorkspaceId();
+  const created = await executeOperation(
+    supabase,
+    'project.create.v1',
+    {
+      title: input.title,
+      finishCondition: input.finishCondition,
+      areaId: input.areaId,
+      targetOn: input.targetOn,
+    },
+    { idempotencyKey: randomUUID(), surface: 'ui' }
+  );
+  revalidateAreas(input.areaId);
+  return { id: created.id, version: created.version, status: created.status };
+}
+
+/* Finishing and reopening are the same Operation because they are the same
+   decision made in two directions, and reopening has to clear the completion
+   time rather than leave a date claiming the work was ever done. */
+export async function setAreaProjectStatus(input: {
+  areaId: string;
+  id: string;
+  expectedVersion: number;
+  status: 'active' | 'paused' | 'completed' | 'abandoned';
+}) {
+  const { supabase } = await requireOwnedWorkspaceId();
+  const saved = await executeOperation(
+    supabase,
+    'project.status.v1',
+    { id: input.id, expectedVersion: input.expectedVersion, status: input.status },
+    { idempotencyKey: randomUUID(), surface: 'ui' }
+  );
+  revalidateAreas(input.areaId);
+  return { id: saved.id, version: saved.version, status: saved.status };
 }
 
 export async function saveAreaVision(input: { areaId: string; bodyMarkdown: string }) {

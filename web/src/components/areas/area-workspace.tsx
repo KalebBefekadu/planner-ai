@@ -16,11 +16,14 @@ import {
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import {
+  createAreaProject,
   renameArea,
   saveAreaVision,
   setAreaAiExclusion,
   setAreaArchived,
+  setAreaProjectStatus,
   type AreaPageData,
+  type AreaProjectItem,
   type AreaScope,
 } from '@/app/areas/actions';
 import { createTodayAction } from '@/app/today/actions';
@@ -34,6 +37,16 @@ const TABS: Array<{ id: Tab; label: string }> = [
   { id: 'plan', label: 'Plan' },
   { id: 'notes', label: 'Notes' },
 ];
+
+/* A project says where it is in plain words. "Active" would be the literal
+   column value, but a project that is simply running is not in a state worth
+   announcing -- what is worth announcing is that one has finished. */
+function projectStateLabel(project: AreaProjectItem) {
+  if (project.status === 'completed') return 'Finished';
+  if (project.status === 'abandoned') return 'Dropped';
+  if (project.status === 'paused') return 'Paused';
+  return project.targetOn ? `Aiming for ${project.targetOn}` : 'In progress';
+}
 
 function statusLabel(status: string) {
   if (status === 'in_progress') return 'In progress';
@@ -75,6 +88,11 @@ export function AreaWorkspace({
   const [editingVision, setEditingVision] = useState(!data.vision);
 
   const [taskTitle, setTaskTitle] = useState('');
+  const [projectDraft, setProjectDraft] = useState({
+    title: '',
+    finishCondition: '',
+    targetOn: '',
+  });
 
   function run(work: () => Promise<void>, fallback: string) {
     setError(null);
@@ -484,6 +502,124 @@ export function AreaWorkspace({
                   </ul>
                 ) : (
                   <p className="area-empty">No goals are filed here.</p>
+                )}
+              </section>
+              <section className="area-section" aria-labelledby="area-projects">
+                <div className="section-heading">
+                  <h2 id="area-projects">Projects</h2>
+                </div>
+                {/* The finish condition is asked for at creation rather than
+                    offered later, because a project nobody can say the end of
+                    is an initiative, and the contract refuses to store it. */}
+                <form
+                  className="area-quick-add"
+                  onSubmit={(event) => {
+                    event.preventDefault();
+                    const { title, finishCondition, targetOn } = projectDraft;
+                    if (!title.trim() || !finishCondition.trim()) return;
+                    run(async () => {
+                      await createAreaProject({
+                        areaId: data.area.id,
+                        title: title.trim(),
+                        finishCondition: finishCondition.trim(),
+                        targetOn: targetOn || null,
+                      });
+                      setProjectDraft({ title: '', finishCondition: '', targetOn: '' });
+                      setNotice(`"${title.trim()}" started.`);
+                      router.refresh();
+                    }, 'Planner AI could not start this project.');
+                  }}
+                >
+                  <label className="visually-hidden" htmlFor="project-title">
+                    Project
+                  </label>
+                  <input
+                    id="project-title"
+                    placeholder="What are you taking on?"
+                    value={projectDraft.title}
+                    onChange={(event) =>
+                      setProjectDraft((draft) => ({ ...draft, title: event.target.value }))
+                    }
+                    maxLength={200}
+                  />
+                  <label className="visually-hidden" htmlFor="project-finish">
+                    What would finishing look like?
+                  </label>
+                  <input
+                    id="project-finish"
+                    placeholder="What would finishing look like?"
+                    value={projectDraft.finishCondition}
+                    onChange={(event) =>
+                      setProjectDraft((draft) => ({
+                        ...draft,
+                        finishCondition: event.target.value,
+                      }))
+                    }
+                    maxLength={1000}
+                  />
+                  <label className="visually-hidden" htmlFor="project-target">
+                    Aiming to finish by
+                  </label>
+                  <input
+                    id="project-target"
+                    type="date"
+                    aria-label="Aiming to finish by"
+                    value={projectDraft.targetOn}
+                    onChange={(event) =>
+                      setProjectDraft((draft) => ({ ...draft, targetOn: event.target.value }))
+                    }
+                  />
+                  <button
+                    type="submit"
+                    className="btn-primary button-with-icon"
+                    disabled={
+                      pending || !projectDraft.title.trim() || !projectDraft.finishCondition.trim()
+                    }
+                  >
+                    <Plus size={15} aria-hidden="true" />
+                    Start project
+                  </button>
+                </form>
+                {data.projects.length ? (
+                  <ul className="area-list">
+                    {data.projects.map((project) => (
+                      <li key={project.id}>
+                        <span className="area-list-title">{project.title}</span>
+                        <span className="area-list-meta">
+                          {projectStateLabel(project)} &middot; Done when: {project.finishCondition}
+                        </span>
+                        <button
+                          className="btn-secondary"
+                          type="button"
+                          disabled={pending}
+                          onClick={() =>
+                            run(async () => {
+                              const next = project.status === 'completed' ? 'active' : 'completed';
+                              await setAreaProjectStatus({
+                                areaId: data.area.id,
+                                id: project.id,
+                                expectedVersion: project.version,
+                                status: next,
+                              });
+                              setNotice(
+                                next === 'completed'
+                                  ? `"${project.title}" finished.`
+                                  : `"${project.title}" reopened.`
+                              );
+                              router.refresh();
+                            }, 'Planner AI could not change this project.')
+                          }
+                        >
+                          {project.status === 'completed' ? 'Reopen' : 'Mark finished'}
+                        </button>
+                      </li>
+                    ))}
+                  </ul>
+                ) : (
+                  <p className="area-empty">
+                    No projects here. A project is work that can be finished, which is what
+                    separates it from an ongoing concern.
+                  </p>
                 )}
               </section>
               <section className="area-section">

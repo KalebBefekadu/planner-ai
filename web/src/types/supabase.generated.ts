@@ -219,6 +219,7 @@ export type Database = {
           occurrence_slot: number | null;
           parent_action_id: string | null;
           primary_area_id: string | null;
+          project_id: string | null;
           purge_after: string | null;
           recurrence_template_id: string | null;
           scheduled_on: string | null;
@@ -245,6 +246,7 @@ export type Database = {
           occurrence_slot?: number | null;
           parent_action_id?: string | null;
           primary_area_id?: string | null;
+          project_id?: string | null;
           purge_after?: string | null;
           recurrence_template_id?: string | null;
           scheduled_on?: string | null;
@@ -271,6 +273,7 @@ export type Database = {
           occurrence_slot?: number | null;
           parent_action_id?: string | null;
           primary_area_id?: string | null;
+          project_id?: string | null;
           purge_after?: string | null;
           recurrence_template_id?: string | null;
           scheduled_on?: string | null;
@@ -309,6 +312,13 @@ export type Database = {
             columns: ['primary_area_id', 'workspace_id'];
             isOneToOne: false;
             referencedRelation: 'life_areas';
+            referencedColumns: ['id', 'workspace_id'];
+          },
+          {
+            foreignKeyName: 'actions_project_id_workspace_id_fkey';
+            columns: ['project_id', 'workspace_id'];
+            isOneToOne: false;
+            referencedRelation: 'projects';
             referencedColumns: ['id', 'workspace_id'];
           },
           {
@@ -2342,6 +2352,98 @@ export type Database = {
           },
         ];
       };
+      projects: {
+        Row: {
+          archived_at: string | null;
+          completed_at: string | null;
+          created_at: string;
+          description_markdown: string | null;
+          finish_condition: string;
+          goal_id: string | null;
+          id: string;
+          note_id: string | null;
+          primary_area_id: string | null;
+          purge_after: string | null;
+          starts_on: string | null;
+          status: string;
+          target_on: string | null;
+          title: string;
+          trashed_at: string | null;
+          updated_at: string;
+          version: number;
+          workspace_id: string;
+        };
+        Insert: {
+          archived_at?: string | null;
+          completed_at?: string | null;
+          created_at?: string;
+          description_markdown?: string | null;
+          finish_condition: string;
+          goal_id?: string | null;
+          id?: string;
+          note_id?: string | null;
+          primary_area_id?: string | null;
+          purge_after?: string | null;
+          starts_on?: string | null;
+          status?: string;
+          target_on?: string | null;
+          title: string;
+          trashed_at?: string | null;
+          updated_at?: string;
+          version?: number;
+          workspace_id: string;
+        };
+        Update: {
+          archived_at?: string | null;
+          completed_at?: string | null;
+          created_at?: string;
+          description_markdown?: string | null;
+          finish_condition?: string;
+          goal_id?: string | null;
+          id?: string;
+          note_id?: string | null;
+          primary_area_id?: string | null;
+          purge_after?: string | null;
+          starts_on?: string | null;
+          status?: string;
+          target_on?: string | null;
+          title?: string;
+          trashed_at?: string | null;
+          updated_at?: string;
+          version?: number;
+          workspace_id?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: 'projects_goal_id_workspace_id_fkey';
+            columns: ['goal_id', 'workspace_id'];
+            isOneToOne: false;
+            referencedRelation: 'goals';
+            referencedColumns: ['id', 'workspace_id'];
+          },
+          {
+            foreignKeyName: 'projects_note_id_workspace_id_fkey';
+            columns: ['note_id', 'workspace_id'];
+            isOneToOne: false;
+            referencedRelation: 'notes';
+            referencedColumns: ['id', 'workspace_id'];
+          },
+          {
+            foreignKeyName: 'projects_primary_area_id_workspace_id_fkey';
+            columns: ['primary_area_id', 'workspace_id'];
+            isOneToOne: false;
+            referencedRelation: 'life_areas';
+            referencedColumns: ['id', 'workspace_id'];
+          },
+          {
+            foreignKeyName: 'projects_workspace_id_fkey';
+            columns: ['workspace_id'];
+            isOneToOne: false;
+            referencedRelation: 'workspaces';
+            referencedColumns: ['id'];
+          },
+        ];
+      };
       review_action_items: {
         Row: {
           action_id: string;
@@ -3470,6 +3572,15 @@ export type Database = {
         };
         Returns: Json;
       };
+      execute_operation_undo_project_base: {
+        Args: {
+          p_idempotency_key: string;
+          p_input: Json;
+          p_operation_id: string;
+          p_surface: string;
+        };
+        Returns: Json;
+      };
       execute_operation_undo_trash_base: {
         Args: {
           p_idempotency_key: string;
@@ -3566,6 +3677,15 @@ export type Database = {
           p_input: Json;
           p_operation_id: string;
           p_surface: string;
+        };
+        Returns: Json;
+      };
+      execute_project_operation: {
+        Args: {
+          p_idempotency_key: string;
+          p_input: Json;
+          p_operation_id: string;
+          p_surface?: string;
         };
         Returns: Json;
       };

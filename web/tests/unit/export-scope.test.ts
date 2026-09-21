@@ -32,6 +32,22 @@ describe('the full Workspace export', () => {
     }
   });
 
+  /* The redesign added five tables, and every one of them holds something a
+     person decided rather than something the app derived: which parts of life
+     they keep, what they committed to in a given week, and what they finished.
+     None of it is reconstructible from the Notes half. */
+  it('carries what the life-areas redesign added', () => {
+    for (const table of [
+      'life_areas',
+      'projects',
+      'weekly_plans',
+      'weekly_plan_items',
+      'weekly_plan_snapshots',
+    ]) {
+      expect(tableNames, `${table} is part of what the owner leaves with`).toContain(table);
+    }
+  });
+
   it('still carries the Notes half, which the vault also covers', () => {
     for (const table of ['notes', 'note_links', 'note_tags', 'tags', 'captures']) {
       expect(tableNames).toContain(table);

@@ -52,12 +52,19 @@ const HUMAN_ONLY: Partial<Record<OperationId, string>> = {
     'Repointing a life area at a different page detaches writing from the area it belonged to, and the person needs to be looking at both pages to know that is what they want.',
   'note.appearance.v1':
     'How a page looks is a preference about the owner workspace, like workspace.preferences.v1; an agent asked to tidy up must not restyle pages.',
-  /* The only two exceptions here that are a measurement rather than a
-     principle, and they should not survive ENG-11. */
+  /* The exceptions here that are a measurement rather than a principle, and
+     none of which should survive ENG-11. Each one is an Operation an agent
+     ought to be able to call, withheld only because the assistant system
+     prompt is held under a byte budget that the catalog has now reached. */
   'goal.create.v2':
     'Not withheld on principle: every chat-exposed Operation puts its schema in the assistant system prompt, which is held under a byte budget this one exceeded, and no assistant intent uses it yet.',
   'goal.schedule.v1':
     'Withheld with goal.create.v2, for the same prompt-budget reason and not because scheduling is undelegatable.',
+  'project.create.v1':
+    'Withheld for the prompt-budget reason, not because starting a project is undelegatable. Adding the three project Operations to the chat catalog put it 1,382 bytes over its 24KB limit, and no assistant intent writes a project yet.',
+  'project.update.v1': 'Withheld with project.create.v1, for the same prompt-budget reason.',
+  'project.status.v1':
+    'Withheld with project.create.v1. Finishing a project is a judgement a person makes, but it is the budget rather than that judgement keeping it here.',
 };
 
 describe('human and agent parity', () => {
