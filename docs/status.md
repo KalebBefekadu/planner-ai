@@ -82,11 +82,25 @@ See [Production](runbooks/production.md) and [Migration reconciliation](runbooks
 
 ### The life-areas redesign is partial, by design and not by accident
 
-Verified on `claude/life-areas-redesign`: 79 pgTAP suites at 1,526 assertions,
-1,126 unit tests across 98 files, and the production-build browser suite,
-including new journeys for life areas, the compacted planner, title-first Today,
-the weekly worksheet, routines counted against a frequency target, and a
-deadline that survives the work being rescheduled.
+Verified on `claude/life-areas-redesign`: 80 pgTAP suites at 1,553 assertions,
+1,163 unit tests across 101 files, and the production-build browser suite at
+395 passing across 35 specs. The owner acceptance journey runs end to end at
+both desktop and phone width: name a part of life, give it a direction, add a
+subarea, file work in it, see that work roll up, start a project that can
+finish, commit a week, complete one item and give the other a decision, close
+the week, reopen its record, and find the same page again from Notes.
+
+One browser test fails, and it is not from this work. On a phone,
+`journey-notes` cannot press "Move note out of its parent" deep in a tree:
+three separate elements take the pointer event at that scroll position --
+the note's own move-controls group, the appearance controls, and the top bar.
+It fails identically at `5696071`, before any of this branch's recent work, so
+it is a pre-existing mobile layering defect in the Notes inspector rather than
+a regression. It is a real defect and worth its own ticket: a control a person
+can see and cannot press is WCAG 2.2's Focus Not Obscured failing. Reserving
+the fixed header's height as scroll margin moves the first interception but
+does not clear the other two, so the fix needs a layout pass on that inspector
+rather than a one-line rule.
 
 Not built, and not to be read into the above: related-area links, deferred
 deliberately -- one primary area, with the association contract isolated so

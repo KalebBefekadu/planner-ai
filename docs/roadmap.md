@@ -187,6 +187,14 @@ reads the above as more than it is:
   growing, and ENG-11 is where that has to be faced.
 - **Related-area links.** Deliberately deferred: one primary area, and the
   association contract isolated so equal membership stays adoptable.
+- **Moving a Note out of its parent, on a phone.** Pre-existing and unrelated
+  to this work -- it fails at `5696071` too. Three elements take the pointer
+  event at that scroll position in the Notes inspector, so a control a person
+  can see cannot be pressed. Needs a layout pass, not a rule.
+- **The production gates, and seven days of real use.** Neither is an
+  engineering task. The migration window, the fresh backup and restore
+  rehearsal, and the dogfood week are the owner's to run, and nothing in this
+  branch shortens them.
 
 The accepted navigation and structure changes are recorded in the amendment to
 [the product shape](product/product-shape.md).
