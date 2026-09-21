@@ -1,4 +1,4 @@
-import { test, expect, goTo, onboardingSeed } from './support/workspace';
+import { expect, goTo, onboardingSeed, openTaskDetails, test } from './support/workspace';
 
 // Journey 4 of the delivery rule: deciding what today is actually for. The
 // product's opinion here is that a day holds a small number of commitments,
@@ -18,7 +18,7 @@ test('Planner navigation keeps Today inside the planning workflow', async ({ wor
   await plannerNavigation.getByRole('link', { name: 'Today', exact: true }).click();
 
   await expect(page).toHaveURL(/\/planner\/today(?:\?|$)/);
-  await expect(page.getByRole('heading', { name: 'Make today count', exact: true })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Today', exact: true, level: 1 })).toBeVisible();
   await expect(page.getByRole('navigation', { name: 'Planning views' })).toBeVisible();
 });
 
@@ -138,10 +138,11 @@ test('an Action created from Today survives a reload and can be completed there'
   const { page } = workspace;
   await goTo(page, '/');
 
-  const composer = page.getByRole('region', { name: 'New Action' });
+  const composer = page.getByRole('region', { name: 'Add a task' });
   await composer.getByRole('textbox', { name: 'What needs doing' }).fill('Book the venue');
+  await openTaskDetails(composer);
   await composer.getByRole('checkbox', { name: "Commit to today's focus" }).uncheck();
-  await composer.getByRole('button', { name: 'Add Action' }).click();
+  await composer.getByRole('button', { name: 'Add task' }).click();
 
   await expect(composer).toContainText('"Book the venue" is saved to your open Actions.');
   await expect(page.getByRole('region', { name: openRegion })).toContainText('Book the venue');
@@ -159,12 +160,13 @@ test('an Action created from Today can be linked to a real Goal and committed at
   const { page } = workspace;
   await goTo(page, '/');
 
-  const composer = page.getByRole('region', { name: 'New Action' });
+  const composer = page.getByRole('region', { name: 'Add a task' });
   await composer.getByRole('textbox', { name: 'What needs doing' }).fill('Draft the invite copy');
+  await openTaskDetails(composer);
   await composer
     .getByRole('combobox', { name: 'Goal' })
     .selectOption({ label: onboardingSeed.goal });
-  await composer.getByRole('button', { name: 'Add Action' }).click();
+  await composer.getByRole('button', { name: 'Add task' }).click();
 
   const committed = page.getByRole('region', { name: committedRegion });
   await expect(committed).toContainText('Draft the invite copy');
@@ -187,20 +189,20 @@ test('a full focus list keeps the new Action and refuses only the commitment', a
   const { page } = workspace;
   await goTo(page, '/');
 
-  const composer = page.getByRole('region', { name: 'New Action' });
+  const composer = page.getByRole('region', { name: 'Add a task' });
   const committed = page.getByRole('region', { name: committedRegion });
 
   // Fill the day to its cap using the composer itself.
   for (let index = 1; index <= 4; index += 1) {
     await composer.getByRole('textbox', { name: 'What needs doing' }).fill(`Committed ${index}`);
-    await composer.getByRole('button', { name: 'Add Action' }).click();
+    await composer.getByRole('button', { name: 'Add task' }).click();
     await expect(committed).toContainText(`Committed ${index}`);
   }
   await page.getByRole('button', { name: `Focus ${onboardingSeed.action}` }).click();
   await expect(committed).toContainText('5 / 5');
 
   await composer.getByRole('textbox', { name: 'What needs doing' }).fill('Overflow work');
-  await composer.getByRole('button', { name: 'Add Action' }).click();
+  await composer.getByRole('button', { name: 'Add task' }).click();
 
   await expect(composer).toContainText("Today's focus is already full at 5");
   // Nothing that was already committed was dropped to make room.
@@ -213,10 +215,10 @@ test('a saved Action is written once and the composer clears itself', async ({ w
   const { page } = workspace;
   await goTo(page, '/');
 
-  const composer = page.getByRole('region', { name: 'New Action' });
+  const composer = page.getByRole('region', { name: 'Add a task' });
   const title = composer.getByRole('textbox', { name: 'What needs doing' });
   await title.fill('Only once');
-  await composer.getByRole('button', { name: 'Add Action' }).click();
+  await composer.getByRole('button', { name: 'Add task' }).click();
   await expect(composer).toContainText('"Only once" is saved');
 
   // A cleared title is what stops the next keystroke from resubmitting the
@@ -326,7 +328,7 @@ test('/today reaches Today instead of a not-found page', async ({ workspace }) =
   // revalidatePath('/today') on nothing.
   await page.goto('/today');
   await expect(page).toHaveURL(/\/planner\/today(?:\?|$)/);
-  await expect(page.getByRole('heading', { name: 'Make today count', exact: true })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Today', exact: true, level: 1 })).toBeVisible();
 });
 
 test('Today offers the way back into the page you were last writing', async ({ workspace }) => {
@@ -349,4 +351,39 @@ test('Today offers the way back into the page you were last writing', async ({ w
   await recent.getByRole('link', { name: /Quarterly summary/ }).click();
   await expect(page).toHaveURL(/\/notes\?note=/);
   await expect(page.getByRole('textbox', { name: 'Note title' })).toHaveValue('Quarterly summary');
+});
+
+/* ENG-02. Today asked for a title, a goal, a date and a commitment before it
+   would take "Sort the hallway cupboard", and surrounded that with a coaching
+   prompt, three counters reading zero, a banner asking the person to go and
+   choose a direction, and two strips promising that things would appear here
+   later. */
+test('a task takes a title and one key, and nothing else is asked for', async ({ workspace }) => {
+  const { page } = workspace;
+  await goTo(page, '/');
+
+  const composer = page.getByRole('region', { name: 'Add a task' });
+  await expect(composer.getByRole('combobox', { name: 'Goal' })).toBeHidden();
+  await expect(composer.getByRole('textbox', { name: 'Scheduled date' })).toBeHidden();
+
+  await composer
+    .getByRole('textbox', { name: 'What needs doing' })
+    .fill('Sort the hallway cupboard');
+  await composer.getByRole('textbox', { name: 'What needs doing' }).press('Enter');
+
+  await expect(composer).toContainText('"Sort the hallway cupboard" is saved');
+  await expect(
+    page.getByRole('region', { name: 'Committed Actions' }).getByText('Sort the hallway cupboard')
+  ).toBeVisible();
+});
+
+test('the day is named by its date, not by a slogan', async ({ workspace }) => {
+  const { page } = workspace;
+  await goTo(page, '/');
+
+  await expect(page.getByRole('heading', { name: 'Today', exact: true, level: 1 })).toBeVisible();
+  await expect(page.getByRole('heading', { name: /Make today count/ })).toHaveCount(0);
+  // A direction band that has no direction to name is a setup nag, not a
+  // section, so it is absent until there is a Goal behind today's work.
+  await expect(page.getByText('Connect today to a meaningful goal')).toHaveCount(0);
 });

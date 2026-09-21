@@ -93,6 +93,7 @@ export function TodayWorkspace({ data }: { data: TodayData }) {
   const [notice, setNotice] = useState<string | null>(null);
   const [draftTitle, setDraftTitle] = useState('');
   const [draftGoalId, setDraftGoalId] = useState('');
+  const [draftAreaId, setDraftAreaId] = useState('');
   const [draftDate, setDraftDate] = useState(data.localDate);
   const [draftFocus, setDraftFocus] = useState(true);
   const requestKey = useRef<string | null>(null);
@@ -131,6 +132,7 @@ export function TodayWorkspace({ data }: { data: TodayData }) {
     const key = requestKey.current;
     const title = draftTitle;
     const goalId = draftGoalId || null;
+    const areaId = draftAreaId || null;
     const scheduledOn = draftDate;
     const focus = draftFocus;
     startTransition(async () => {
@@ -138,6 +140,7 @@ export function TodayWorkspace({ data }: { data: TodayData }) {
         const result = await createTodayAction({
           title,
           goalId,
+          areaId,
           scheduledOn,
           focus,
           requestKey: key,
@@ -371,22 +374,22 @@ export function TodayWorkspace({ data }: { data: TodayData }) {
     );
   }
 
+  const todayMetrics = [
+    { label: 'Focused', count: focus.length, Icon: Target },
+    { label: 'Due today', count: dueTodayCount, Icon: CalendarCheck2 },
+    { label: 'Overdue', count: overdueCount, Icon: AlertTriangle },
+  ].filter((metric) => metric.count > 0);
+
   return (
     <div className="page canonical-today-page">
+      {/* The date, then the name of the day. "Make today count" was the same
+          sentence every morning, and the entry for the thing you came here to
+          write was four fields below it. */}
       <header className="page-heading today-heading">
         <div>
           <p className="eyebrow">{readableDate}</p>
-          <h1>Make today count</h1>
-          <p className="lede">
-            {focus.length
-              ? `${focus.length} committed ${focus.length === 1 ? 'outcome' : 'outcomes'}. Enough space to do them well.`
-              : 'Choose a few outcomes. Leave enough space to do them well.'}
-          </p>
+          <h1>Today</h1>
         </div>
-        <Link className="btn-primary button-with-icon" href="/planner/inbox">
-          <Plus size={16} aria-hidden="true" />
-          Capture an action
-        </Link>
       </header>
 
       <nav className="planner-today-tabs" aria-label="Planning views">
@@ -407,67 +410,90 @@ export function TodayWorkspace({ data }: { data: TodayData }) {
         </p>
       ) : null}
 
-      <section className="today-composer" aria-labelledby="today-composer-heading">
-        <div className="section-heading">
-          <div>
-            <p className="eyebrow">Add</p>
-            <h2 id="today-composer-heading">New Action</h2>
-          </div>
-        </div>
+      {/* Title first. "Sort the hallway cupboard" is a whole task, and it
+          should take one line and one key. A date, a goal, an area and
+          whether it is one of today's few commitments are all real, and all
+          optional -- so they are behind a disclosure that remembers nothing
+          and asks for nothing. */}
+      <section className="today-composer" aria-label="Add a task">
         <form className="today-composer-form" onSubmit={submitDraft}>
-          <label className="today-composer-title">
-            What needs doing
+          <div className="today-composer-line">
+            <label className="visually-hidden" htmlFor="today-task-title">
+              What needs doing
+            </label>
             <input
+              id="today-task-title"
               className="input-field"
               name="title"
               value={draftTitle}
               onChange={(event) => setDraftTitle(event.target.value)}
-              placeholder="Draft the quarterly summary"
+              placeholder="What needs doing?"
               minLength={3}
               maxLength={1000}
               required
             />
-          </label>
-          <label>
-            Goal
-            <select
-              className="input-field"
-              name="goalId"
-              value={draftGoalId}
-              onChange={(event) => setDraftGoalId(event.target.value)}
-            >
-              <option value="">No goal yet</option>
-              {data.goals.map((goal) => (
-                <option key={goal.id} value={goal.id}>
-                  {goal.title}
-                </option>
-              ))}
-            </select>
-          </label>
-          <label>
-            Scheduled date
-            <input
-              className="input-field"
-              type="date"
-              name="scheduledOn"
-              value={draftDate}
-              onChange={(event) => setDraftDate(event.target.value)}
-              required
-            />
-          </label>
-          <label className="today-composer-focus">
-            <input
-              type="checkbox"
-              name="focus"
-              checked={draftFocus}
-              onChange={(event) => setDraftFocus(event.target.checked)}
-            />
-            Commit to today&apos;s focus
-          </label>
-          <button className="btn-primary button-with-icon" type="submit" disabled={isPending}>
-            <Plus size={16} aria-hidden="true" />
-            {isPending ? 'Saving...' : 'Add Action'}
-          </button>
+            <button className="btn-primary button-with-icon" type="submit" disabled={isPending}>
+              <Plus size={16} aria-hidden="true" />
+              {isPending ? 'Saving...' : 'Add task'}
+            </button>
+          </div>
+          <details className="today-composer-details">
+            <summary>Details</summary>
+            <div className="today-composer-fields">
+              <label>
+                Goal
+                <select
+                  className="input-field"
+                  name="goalId"
+                  value={draftGoalId}
+                  onChange={(event) => setDraftGoalId(event.target.value)}
+                >
+                  <option value="">No goal yet</option>
+                  {data.goals.map((goal) => (
+                    <option key={goal.id} value={goal.id}>
+                      {goal.title}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <label>
+                Life area
+                <select
+                  className="input-field"
+                  name="areaId"
+                  value={draftAreaId}
+                  onChange={(event) => setDraftAreaId(event.target.value)}
+                >
+                  <option value="">No area</option>
+                  {data.areas.map((area) => (
+                    <option key={area.id} value={area.id}>
+                      {area.path}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <label>
+                Scheduled date
+                <input
+                  className="input-field"
+                  type="date"
+                  name="scheduledOn"
+                  value={draftDate}
+                  onChange={(event) => setDraftDate(event.target.value)}
+                  required
+                />
+              </label>
+              <label className="today-composer-focus">
+                <input
+                  type="checkbox"
+                  name="focus"
+                  checked={draftFocus}
+                  onChange={(event) => setDraftFocus(event.target.checked)}
+                />
+                Commit to today&apos;s focus
+              </label>
+            </div>
+          </details>
         </form>
         <p className="status-message" role="status">
           {notice ?? ''}
@@ -482,29 +508,21 @@ export function TodayWorkspace({ data }: { data: TodayData }) {
         })}
       />
 
-      <section className="today-metrics" aria-label="Today summary">
-        <div className="metric-block">
-          <Target size={18} aria-hidden="true" />
-          <div>
-            <strong>{focus.length}</strong>
-            <span>Focused</span>
-          </div>
-        </div>
-        <div className="metric-block">
-          <CalendarCheck2 size={18} aria-hidden="true" />
-          <div>
-            <strong>{dueTodayCount}</strong>
-            <span>Due today</span>
-          </div>
-        </div>
-        <div className="metric-block">
-          <AlertTriangle size={18} aria-hidden="true" />
-          <div>
-            <strong>{overdueCount}</strong>
-            <span>Overdue</span>
-          </div>
-        </div>
-      </section>
+      {/* Three counters reading zero told a new account only that it was new.
+          Each appears when it has something to report. */}
+      {todayMetrics.length ? (
+        <section className="today-metrics" aria-label="Today summary">
+          {todayMetrics.map((metric) => (
+            <div className="metric-block" key={metric.label}>
+              <metric.Icon size={18} aria-hidden="true" />
+              <div>
+                <strong>{metric.count}</strong>
+                <span>{metric.label}</span>
+              </div>
+            </div>
+          ))}
+        </section>
+      ) : null}
 
       <div className="today-execution-grid">
         <section className="today-section" aria-labelledby="today-committed-actions">
@@ -553,20 +571,22 @@ export function TodayWorkspace({ data }: { data: TodayData }) {
         </section>
       </div>
 
-      <section className="direction-band today-direction-band" aria-labelledby="today-direction">
-        <div>
-          <p className="eyebrow">Direction</p>
-          <h2 id="today-direction">{directionGoal ?? 'Connect today to a meaningful goal'}</h2>
-        </div>
-        <p>
-          {directionGoal
-            ? 'Your focused work advances this goal. Review the larger plan before adding more.'
-            : 'Link an Action to a Goal so today has a visible line back to what matters.'}
-        </p>
-        <Link className="btn-secondary" href="/goals">
-          {directionGoal ? 'Open goal' : 'Choose direction'}
-        </Link>
-      </section>
+      {/* Only when there is a direction to name. "Connect today to a
+          meaningful goal" on an empty account is a banner asking the person to
+          go and do setup before the screen will be useful to them, which is
+          the opposite of what this screen is for. */}
+      {directionGoal ? (
+        <section className="direction-band today-direction-band" aria-labelledby="today-direction">
+          <div>
+            <p className="eyebrow">Direction</p>
+            <h2 id="today-direction">{directionGoal}</h2>
+          </div>
+          <p>Your focused work advances this goal. Review the larger plan before adding more.</p>
+          <Link className="btn-secondary" href="/goals">
+            Open goal
+          </Link>
+        </section>
+      ) : null}
 
       {/* A section with no accessible name is not exposed as a landmark, so
           this block was unreachable by landmark navigation while every other
@@ -611,38 +631,36 @@ export function TodayWorkspace({ data }: { data: TodayData }) {
         )}
       </section>
 
-      <section
-        className="today-section today-capture-strip"
-        aria-labelledby="today-recent-captures"
-      >
-        <div className="section-heading">
-          <div>
-            <p className="eyebrow">Inbox</p>
-            <h2 id="today-recent-captures">Recent captures</h2>
-          </div>
-          <Link href="/planner/inbox" aria-label="Open Inbox" title="Open Inbox">
-            <Inbox size={18} />
-          </Link>
-        </div>
-        <div className="capture-preview-list">
-          {data.recentCaptures.map((capture) => (
-            <article className="capture-preview" key={capture.id}>
-              <p>{capture.rawText}</p>
-              <time dateTime={capture.createdAt}>
-                {new Intl.DateTimeFormat('en-US', { month: 'short', day: 'numeric' }).format(
-                  new Date(capture.createdAt)
-                )}
-              </time>
-            </article>
-          ))}
-          {!data.recentCaptures.length ? (
-            <div className="inline-empty">
-              <p>Your unstructured thoughts will land here.</p>
-              <Link href="/planner/inbox">Make a capture</Link>
+      {/* Secondary. A strip promising that thoughts will land here is not
+          worth the space on a screen whose job is the next few hours. */}
+      {data.recentCaptures.length ? (
+        <section
+          className="today-section today-capture-strip"
+          aria-labelledby="today-recent-captures"
+        >
+          <div className="section-heading">
+            <div>
+              <p className="eyebrow">Inbox</p>
+              <h2 id="today-recent-captures">Recent captures</h2>
             </div>
-          ) : null}
-        </div>
-      </section>
+            <Link href="/planner/inbox" aria-label="Open Inbox" title="Open Inbox">
+              <Inbox size={18} />
+            </Link>
+          </div>
+          <div className="capture-preview-list">
+            {data.recentCaptures.map((capture) => (
+              <article className="capture-preview" key={capture.id}>
+                <p>{capture.rawText}</p>
+                <time dateTime={capture.createdAt}>
+                  {new Intl.DateTimeFormat('en-US', { month: 'short', day: 'numeric' }).format(
+                    new Date(capture.createdAt)
+                  )}
+                </time>
+              </article>
+            ))}
+          </div>
+        </section>
+      ) : null}
 
       {editing ? (
         <div className="dialog-backdrop" role="presentation" onMouseDown={closeEditor}>

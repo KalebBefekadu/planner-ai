@@ -292,3 +292,17 @@ export const scanTest = base.extend<
 });
 
 export { expect };
+
+/**
+ * Open Today's optional fields.
+ *
+ * A task needs a title and nothing else, so the goal, the life area, the date
+ * and the commitment checkbox sit behind a disclosure. A spec that wants one
+ * of them has to do what a person does: ask for the details.
+ */
+export async function openTaskDetails(composer: Locator) {
+  const goal = composer.getByRole('combobox', { name: 'Goal' });
+  if (await goal.isVisible()) return;
+  await composer.locator('summary').filter({ hasText: 'Details' }).click();
+  await expect(goal).toBeVisible();
+}

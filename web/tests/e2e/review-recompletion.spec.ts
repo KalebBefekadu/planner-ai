@@ -18,7 +18,10 @@ for (const period of ['week', 'month', 'quarter'] as const) {
           .selectOption('left_overdue');
         await page.getByLabel('What should you remember from this week?').fill(reflection);
         await page.getByRole('button', { name: 'Complete weekly review' }).click();
-        await expect(page.getByRole('status')).toContainText('Review completed');
+        /* The confirmation is a toast that the refreshed record view replaces,
+           so waiting for it is a race the test only sometimes wins. The record
+           is what persists, and it is what this test is about. */
+        await expect(page.getByRole('region', { name: 'Week complete' })).toContainText(reflection);
       } else {
         await page
           .getByLabel('What changed, what mattered, and what will you adjust next?')
@@ -42,10 +45,10 @@ for (const period of ['week', 'month', 'quarter'] as const) {
     await submit('Corrected completion after undo');
 
     if (period === 'week') {
-      // A completed week still shows its form on this branch rather than a
-      // saved record, so the evidence that the second completion was really
-      // written is the receipt it left, not anything on the review screen.
-      // The undone one is still listed, so this asserts on the newest.
+      // The record on screen is already asserted above. The receipt is the
+      // second, independent piece of evidence that the correction was really
+      // written -- and the undone one is still listed, so this asserts on the
+      // newest rather than on any of them.
       await goTo(page, '/activity');
       const latest = page
         .locator('article')

@@ -771,6 +771,13 @@ a {
   display: grid;
   gap: 28px;
 }
+/* A grid item's automatic minimum size is its min-content, so one unbreakable
+   line anywhere in a section makes the whole page that wide and the reader
+   scrolls sideways to read anything. Items that must not shrink say so for
+   themselves; the default here is that a page reflows. */
+.page > * {
+  min-width: 0;
+}
 .page-heading {
   display: flex;
   align-items: flex-end;
@@ -1235,7 +1242,12 @@ button:disabled {
 }
 .planner-direction-band > summary > span:last-child {
   display: flex;
+  /* Both halves matter: the flex item has to be allowed to shrink, and the
+     line inside it has to be allowed to stop. Without the first, `nowrap` on
+     the summary line made the whole page 370 pixels wide at a 320 pixel
+     viewport -- the ellipsis had nothing to ellipsise against. */
   min-width: 0;
+  flex: 1 1 auto;
   flex-direction: column;
   gap: 2px;
 }
@@ -6826,6 +6838,13 @@ button:disabled {
     flex-direction: column;
     gap: 14px;
   }
+  /* A column flex container with align-items:flex-start sizes each child to
+     its max-content, so one long line in a heading pushed the whole page
+     sideways at 320 pixels rather than wrapping. Bounding the children is the
+     durable fix; shortening the copy alone would only move the cliff. */
+  .page-heading > * {
+    max-width: 100%;
+  }
   h1 {
     font-size: var(--fs-page);
   }
@@ -8876,4 +8895,43 @@ button:disabled {
   background: var(--surface);
   color: var(--ink);
   font-size: var(--fs-body);
+}
+
+/* One line to add a task; everything else behind a disclosure. */
+.today-composer-line {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.today-composer-line input {
+  flex: 1 1 260px;
+  min-width: 0;
+  min-height: 44px;
+  font-size: var(--fs-read);
+}
+.today-composer-line .btn-primary {
+  min-height: 44px;
+}
+.today-composer-details {
+  margin-top: 10px;
+}
+.today-composer-details > summary {
+  display: inline-flex;
+  align-items: center;
+  min-height: 32px;
+  color: var(--muted);
+  cursor: pointer;
+  font-size: var(--fs-label);
+  font-weight: 700;
+}
+.today-composer-fields {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 12px;
+  margin-top: 10px;
+}
+@media (min-width: 720px) {
+  .today-composer-fields {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
 }

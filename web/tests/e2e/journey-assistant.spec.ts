@@ -175,9 +175,9 @@ test('core Notes and Planner work stays completable while every AI route is down
   await expect(page.getByRole('status')).toHaveText('Saved', { timeout: 15_000 });
 
   await goTo(page, '/');
-  const composer = page.getByRole('region', { name: 'New Action' });
+  const composer = page.getByRole('region', { name: 'Add a task' });
   await composer.getByRole('textbox', { name: 'What needs doing' }).fill('Book the venue');
-  await composer.getByRole('button', { name: 'Add Action' }).click();
+  await composer.getByRole('button', { name: 'Add task' }).click();
   await expect(page.getByRole('button', { name: 'Complete Book the venue' })).toBeVisible();
   await page.getByRole('button', { name: 'Complete Book the venue' }).click();
   await expect(page.getByRole('button', { name: 'Complete Book the venue' })).toHaveCount(0);

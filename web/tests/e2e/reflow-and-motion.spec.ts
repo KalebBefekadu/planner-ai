@@ -37,12 +37,20 @@ test.describe('the workspace reflows instead of scrolling sideways', () => {
       const overflow = await page.evaluate(() => ({
         scrollWidth: document.documentElement.scrollWidth,
         clientWidth: document.documentElement.clientWidth,
-        // A single wide element is the usual cause, so name it rather than
-        // leaving a bare width comparison to be puzzled over.
+        /* A single wide element is the usual cause, so name it rather than
+           leaving a bare width comparison to be puzzled over. Ancestors of the
+           culprit are wide too, and they come first in document order, so
+           naming only the first three named the page and not the element:
+           report the widest instead, with the width that makes them so. */
         widest: Array.from(document.querySelectorAll<HTMLElement>('body *'))
-          .filter((element) => element.getBoundingClientRect().width > window.innerWidth + 1)
-          .slice(0, 3)
-          .map((element) => `${element.tagName.toLowerCase()}.${element.className}`),
+          .map((element) => ({ element, width: element.getBoundingClientRect().width }))
+          .filter((entry) => entry.width > window.innerWidth + 1)
+          .sort((first, second) => second.width - first.width)
+          .slice(0, 6)
+          .map(
+            (entry) =>
+              `${entry.element.tagName.toLowerCase()}.${entry.element.className} (${Math.round(entry.width)}px)`
+          ),
       }));
       expect(
         overflow.scrollWidth,

@@ -1,4 +1,4 @@
-import { test, expect, goTo, onboardingSeed } from './support/workspace';
+import { expect, goTo, onboardingSeed, openTaskDetails, test } from './support/workspace';
 
 // Journey 2 of the delivery rule: connecting a direction to the next useful
 // thing to do. The cascade is the product's central claim -- that an Action can
@@ -114,10 +114,11 @@ test('the period filter excludes other periods without hiding the work', async (
   // crosses at least one month boundary, so it lands in a different week and
   // a different month.
   await goTo(page, '/');
-  const composer = page.getByRole('region', { name: 'New Action' });
+  const composer = page.getByRole('region', { name: 'Add a task' });
   await composer.getByRole('textbox', { name: 'What needs doing' }).fill('Work for a later week');
+  await openTaskDetails(composer);
   await composer.getByRole('textbox', { name: 'Scheduled date' }).fill(isoDaysFromToday(60));
-  await composer.getByRole('button', { name: 'Add Action' }).click();
+  await composer.getByRole('button', { name: 'Add task' }).click();
   await expect(composer).toContainText('is saved');
 
   await page.goto('/planner');
@@ -263,10 +264,10 @@ test('work nests, and the nesting is how a task keeps its context', async ({ wor
   // rollup and read it straight back out, so a task could never sit under a
   // task.
   await goTo(page, '/');
-  const today = page.getByRole('region', { name: 'New Action' });
+  const today = page.getByRole('region', { name: 'Add a task' });
   for (const title of ['Reach out to Baily', 'wait to hear back']) {
     await today.getByRole('textbox', { name: 'What needs doing' }).fill(title);
-    await today.getByRole('button', { name: 'Add Action' }).click();
+    await today.getByRole('button', { name: 'Add task' }).click();
     await expect(today).toContainText(`"${title}" is saved`);
   }
 
@@ -328,12 +329,13 @@ test('a breakdown is an offer, and an initiative works without one', async ({ wo
   // The invariant the offer has to respect: an initiative with an empty list is
   // fully usable, and nothing about the week depends on a provider.
   await goTo(page, '/');
-  const today = page.getByRole('region', { name: 'New Action' });
+  const today = page.getByRole('region', { name: 'Add a task' });
   await today.getByRole('textbox', { name: 'What needs doing' }).fill('Write the listing script');
+  await openTaskDetails(today);
   await today
     .getByRole('combobox', { name: 'Goal' })
     .selectOption({ label: 'Real estate agent business' });
-  await today.getByRole('button', { name: 'Add Action' }).click();
+  await today.getByRole('button', { name: 'Add task' }).click();
   await expect(today).toContainText('"Write the listing script" is saved');
 
   await goTo(page, '/review');

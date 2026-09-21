@@ -51,6 +51,9 @@ test('planner and settings use their own navigation surfaces', async ({ page }) 
     .getByRole('navigation', { name: 'Primary navigation' })
     .getByLabel('Planner', { exact: true })
     .click();
+  // /preview is the fixture reference, not the product, and it still carries
+  // the heading the real Today has stopped using. It is due for removal rather
+  // than for being kept in step.
   await expect(page.getByRole('heading', { name: 'Make today count' })).toBeVisible();
   await expect(page.getByText('Personal workspace')).toHaveCount(0);
 

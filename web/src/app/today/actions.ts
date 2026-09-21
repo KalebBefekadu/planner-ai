@@ -29,6 +29,12 @@ export type TodayGoalOption = {
   title: string;
 };
 
+/** An area, with the path that tells two "Planning" subareas apart. */
+export type TodayAreaOption = {
+  id: string;
+  path: string;
+};
+
 export type TodayData = {
   localDate: string;
   timezone: string;
@@ -38,6 +44,7 @@ export type TodayData = {
   focusActionIds: string[];
   actions: TodayAction[];
   goals: TodayGoalOption[];
+  areas: TodayAreaOption[];
   recentCaptures: Array<{ id: string; rawText: string; createdAt: string }>;
   /** The Notes touched most recently, so the day can start where it stopped. */
   recentNotes: Array<{ id: string; title: string; updatedAt: string }>;
@@ -94,10 +101,34 @@ async function readFocusIds(
   return (data ?? []).map((row) => row.action_id as string);
 }
 
+/* "Planning" under Business and "Planning" under Home are different places,
+   and a flat list of names cannot tell them apart. The path can, and building
+   it here keeps the select a plain list of strings. */
+function areaOptions(
+  rows: Array<{ id: unknown; name: unknown; parent_area_id: unknown }>
+): TodayAreaOption[] {
+  const byId = new Map(rows.map((row) => [row.id as string, row]));
+  const pathOf = (id: string) => {
+    const parts: string[] = [];
+    const seen = new Set<string>();
+    let current = byId.get(id);
+    while (current && !seen.has(current.id as string)) {
+      seen.add(current.id as string);
+      parts.unshift(current.name as string);
+      const parent = current.parent_area_id as string | null;
+      current = parent ? byId.get(parent) : undefined;
+    }
+    return parts.join(' / ');
+  };
+  return rows
+    .map((row) => ({ id: row.id as string, path: pathOf(row.id as string) }))
+    .sort((left, right) => left.path.localeCompare(right.path));
+}
+
 export async function getTodayData(): Promise<TodayData> {
   const { supabase, workspaceId, timezone, weekStartsOn, coachingIntensity } = await todayClient();
   const localDate = dateInTimezone(timezone);
-  const [actionsResult, focusResult, goalsResult, capturesResult, recentNotesResult] =
+  const [actionsResult, focusResult, goalsResult, capturesResult, recentNotesResult, areasResult] =
     await Promise.all([
       supabase
         .from('actions')
@@ -142,13 +173,24 @@ export async function getTodayData(): Promise<TodayData> {
         .is('trashed_at', null)
         .order('updated_at', { ascending: false })
         .limit(4),
+      /* Active areas only: filing today's task into something archived is not
+         a choice worth offering. Bounded like every other read here; a person
+         with more than 200 life areas has a different problem. */
+      supabase
+        .from('life_areas')
+        .select('id,name,parent_area_id,sort_key')
+        .eq('workspace_id', workspaceId)
+        .is('archived_at', null)
+        .order('sort_key')
+        .limit(200),
     ]);
   if (
     actionsResult.error ||
     focusResult.error ||
     goalsResult.error ||
     capturesResult.error ||
-    recentNotesResult.error
+    recentNotesResult.error ||
+    areasResult.error
   ) {
     throw new Error('Unable to load Today.');
   }
@@ -192,6 +234,7 @@ export async function getTodayData(): Promise<TodayData> {
       id: goal.id as string,
       title: goal.title as string,
     })),
+    areas: areaOptions(areasResult.data ?? []),
     recentNotes: (recentNotesResult.data ?? []).map((note) => ({
       id: note.id as string,
       title: (note.title as string) || 'Untitled',
