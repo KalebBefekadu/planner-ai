@@ -93,7 +93,29 @@ describe('assistant policy', () => {
       evidenceCatalog: [],
     });
 
-    expect(new TextEncoder().encode(prompt).byteLength).toBeLessThan(24_000);
+    const bytes = new TextEncoder().encode(prompt).byteLength;
+    expect(bytes, `${24_000 - bytes} bytes of headroom left in the system prompt`).toBeLessThan(
+      24_000
+    );
+  });
+
+  /* The catalog is closed, and this is where that decision lives.
+     
+     Every entry costs prompt bytes that every other entry also needs, and at
+     the time of writing there are a few hundred bytes of headroom across all
+     of them -- less than one Operation's schema. So the next capability does
+     not join this list; it becomes a contextual intent, which costs this
+     prompt nothing. See the note on `assistantOperationCatalog`.
+     
+     Raising this number is not a chore to do alongside a feature. It is the
+     decision to reopen the catalog, and it needs an answer to "what happens
+     at the ceiling" first -- because compressing the schemas to fit is paying
+     for a new capability by degrading every existing one. */
+  it('does not grow the closed chat catalog', () => {
+    expect(
+      Object.keys(assistantOperationCatalog()).length,
+      'a new Operation joined the chat catalog; build it as an intent instead'
+    ).toBeLessThanOrEqual(64);
   });
 
   it('requires explicit legitimate reads without allowing write confusion', () => {

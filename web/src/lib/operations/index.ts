@@ -404,12 +404,15 @@ export const operationDefinitions = {
   'project.create.v1': {
     summary: 'Start a finite body of work that says what finishing it means.',
     risk: 'low',
-    /* UI only, deliberately. No assistant intent creates or edits a project
-       yet, and the chat catalog is already at the provider prompt budget --
-       advertising a capability nothing uses would spend that budget on
-       nothing and shrink the schemas every other Operation gets to show.
-       Widen this when an intent actually needs it. */
-    exposure: ['ui'],
+    /* Not chat, deliberately: a chat-exposed Operation puts its input schema
+       in the assistant system prompt, which is held under a byte ceiling this
+       one would cross. The assistant reaches this capability through a
+       contextual intent instead.
+
+       `mcp` is a different flag and carries no such cost -- the MCP catalog
+       holds an id, a summary and a risk class, and no schema. Withholding it
+       there bought nothing and quietly broke agent parity. */
+    exposure: ['ui', 'mcp'],
     reversible: true,
     domain: 'project',
     input: z
@@ -430,12 +433,15 @@ export const operationDefinitions = {
   'project.update.v1': {
     summary: 'Edit a project, including what would count as finishing it.',
     risk: 'low',
-    /* UI only, deliberately. No assistant intent creates or edits a project
-       yet, and the chat catalog is already at the provider prompt budget --
-       advertising a capability nothing uses would spend that budget on
-       nothing and shrink the schemas every other Operation gets to show.
-       Widen this when an intent actually needs it. */
-    exposure: ['ui'],
+    /* Not chat, deliberately: a chat-exposed Operation puts its input schema
+       in the assistant system prompt, which is held under a byte ceiling this
+       one would cross. The assistant reaches this capability through a
+       contextual intent instead.
+
+       `mcp` is a different flag and carries no such cost -- the MCP catalog
+       holds an id, a summary and a risk class, and no schema. Withholding it
+       there bought nothing and quietly broke agent parity. */
+    exposure: ['ui', 'mcp'],
     reversible: true,
     domain: 'project',
     input: z
@@ -457,12 +463,15 @@ export const operationDefinitions = {
   'project.status.v1': {
     summary: 'Complete, reopen, pause, or abandon a project.',
     risk: 'low',
-    /* UI only, deliberately. No assistant intent creates or edits a project
-       yet, and the chat catalog is already at the provider prompt budget --
-       advertising a capability nothing uses would spend that budget on
-       nothing and shrink the schemas every other Operation gets to show.
-       Widen this when an intent actually needs it. */
-    exposure: ['ui'],
+    /* Not chat, deliberately: a chat-exposed Operation puts its input schema
+       in the assistant system prompt, which is held under a byte ceiling this
+       one would cross. The assistant reaches this capability through a
+       contextual intent instead.
+
+       `mcp` is a different flag and carries no such cost -- the MCP catalog
+       holds an id, a summary and a risk class, and no schema. Withholding it
+       there bought nothing and quietly broke agent parity. */
+    exposure: ['ui', 'mcp'],
     reversible: true,
     domain: 'project',
     input: z
@@ -703,10 +712,15 @@ export const operationDefinitions = {
   'goal.create.v2': {
     summary: 'Create a Goal that carries its own dates rather than a period.',
     risk: 'low',
-    /* UI only until the assistant has a goal-planning intent to use it for.
-       Every chat-exposed Operation puts its schema in the system prompt, and
-       that prompt is held under a byte budget these two exceeded. */
-    exposure: ['ui'],
+    /* Not chat, deliberately: a chat-exposed Operation puts its input schema
+       in the assistant system prompt, which is held under a byte ceiling this
+       one would cross. The assistant reaches this capability through a
+       contextual intent instead.
+
+       `mcp` is a different flag and carries no such cost -- the MCP catalog
+       holds an id, a summary and a risk class, and no schema. Withholding it
+       there bought nothing and quietly broke agent parity. */
+    exposure: ['ui', 'mcp'],
     reversible: true,
     domain: 'goal_scope',
     input: z
@@ -730,7 +744,8 @@ export const operationDefinitions = {
   'goal.schedule.v1': {
     summary: 'Set or clear the dates a Goal runs between.',
     risk: 'low',
-    exposure: ['ui'],
+    // Withheld from chat with goal.create.v2, for the same budget reason.
+    exposure: ['ui', 'mcp'],
     reversible: true,
     domain: 'goal_scope',
     input: z

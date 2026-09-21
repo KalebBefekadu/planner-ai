@@ -1,3 +1,5 @@
+import { readdirSync, readFileSync } from 'node:fs';
+import { join } from 'node:path';
 import { expect, test } from '@playwright/test';
 import { createClient } from '@supabase/supabase-js';
 
@@ -188,22 +190,44 @@ test('anonymous AI requests fail with JSON instead of exposing a provider', asyn
   await expect(response.json()).resolves.toMatchObject({ code: 'authentication_required' });
 });
 
-test('anonymous users cannot analyze Captures into Proposals', async ({ request }) => {
-  const response = await request.post('/api/capture-proposals', {
-    data: { captureId: '10000000-0000-4000-8000-000000000001' },
-  });
+/**
+ * Every AI endpoint, found rather than listed.
+ *
+ * This used to be one test per endpoint, written when that endpoint was.
+ * Which means a new AI route arrives with no boundary test and nothing says
+ * so -- and two of them did exactly that. A route that reaches a paid provider
+ * with no signed-in user is the one kind of hole worth finding by construction
+ * rather than by remembering, so the list is derived from the source: anything
+ * that calls `authorizeAiRequest` has to refuse an anonymous caller.
+ */
+function aiEndpoints(): string[] {
+  const root = 'src/app/api';
+  return readdirSync(root, { recursive: true, encoding: 'utf8' })
+    .filter((entry) => entry.endsWith('route.ts'))
+    .filter((entry) => readFileSync(join(root, entry), 'utf8').includes('authorizeAiRequest('))
+    .map(
+      (entry) =>
+        `/api/${entry
+          .replace(/\/route\.ts$/, '')
+          .split('\\')
+          .join('/')}`
+    )
+    .sort();
+}
 
-  expect(response.status()).toBe(401);
-  await expect(response.json()).resolves.toMatchObject({ code: 'authentication_required' });
-});
+test('every AI endpoint refuses an anonymous caller', async ({ request }) => {
+  const endpoints = aiEndpoints();
+  /* If the search ever stops finding them, this test would pass over an empty
+     list and guard nothing. */
+  expect(endpoints.length, 'no AI endpoints were found to check').toBeGreaterThanOrEqual(8);
 
-test('anonymous users cannot generate Review Proposals', async ({ request }) => {
-  const response = await request.post('/api/review-proposals', {
-    data: { kind: 'weekly', startsOn: '2026-08-17', endsOn: '2026-08-23' },
-  });
-
-  expect(response.status()).toBe(401);
-  await expect(response.json()).resolves.toMatchObject({ code: 'authentication_required' });
+  for (const endpoint of endpoints) {
+    const response = await request.post(endpoint, { data: {} });
+    expect(response.status(), `${endpoint} let an anonymous caller in`).toBe(401);
+    await expect(response.json(), `${endpoint} did not say why`).resolves.toMatchObject({
+      code: 'authentication_required',
+    });
+  }
 });
 
 test('MCP publishes OAuth protected-resource metadata without authentication', async ({

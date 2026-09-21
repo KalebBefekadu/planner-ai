@@ -6,6 +6,15 @@ export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 
 export const exportTables = [
+  /* The preferences the owner chose, without the identity they chose them
+     under. `owner_user_id` belongs to Auth and means nothing in a restored
+     database; everything else here is a decision -- which day the week starts
+     on, when the review is, the quiet hours, the AI budget -- and losing it
+     silently changes how every future week is computed. */
+  [
+    'workspaces',
+    'id,name,timezone,week_starts_on,weekly_review_day,coaching_intensity,ai_enabled,ai_soft_budget_cents,email_reminders_enabled,in_app_notifications_enabled,reminder_email_hour,quiet_hours_start,quiet_hours_end,onboarding_completed_at,created_at,updated_at',
+  ],
   ['planning_horizons', '*'],
   ['visions', '*'],
   ['goals', '*'],

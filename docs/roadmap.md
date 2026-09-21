@@ -176,25 +176,29 @@ review-my-week proposals that already existed.
 
 `PL-05` is complete as part of title-first Today.
 
-What the proposal asks for and this branch does **not** contain, so nobody
-reads the above as more than it is:
+What this branch does **not** contain is recorded once, in
+[Status](status.md), and not repeated here. It was kept in both files for a
+while and both went stale the same way: a list of what is absent is only true
+until someone builds one of the things on it, and two copies rot twice as fast
+as one. This file owns the sequence; Status owns the factual snapshot, which is
+what a claim about absence is.
 
-- **Assistant access to Projects.** The three project Operations are UI-only.
-  Adding them to the chat catalog put it 1,382 bytes past its 24KB prompt
-  budget, and no intent writes a project yet. Recorded with `goal.create.v2`
-  and `goal.schedule.v1` in the agent-parity exceptions, which now names four
-  Operations withheld for budget rather than principle. The catalog cannot keep
-  growing, and ENG-11 is where that has to be faced.
-- **Related-area links.** Deliberately deferred: one primary area, and the
-  association contract isolated so equal membership stays adoptable.
-- **Moving a Note out of its parent, on a phone.** Pre-existing and unrelated
-  to this work -- it fails at `5696071` too. Three elements take the pointer
-  event at that scroll position in the Notes inspector, so a control a person
-  can see cannot be pressed. Needs a layout pass, not a rule.
-- **The production gates, and seven days of real use.** Neither is an
-  engineering task. The migration window, the fresh backup and restore
-  rehearsal, and the dogfood week are the owner's to run, and nothing in this
-  branch shortens them.
+### The next engineering step, and why it is not the next thing done
+
+Contextual intents are how the assistant gains capability now, because the chat
+catalog is closed. But adding an Operation to that catalog is one line and
+writing an intent is about a hundred and fifty, two thirds of which is the same
+authorisation, quota, provider and error-recording scaffolding in every one of
+them. An architecture whose recommended path is the expensive path does not
+survive contact with a deadline, so that scaffolding wants extracting.
+
+It is deliberately not done yet. The success path of these routes has no
+automated coverage in any environment -- no test environment has a provider
+key, so what is verified is that they fail safely, not that they work. A
+refactor of three routes whose happy path cannot be exercised is a good way to
+break something invisibly. Use them against a real provider first, find out
+which parts are genuinely common and whether the prompts are worth keeping at
+all, and extract afterwards with something able to catch a mistake.
 
 The accepted navigation and structure changes are recorded in the amendment to
 [the product shape](product/product-shape.md).

@@ -225,13 +225,13 @@ export const databaseOperationContracts: Readonly<Record<string, GeneratedOperat
   },
   'goal.create.v2': {
     riskClass: 'low',
-    exposures: ['ui'],
+    exposures: ['ui', 'mcp'],
     reversible: true,
     owningDomain: 'goal_scope',
   },
   'goal.schedule.v1': {
     riskClass: 'low',
-    exposures: ['ui'],
+    exposures: ['ui', 'mcp'],
     reversible: true,
     owningDomain: 'goal_scope',
   },
@@ -393,19 +393,19 @@ export const databaseOperationContracts: Readonly<Record<string, GeneratedOperat
   },
   'project.create.v1': {
     riskClass: 'low',
-    exposures: ['ui'],
+    exposures: ['ui', 'mcp'],
     reversible: true,
     owningDomain: 'project',
   },
   'project.status.v1': {
     riskClass: 'low',
-    exposures: ['ui'],
+    exposures: ['ui', 'mcp'],
     reversible: true,
     owningDomain: 'project',
   },
   'project.update.v1': {
     riskClass: 'low',
-    exposures: ['ui'],
+    exposures: ['ui', 'mcp'],
     reversible: true,
     owningDomain: 'project',
   },

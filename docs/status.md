@@ -33,8 +33,12 @@ Owner decision, 2026-09-20: the representative Notion pilot is removed from the 
   finishing it means, can span the turn of a year, and can be reopened after
   being called done.
 - The full Workspace export now carries life areas, projects, weekly plans and
-  their baselines. It carried none of them before, so a restore would have
-  returned the work without the parts of life it was filed under.
+  their baselines, and the workspace preferences: timezone, week start, review
+  day, quiet hours, coaching intensity and AI budget. It carried none of them
+  before, so a restore returned the work without the parts of life it was filed
+  under, and rebuilt every future week against a default week-start rather than
+  the chosen one. Which tables are exported is now checked against the schema,
+  so a new table fails the build until someone decides.
 - "Break this down" on a dated Goal, which previously refused anything but an
   ongoing initiative. It declines a goal whose date has passed rather than
   quietly rescheduling it.
@@ -45,6 +49,12 @@ Owner decision, 2026-09-20: the representative Notion pilot is removed from the 
   controls use.
 - "What has gone quiet", answered from dates rather than by a model, asked for
   rather than shown, and explicit that it measures what was written down.
+- Agent parity with no budget exceptions. Five Operations had been withheld
+  from agents citing the assistant's prompt budget; that budget is spent by the
+  `chat` flag and `mcp` is a separate one carrying no schema, so the exclusions
+  bought nothing and broke the stated north star silently.
+- An export whose completeness is derived from the schema rather than from a
+  hand-written list, and which now carries the owner's preferences.
 
 The latest merged delivery work is PR #111 (`82291a9`): Today uses the accepted outcome-focused hierarchy, stays inside Planner navigation, and shows real Goal direction without fixture content.
 
@@ -83,30 +93,57 @@ See [Production](runbooks/production.md) and [Migration reconciliation](runbooks
 ### The life-areas redesign is partial, by design and not by accident
 
 Verified on `claude/life-areas-redesign`: 80 pgTAP suites at 1,553 assertions,
-1,163 unit tests across 101 files, and the production-build browser suite at
-395 passing across 35 specs. The owner acceptance journey runs end to end at
+1,169 unit tests across 101 files, and the browser suite across 36 specs.
+
+A note on reading a local browser run: at the default four workers it is not
+trustworthy. A full run reported ten failures across three specs and took an
+hour; every one of them passed on re-run at `--workers=1`, and one of them had
+passed standalone minutes before. The symptom is `authentication_required` in
+the server log and login assertions failing, which is the shared local Supabase
+auth service buckling under four workers creating and deleting users. CI uses
+one worker and does not see it. Re-run a local failure single-threaded before
+believing it. The owner acceptance journey runs end to end at
 both desktop and phone width: name a part of life, give it a direction, add a
 subarea, file work in it, see that work roll up, start a project that can
 finish, commit a week, complete one item and give the other a decision, close
 the week, reopen its record, and find the same page again from Notes.
 
-One browser test fails, and it is not from this work. On a phone,
-`journey-notes` cannot press "Move note out of its parent" deep in a tree:
-three separate elements take the pointer event at that scroll position --
-the note's own move-controls group, the appearance controls, and the top bar.
-It fails identically at `5696071`, before any of this branch's recent work, so
-it is a pre-existing mobile layering defect in the Notes inspector rather than
-a regression. It is a real defect and worth its own ticket: a control a person
-can see and cannot press is WCAG 2.2's Focus Not Obscured failing. Reserving
-the fixed header's height as scroll margin moves the first interception but
-does not clear the other two, so the fix needs a layout pass on that inspector
-rather than a one-line rule.
+### What is not built
 
-Not built, and not to be read into the above: related-area links, deferred
-deliberately -- one primary area, with the association contract isolated so
-equal membership stays adoptable. Four Operations are withheld from agents for
-prompt budget rather than principle, which is a ceiling the assistant catalog
-has now reached rather than a decision anyone made.
+This is the only list of what is absent. It used to be kept here and in the
+roadmap, and both copies went stale the same way.
+
+- **Related-area links.** Deferred deliberately: one primary area, with the
+  association contract isolated so equal membership stays adoptable.
+- **Moving a Note out of its parent, at phone width.** A real defect, older
+  than this work -- it fails identically at `5696071`. Three elements take the
+  pointer event at that scroll position: the note's own move-controls group,
+  the appearance controls, and the top bar. A control a person can see and
+  cannot press is WCAG 2.2's Focus Not Obscured (2.4.11) failing. Reserving the
+  fixed header's height as scroll margin was tried and moves only the first
+  interception, so the fix is a layout pass on that inspector.
+
+  The browser test for it is marked `fixme` on mobile and passes on desktop, so
+  the suite is green. That marker does not clear itself: whoever fixes the
+  layout has to delete it. A suite carrying one permanent failure was the worse
+  option, because it teaches everyone to read a red run as noise.
+- **The production gates, and seven days of real use.** Neither is an
+  engineering task. The migration window, a fresh backup and restore rehearsal,
+  and the dogfood week are the owner's to run, and nothing on this branch
+  shortens them.
+- **Evidence that the AI suggestions are any good.** There is evidence they are
+  safe: they cannot name work that does not exist, they write nothing without
+  an explicit press, and they fail without taking the manual path down with
+  them. Whether the prompts produce suggestions worth taking is unknown, because
+  no provider is configured in any test environment. The first real output will
+  be the first data.
+
+The chat catalog is closed rather than full. It costs O(n) prompt bytes against
+a fixed ceiling and has a few hundred bytes of headroom across sixty-four
+Operations -- less than one more schema. New assistant capability is built as a
+contextual intent instead, which costs that prompt nothing; the decision is
+recorded on `assistantOperationCatalog` and held by a test that fails if the
+catalog grows. This is a constraint someone chose, not a wall somebody hit.
 
 One dependency is refused rather than handled: an area's canonical page cannot
 be moved to Trash while the area uses it. A database trigger enforces that on

@@ -98,6 +98,27 @@ export function minimizeAssistantProductContext(value: unknown): Record<string, 
   return context;
 }
 
+/**
+ * Every Operation the chat assistant may propose, with its input schema.
+ *
+ * This catalog is closed. It costs O(n) prompt bytes against a fixed ceiling,
+ * so each entry is paid for by every other entry: adding one either pushes the
+ * prompt over the limit or forces the schemas to be compressed until the model
+ * is guessing at shapes. It has been the blocking constraint three times now.
+ *
+ * New assistant capability is built as a contextual intent instead -- a route
+ * that reads a bounded slice of the workspace, sends a prompt shaped for one
+ * question, and maps a constrained answer onto Operation inputs built in code.
+ * See `goal-breakdown`, `choose-today` and `plan-week`. Those cost this prompt
+ * nothing, cannot name a record they were not given, and can be tested without
+ * a provider. They are the better design on every axis that matters here, and
+ * they are also what the product plan asks for: AI through buttons inside the
+ * work, with chat as the flexible fallback rather than the main surface.
+ *
+ * `mcp` is a separate flag and none of this applies to it. The MCP catalog
+ * carries an id, a summary and a risk class, and no schema. Withholding an
+ * Operation from agents never buys prompt bytes.
+ */
 export function assistantOperationCatalog() {
   return Object.fromEntries(
     Object.entries(operationDefinitions)
