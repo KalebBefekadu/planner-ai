@@ -139,9 +139,17 @@ roadmap, and both copies went stale the same way.
 - **Evidence that the AI suggestions are any good.** There is evidence they are
   safe: they cannot name work that does not exist, they write nothing without
   an explicit press, and they fail without taking the manual path down with
-  them. Whether the prompts produce suggestions worth taking is unknown, because
-  no provider is configured in any test environment. The first real output will
-  be the first data.
+  them. Whether the prompts produce suggestions worth taking is still unknown,
+  because no test environment has a provider key.
+
+  It is now answerable rather than only unanswered. `npm run test:ai:live`
+  carries a ten-fixture corpus for the three intents, graded by evaluators that
+  read the raw completion rather than the resolved output -- a guard dropping an
+  invented reference is the right behaviour in production and would hide the
+  very thing worth measuring here. The graders themselves are unit-tested
+  against hand-written answers, so a pass means the model behaved rather than
+  that the grader is blind. Running it costs money and is nobody's decision but
+  the owner's.
 
 The chat catalog is closed rather than full. It costs O(n) prompt bytes against
 a fixed ceiling and has a few hundred bytes of headroom across sixty-four
